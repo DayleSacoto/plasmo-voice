@@ -1,0 +1,26 @@
+{
+  "modListVersion": 2,
+  "modList": [
+    {
+      "modid": "${modId}",
+      "name": "${modName}",
+      "description": "Unofficial fork of Plasmo Voice, backported to Minecraft 1.7.10 and Forge with GT New Horizons support.",
+      "version": "${modVersion}",
+      "mcversion": "${minecraftVersion}",
+      "url": "https://github.com/DayleSacoto/plasmo-voice",
+      "updateUrl": "",
+      "authorList": [
+        "Plasmo",
+        "DayleSacoto"
+      ],
+      "credits": "Original Plasmo Voice by Plasmo. Minecraft 1.7.10 / Forge backport maintained by DayleSacoto.",
+      "logoFile": "icon.png",
+      "screenshots": [],
+      "parent": "",
+      "requiredMods": [],
+      "dependencies": [],
+      "dependants": [],
+      "useDependencyInformation": false
+    }
+  ]
+}
