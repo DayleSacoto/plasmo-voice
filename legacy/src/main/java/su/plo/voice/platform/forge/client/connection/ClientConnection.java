@@ -13,12 +13,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import su.plo.voice.platform.forge.PlasmoVoiceMod;
+import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
-import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 
 @SideOnly(Side.CLIENT)
 public final class ClientConnection implements AutoCloseable {
@@ -34,11 +34,20 @@ public final class ClientConnection implements AutoCloseable {
     private ConnectionPacket connectionInfo;
     private UdpClient udpClient;
     @Getter
-    private ClientConfig config;
+    private final ClientConnectionState state;
+    private final ClientState clientState;
 
-    public ClientConnection(VoiceChannel channel, NetworkManager connection) {
+    public ClientConnection(VoiceChannel channel, NetworkManager connection, ClientState clientState) {
         this.channel = Objects.requireNonNull(channel);
         this.connection = Objects.requireNonNull(connection);
+        this.clientState = Objects.requireNonNull(clientState);
+        this.state = clientState.openConnection();
+        LOGGER.info("Voice client state opened: voiceDisabled={}, microphoneMuted={}, configured={}",
+                clientState.isVoiceDisabled(), clientState.isMicrophoneMuted(), state.isConfigured());
+    }
+
+    public ClientConfig getConfig() {
+        return state.getConfig();
     }
 
     public KeyPair getKeyPair() {
@@ -75,7 +84,7 @@ public final class ClientConnection implements AutoCloseable {
             host = connection.getSocketAddress() instanceof java.net.InetSocketAddress
                     ? ((java.net.InetSocketAddress) connection.getSocketAddress()).getHostString() : "127.0.0.1";
         }
-        udpClient = new UdpClient(LOGGER, packet.getSecret(), host, packet.getPort());
+        udpClient = new UdpClient(LOGGER, packet.getSecret(), host, packet.getPort(), state.replaceUdp());
         LOGGER.info("ConnectionPacket received: host={}, port={}, session present; voice configuration pending",
                 packet.getIp(), packet.getPort());
         udpClient.start();
@@ -84,10 +93,14 @@ public final class ClientConnection implements AutoCloseable {
     @Override
     public void close() {
         clearConfig();
+        state.close();
         if (udpClient != null) udpClient.close();
         udpClient = null;
         connectionInfo = null;
         keyPair = null;
+        LOGGER.info("Voice client state closed: connected={}, udpEndpoint={}, udpConfirmed={}, configured={}; voiceDisabled={}, microphoneMuted={}",
+                state.isConnected(), state.hasUdpEndpoint(), state.isUdpConfirmed(), state.isConfigured(),
+                clientState.isVoiceDisabled(), clientState.isMicrophoneMuted());
     }
 
     private void handle(ConfigPacket packet) {
@@ -98,7 +111,7 @@ public final class ClientConnection implements AutoCloseable {
         }
         try {
             ClientConfig accepted = ClientConfig.decode(packet, getKeyPair().getPrivate());
-            config = accepted;
+            state.acceptConfig(accepted);
             if (accepted.getAesKey() != null) LOGGER.info("RSA encryption data decrypted; algorithm={}",
                     packet.getEncryption().getAlgorithm());
             LOGGER.info("Voice configuration accepted: serverId={}, sampleRate={}, mtu={}, codec={}; audio not started",
@@ -114,17 +127,15 @@ public final class ClientConnection implements AutoCloseable {
     }
 
     private void clearConfig() {
-        if (config != null) LOGGER.info("Voice client config/encryption state cleared");
-        config = null;
+        if (state.isConfigured()) LOGGER.info("Voice client config/encryption state cleared");
+        state.clearConfig();
     }
 
     private void handle(PlayerInfoRequestPacket packet) {
-        channel.sendToServer(new PlayerInfoPacket(
+        channel.sendToServer(clientState.createPlayerInfo(
                 "1.7.10",
                 PlasmoVoiceMod.VERSION,
-                getKeyPair().getPublic().getEncoded(),
-                false,
-                false
+                getKeyPair().getPublic().getEncoded()
         ));
     }
 }

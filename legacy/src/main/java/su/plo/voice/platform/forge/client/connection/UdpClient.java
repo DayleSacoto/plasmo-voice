@@ -11,7 +11,6 @@ import java.util.UUID;
 import com.google.common.io.ByteStreams;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
-import lombok.Getter;
 import org.apache.logging.log4j.Logger;
 import su.plo.voice.proto.packets.PacketDirection;
 import su.plo.voice.proto.packets.udp.PacketUdp;
@@ -26,13 +25,10 @@ public final class UdpClient implements AutoCloseable {
     private final int port;
     private final Thread worker;
     private volatile DatagramSocket socket;
-    @Getter
-    private volatile InetSocketAddress remoteAddress;
+    private final ClientConnectionState.UdpState state;
     private volatile boolean closed;
-    @Getter
-    private volatile boolean udpConfirmed;
 
-    public UdpClient(Logger logger, UUID secret, String host, int port) {
+    public UdpClient(Logger logger, UUID secret, String host, int port, ClientConnectionState.UdpState state) {
         if (host == null || host.isEmpty() || port < 1 || port > 65535) {
             throw new IllegalArgumentException("Invalid UDP remote endpoint");
         }
@@ -40,12 +36,21 @@ public final class UdpClient implements AutoCloseable {
         this.secret = secret;
         this.host = host;
         this.port = port;
+        this.state = java.util.Objects.requireNonNull(state);
         worker = new Thread(this::run, "plasmo-voice-udp-client");
         worker.setDaemon(true);
     }
 
     public void start() {
         worker.start();
+    }
+
+    public InetSocketAddress getRemoteAddress() {
+        return state.getRemoteAddress();
+    }
+
+    public boolean isUdpConfirmed() {
+        return state.isConfirmed();
     }
 
     private void run() {
@@ -57,7 +62,7 @@ public final class UdpClient implements AutoCloseable {
                 throw new IllegalArgumentException("UDP remote address is unresolved or wildcard");
             }
             endpoint.connect(remote);
-            remoteAddress = remote;
+            state.opened(remote);
             endpoint.setSoTimeout(100);
             logger.info("UDP client endpoint opened for {} (bootstrap only)", remote);
             long keepAlive = System.currentTimeMillis();
@@ -69,7 +74,7 @@ public final class UdpClient implements AutoCloseable {
                     logger.info("UDP bootstrap timed out");
                     break;
                 }
-                if (!udpConfirmed && now - lastAttempt >= 1000L) {
+                if (!state.isConfirmed() && now - lastAttempt >= 1000L) {
                     send(endpoint, new PingPacket(remote.getHostString(), remote.getPort()));
                     lastAttempt = now;
                 }
@@ -86,8 +91,8 @@ public final class UdpClient implements AutoCloseable {
                     if (!secret.equals(packet.getSecret()) || packet.getPacketClass() != PingPacket.class) continue;
                     packet.getPacketUntyped();
                     keepAlive = System.currentTimeMillis();
-                    if (!udpConfirmed) logger.info("UDP ping received; bidirectional bootstrap confirmed; voice configuration pending");
-                    udpConfirmed = true;
+                    if (!state.isConfirmed()) logger.info("UDP ping received; bidirectional bootstrap confirmed");
+                    state.confirm();
                 } catch (IOException | IllegalArgumentException | IllegalStateException ignored) {
                     continue;
                 }
@@ -96,9 +101,8 @@ public final class UdpClient implements AutoCloseable {
         } catch (Exception e) {
             if (!closed) logger.warn("UDP client stopped unexpectedly", e);
         } finally {
-            remoteAddress = null;
+            state.close();
             closed = true;
-            udpConfirmed = false;
             logger.info("UDP client endpoint closed");
         }
     }
@@ -110,9 +114,8 @@ public final class UdpClient implements AutoCloseable {
 
     @Override
     public void close() {
-        remoteAddress = null;
+        state.close();
         closed = true;
-        udpConfirmed = false;
         DatagramSocket endpoint = socket;
         if (endpoint != null) endpoint.close();
         try {

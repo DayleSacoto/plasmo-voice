@@ -10,6 +10,7 @@ import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.INetHandlerPlayClient;
 import su.plo.voice.proto.packets.PacketDirection;
 import su.plo.voice.platform.forge.client.connection.ClientConnection;
+import su.plo.voice.platform.forge.client.ClientState;
 
 @SideOnly(Side.CLIENT)
 public final class ClientChannelHandler {
@@ -32,7 +33,7 @@ public final class ClientChannelHandler {
                         try {
                             if (this.connection == null || this.connection.getConnection() != connection) {
                                 if (this.connection != null) this.connection.close();
-                                ClientConnection clientConnection = new ClientConnection(channel, connection);
+                                ClientConnection clientConnection = new ClientConnection(channel, connection, ClientState.getInstance());
                                 clientConnection.generateKeyPair();
                                 this.connection = clientConnection;
 
