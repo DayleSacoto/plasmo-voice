@@ -26,6 +26,8 @@ public final class UdpClient implements AutoCloseable {
     private final int port;
     private final Thread worker;
     private volatile DatagramSocket socket;
+    @Getter
+    private volatile InetSocketAddress remoteAddress;
     private volatile boolean closed;
     @Getter
     private volatile boolean udpConfirmed;
@@ -55,6 +57,7 @@ public final class UdpClient implements AutoCloseable {
                 throw new IllegalArgumentException("UDP remote address is unresolved or wildcard");
             }
             endpoint.connect(remote);
+            remoteAddress = remote;
             endpoint.setSoTimeout(100);
             logger.info("UDP client endpoint opened for {} (bootstrap only)", remote);
             long keepAlive = System.currentTimeMillis();
@@ -93,6 +96,7 @@ public final class UdpClient implements AutoCloseable {
         } catch (Exception e) {
             if (!closed) logger.warn("UDP client stopped unexpectedly", e);
         } finally {
+            remoteAddress = null;
             closed = true;
             udpConfirmed = false;
             logger.info("UDP client endpoint closed");
@@ -106,6 +110,7 @@ public final class UdpClient implements AutoCloseable {
 
     @Override
     public void close() {
+        remoteAddress = null;
         closed = true;
         udpConfirmed = false;
         DatagramSocket endpoint = socket;

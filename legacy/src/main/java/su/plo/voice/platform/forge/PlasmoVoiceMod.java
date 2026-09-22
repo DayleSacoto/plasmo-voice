@@ -25,6 +25,7 @@ import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.platform.forge.server.connection.ServerConnection;
 import su.plo.voice.platform.forge.server.connection.UdpServer;
+import su.plo.voice.platform.forge.server.connection.ServerConfig;
 
 @Getter
 @Mod(
@@ -40,6 +41,7 @@ public final class PlasmoVoiceMod {
     private static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
     private VoiceChannel voiceChannel;
     private UdpServer udpServer;
+    private ServerConfig serverConfig;
 
     private final Map<UUID, ServerConnection> serverConnections = new HashMap<>();
 
@@ -106,8 +108,9 @@ public final class PlasmoVoiceMod {
     }
 
     @Mod.EventHandler
-    public void serverAboutToStart(FMLServerAboutToStartEvent event) {
+    public void serverAboutToStart(FMLServerAboutToStartEvent event) throws java.security.GeneralSecurityException {
         serverConnections.clear();
+        serverConfig = new ServerConfig();
         udpServer = UdpServer.fromProperties(LOGGER);
         udpServer.start();
     }
@@ -115,13 +118,14 @@ public final class PlasmoVoiceMod {
     @SubscribeEvent
     public void serverTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || udpServer == null) return;
-        serverConnections.values().forEach(connection -> connection.tick(udpServer, voiceChannel));
+        serverConnections.values().forEach(connection -> connection.tick(udpServer, voiceChannel, serverConfig));
     }
 
     @Mod.EventHandler
     public void serverStopping(FMLServerStoppingEvent event) {
         if (udpServer != null) udpServer.close();
         udpServer = null;
+        serverConfig = null;
     }
 
     @SubscribeEvent
@@ -140,6 +144,7 @@ public final class PlasmoVoiceMod {
     public void serverStopped(FMLServerStoppedEvent event) {
         if (udpServer != null) udpServer.close();
         udpServer = null;
+        serverConfig = null;
         serverConnections.clear();
 
         if (voiceChannel != null) {

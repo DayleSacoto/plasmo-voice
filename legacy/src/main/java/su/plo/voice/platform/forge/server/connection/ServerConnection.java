@@ -28,20 +28,38 @@ public final class ServerConnection {
     private boolean microphoneMuted;
     private UdpServer.Session udpSession;
     private boolean connectionInfoSent;
+    private boolean configSent;
 
     public void prepareUdp(UdpServer server) {
         udpSession = server.createSession(player.getUniqueID());
         connectionInfoSent = false;
+        configSent = false;
     }
 
-    public void tick(UdpServer server, VoiceChannel channel) {
+    public void tick(UdpServer server, VoiceChannel channel, ServerConfig config) {
         if (udpSession == null) return;
         if (!udpSession.isActive()) {
             udpSession = null;
             channel.sendToPlayer(player, new PlayerInfoRequestPacket());
             return;
         }
-        if (connectionInfoSent) return;
+        if (connectionInfoSent) {
+            // The UDP worker publishes authentication through the volatile session flag.
+            // TCP writes stay on the Minecraft server tick thread.
+            synchronized (udpSession) {
+                if (configSent || !udpSession.isActive() || !udpSession.isAuthenticated()) return;
+                try {
+                    channel.sendToPlayer(player, config.createPacket(publicKey));
+                    configSent = true;
+                    LogManager.getLogger("Plasmo Voice").info("ConfigPacket sent to {} after UDP authentication",
+                            player.getCommandSenderName());
+                } catch (java.security.GeneralSecurityException e) {
+                    server.removeSession(player.getUniqueID());
+                    LogManager.getLogger("Plasmo Voice").warn("Failed to encrypt voice configuration", e);
+                }
+            }
+            return;
+        }
         ConnectionPacket packet = server.connectionPacket(udpSession);
         if (packet == null) return;
         channel.sendToPlayer(player, packet);

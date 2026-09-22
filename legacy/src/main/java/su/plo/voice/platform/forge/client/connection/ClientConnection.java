@@ -17,6 +17,7 @@ import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 
 @SideOnly(Side.CLIENT)
@@ -32,6 +33,8 @@ public final class ClientConnection implements AutoCloseable {
     @Getter
     private ConnectionPacket connectionInfo;
     private UdpClient udpClient;
+    @Getter
+    private ClientConfig config;
 
     public ClientConnection(VoiceChannel channel, NetworkManager connection) {
         this.channel = Objects.requireNonNull(channel);
@@ -58,10 +61,13 @@ public final class ClientConnection implements AutoCloseable {
             handle((PlayerInfoRequestPacket) packet);
         } else if (packet instanceof ConnectionPacket) {
             handle((ConnectionPacket) packet);
+        } else if (packet instanceof ConfigPacket) {
+            handle((ConfigPacket) packet);
         }
     }
 
     private void handle(ConnectionPacket packet) {
+        clearConfig();
         if (udpClient != null) udpClient.close();
         connectionInfo = packet;
         String host = packet.getIp();
@@ -77,10 +83,39 @@ public final class ClientConnection implements AutoCloseable {
 
     @Override
     public void close() {
+        clearConfig();
         if (udpClient != null) udpClient.close();
         udpClient = null;
         connectionInfo = null;
         keyPair = null;
+    }
+
+    private void handle(ConfigPacket packet) {
+        LOGGER.info("ConfigPacket received");
+        if (udpClient == null || udpClient.getRemoteAddress() == null) {
+            LOGGER.warn("Config packet is received before UDP is connected");
+            return;
+        }
+        try {
+            ClientConfig accepted = ClientConfig.decode(packet, getKeyPair().getPrivate());
+            config = accepted;
+            if (accepted.getAesKey() != null) LOGGER.info("RSA encryption data decrypted; algorithm={}",
+                    packet.getEncryption().getAlgorithm());
+            LOGGER.info("Voice configuration accepted: serverId={}, sampleRate={}, mtu={}, codec={}; audio not started",
+                    packet.getServerId(), packet.getCaptureInfo().getSampleRate(),
+                    packet.getCaptureInfo().getMtuSize(),
+                    packet.getCaptureInfo().getEncoderInfo() == null ? "none" : packet.getCaptureInfo().getEncoderInfo().getName());
+        } catch (GeneralSecurityException e) {
+            clearConfig();
+            udpClient.close();
+            udpClient = null;
+            LOGGER.warn("Failed to decrypt voice configuration", e);
+        }
+    }
+
+    private void clearConfig() {
+        if (config != null) LOGGER.info("Voice client config/encryption state cleared");
+        config = null;
     }
 
     private void handle(PlayerInfoRequestPacket packet) {
