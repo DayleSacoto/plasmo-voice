@@ -39,7 +39,9 @@ public final class VoiceChannel {
         logger.info("Voice channel registered: {}; server handler registered; codec: {}",
                 NAME, PacketTcpCodec.class.getName());
         if (FMLCommonHandler.instance().getSide().isClient()) {
-            channel.register(new ClientChannelHandler(this));
+            ClientChannelHandler clientHandler = new ClientChannelHandler(this);
+            channel.register(clientHandler);
+            FMLCommonHandler.instance().bus().register(clientHandler);
             logger.info("Voice client handler registered: {}", NAME);
         }
     }

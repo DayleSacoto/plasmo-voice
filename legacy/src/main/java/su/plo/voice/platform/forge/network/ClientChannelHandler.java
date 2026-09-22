@@ -1,6 +1,7 @@
 package su.plo.voice.platform.forge.network;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.network.FMLNetworkEvent;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -30,6 +31,7 @@ public final class ClientChannelHandler {
                         }
                         try {
                             if (this.connection == null || this.connection.getConnection() != connection) {
+                                if (this.connection != null) this.connection.close();
                                 ClientConnection clientConnection = new ClientConnection(channel, connection);
                                 clientConnection.generateKeyPair();
                                 this.connection = clientConnection;
@@ -45,6 +47,15 @@ public final class ClientChannelHandler {
                     }));
         } catch (Exception e) {
             channel.logger().debug("Failed to decode clientbound voice packet", e);
+        }
+    }
+
+    @SubscribeEvent
+    public void tick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END && connection != null
+                && !connection.getConnection().isChannelOpen()) {
+            connection.close();
+            connection = null;
         }
     }
 }
