@@ -8,11 +8,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.INetHandlerPlayClient;
 import su.plo.voice.proto.packets.PacketDirection;
+import su.plo.voice.platform.forge.client.connection.ClientConnection;
 
 @SideOnly(Side.CLIENT)
 public final class ClientChannelHandler {
     private final VoiceChannel channel;
-
+    private ClientConnection connection;
     ClientChannelHandler(VoiceChannel channel) {
         this.channel = channel;
     }
@@ -28,7 +29,16 @@ public final class ClientChannelHandler {
                             return;
                         }
                         try {
+                            if (this.connection == null || this.connection.getConnection() != connection) {
+                                ClientConnection clientConnection = new ClientConnection(channel, connection);
+                                clientConnection.generateKeyPair();
+                                this.connection = clientConnection;
+
+                                channel.logger().info("Voice client connection initialized");
+                            }
+
                             channel.deliverToClient(connection, packet);
+                            this.connection.handle(packet);
                         } catch (Exception e) {
                             channel.logger().warn("Failed to handle clientbound voice packet", e);
                         }
