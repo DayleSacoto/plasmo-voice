@@ -55,4 +55,18 @@ dependencies {
 
     compileOnly("org.projectlombok:lombok:1.18.44")
     annotationProcessor("org.projectlombok:lombok:1.18.44")
+    testImplementation("junit:junit:4.13.2")
+}
+
+tasks.test {
+    workingDir(layout.buildDirectory.dir("transport-test"))
+    doFirst {
+        workingDir.mkdirs()
+    }
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(25))
+    })
+    testLogging {
+        events("passed", "failed")
+    }
 }

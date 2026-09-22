@@ -3,10 +3,14 @@ package su.plo.voice.platform.forge;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.event.FMLServerStoppedEvent;
+import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import su.plo.voice.proto.packets.PacketRegistry;
+import su.plo.voice.platform.forge.network.VoiceChannel;
+@Getter
 @Mod(
         modid = PlasmoVoiceMod.MOD_ID,
         name = PlasmoVoiceMod.MOD_NAME,
@@ -18,6 +22,7 @@ public final class PlasmoVoiceMod {
     public static final String VERSION = "2.1.17";
 
     private static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
+    private VoiceChannel voiceChannel;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -27,6 +32,12 @@ public final class PlasmoVoiceMod {
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
+        voiceChannel = new VoiceChannel(LOGGER);
         LOGGER.info("{} initialized", MOD_NAME);
+    }
+
+    @Mod.EventHandler
+    public void serverStopped(FMLServerStoppedEvent event) {
+        voiceChannel.clearServer();
     }
 }
