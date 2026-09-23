@@ -21,7 +21,7 @@ public class ClientStateTest {
         assertFalse(client.isVoiceDisabled());
         assertFalse(client.isMicrophoneMuted());
         assertFalse(client.isConnected());
-        ClientConnectionState first = client.openConnection();
+        ClientConnectionState first = client.openConnection(packet -> {});
         client.setVoiceDisabled(true);
         client.setMicrophoneMuted(true);
         first.replaceUdp().opened(new InetSocketAddress("127.0.0.1", 24454));
@@ -35,7 +35,7 @@ public class ClientStateTest {
         assertFalse(first.hasUdpEndpoint());
         assertFalse(first.isUdpConfirmed());
         assertFalse(first.isConfigured());
-        ClientConnectionState second = client.openConnection();
+        ClientConnectionState second = client.openConnection(packet -> {});
         assertNotSame(first, second);
         assertTrue(second.isConnected());
         assertFalse(second.hasUdpEndpoint());
@@ -54,7 +54,7 @@ public class ClientStateTest {
 
     @Test
     public void replacementUdpCannotInheritOrReviveOldFlags() throws Exception {
-        ClientConnectionState connection = new ClientState().openConnection();
+        ClientConnectionState connection = new ClientState().openConnection(packet -> {});
         ClientConnectionState.UdpState old = connection.replaceUdp();
         old.opened(new InetSocketAddress("127.0.0.1", 24454));
         old.confirm();

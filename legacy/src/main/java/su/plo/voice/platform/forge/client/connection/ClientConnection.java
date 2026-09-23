@@ -41,7 +41,7 @@ public final class ClientConnection implements AutoCloseable {
         this.channel = Objects.requireNonNull(channel);
         this.connection = Objects.requireNonNull(connection);
         this.clientState = Objects.requireNonNull(clientState);
-        this.state = clientState.openConnection();
+        this.state = clientState.openConnection(channel::sendToServer);
         LOGGER.info("Voice client state opened: voiceDisabled={}, microphoneMuted={}, configured={}",
                 clientState.isVoiceDisabled(), clientState.isMicrophoneMuted(), state.isConfigured());
     }
@@ -118,6 +118,8 @@ public final class ClientConnection implements AutoCloseable {
                     packet.getServerId(), packet.getCaptureInfo().getSampleRate(),
                     packet.getCaptureInfo().getMtuSize(),
                     packet.getCaptureInfo().getEncoderInfo() == null ? "none" : packet.getCaptureInfo().getEncoderInfo().getName());
+            // Settings changed after PlayerInfoPacket but before the server accepted state updates.
+            clientState.syncState();
         } catch (GeneralSecurityException e) {
             clearConfig();
             udpClient.close();

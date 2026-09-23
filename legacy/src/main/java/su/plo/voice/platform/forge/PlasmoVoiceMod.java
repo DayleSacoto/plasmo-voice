@@ -23,6 +23,7 @@ import su.plo.voice.proto.packets.PacketRegistry;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.platform.forge.server.connection.ServerConnection;
 import su.plo.voice.platform.forge.server.connection.UdpServer;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
@@ -62,6 +63,16 @@ public final class PlasmoVoiceMod {
         });
 
         voiceChannel.setServerListener((player, packet) -> {
+            // Exact class: PlayerInfoPacket extends PlayerStatePacket in the upstream protocol.
+            if (packet.getClass() == PlayerStatePacket.class) {
+                PlayerStatePacket state = (PlayerStatePacket) packet;
+                ServerConnection connection = serverConnections.get(player.getUniqueID());
+                if (connection != null && connection.handle(state)) {
+                    LOGGER.info("Voice state updated for {}: voiceDisabled={}, microphoneMuted={}",
+                            player.getCommandSenderName(), state.isVoiceDisabled(), state.isMicrophoneMuted());
+                }
+                return;
+            }
             if (!(packet instanceof PlayerInfoPacket)) {
                 return;
             }

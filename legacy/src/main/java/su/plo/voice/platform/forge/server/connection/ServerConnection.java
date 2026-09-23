@@ -9,6 +9,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import net.minecraft.entity.player.EntityPlayerMP;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.platform.forge.network.VoiceChannel;
@@ -66,6 +67,18 @@ public final class ServerConnection {
         connectionInfoSent = true;
         LogManager.getLogger("Plasmo Voice").info("ConnectionPacket sent to {}: host={}, port={}, session present",
                 player.getCommandSenderName(), packet.getIp(), packet.getPort());
+    }
+
+    /**
+     * Upstream accepts live state only while the player has voice chat, i.e. after the first UDP ping.
+     * Returns whether the state was applied. PlayerInfoUpdate broadcast needs the player list layer.
+     */
+    public boolean handle(PlayerStatePacket packet) {
+        UdpServer.Session session = udpSession;
+        if (session == null || !session.isActive() || !session.isAuthenticated()) return false;
+        voiceDisabled = packet.isVoiceDisabled();
+        microphoneMuted = packet.isMicrophoneMuted();
+        return true;
     }
 
     public void handle(PlayerInfoPacket packet) throws Exception {
