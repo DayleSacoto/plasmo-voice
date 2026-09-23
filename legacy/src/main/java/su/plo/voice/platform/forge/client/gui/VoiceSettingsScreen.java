@@ -1,7 +1,8 @@
 package su.plo.voice.platform.forge.client.gui;
 
-import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -12,13 +13,13 @@ import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
+import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 import su.plo.voice.platform.forge.PlasmoVoiceMod;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.VoiceControls;
-import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 
-/** Legacy port of the upstream settings frame: header, title and the microphone/voice toggles. */
+/** Legacy port of the upstream settings screen and VoiceSettingsNavigation: header, tabs and the voice toggles. */
 @SideOnly(Side.CLIENT)
 public final class VoiceSettingsScreen extends GuiScreen {
     private static final ResourceLocation MICROPHONE_ICON = icon("microphone_menu");
@@ -26,10 +27,12 @@ public final class VoiceSettingsScreen extends GuiScreen {
     private static final ResourceLocation SPEAKER_ICON = icon("speaker_menu");
     private static final ResourceLocation SPEAKER_DISABLED_ICON = icon("speaker_menu_disabled");
     private static final int HEADER_HEIGHT = 36;
-    private static final int CONTAINER_WIDTH = 303;
-    private static final int ROW_HEIGHT = 24;
 
     private final ClientState state;
+    private final List<TabButton> tabButtons = new ArrayList<>();
+    private final List<SettingsTab> tabs = new ArrayList<>();
+    private int active;
+    private int navigationHeight = HEADER_HEIGHT;
     private IconButton microphoneButton;
     private IconButton voiceButton;
 
@@ -46,6 +49,52 @@ public final class VoiceSettingsScreen extends GuiScreen {
                 () -> state.isVoiceDisabled() ? SPEAKER_DISABLED_ICON : SPEAKER_ICON);
         buttonList.add(microphoneButton);
         buttonList.add(voiceButton);
+
+        tabs.clear();
+        tabButtons.clear();
+        addTab("gui.plasmovoice.devices", "devices", new DevicesTab(this, state));
+        addTab("gui.plasmovoice.activation", "activation", new ActivationTab(this, state));
+        layoutTabs();
+        activeTab().init(navigationHeight, height);
+    }
+
+    private void addTab(String nameKey, String icon, SettingsTab tab) {
+        tabButtons.add(new TabButton(fontRendererObj, I18n.format(nameKey), icon));
+        tabs.add(tab);
+    }
+
+    private SettingsTab activeTab() {
+        return tabs.get(active);
+    }
+
+    private void openTab(int index) {
+        activeTab().removed();
+        active = index;
+        activeTab().init(navigationHeight, height);
+    }
+
+    /** Upstream VoiceSettingsNavigation: tabs centered in the header, or wrapped below the title when narrow. */
+    private void layoutTabs() {
+        int buttonsWidth = -4;
+        for (TabButton button : tabButtons) buttonsWidth += button.width + 4;
+        int titleWidth = 14 + fontRendererObj.getStringWidth(title()) + 4;
+        int centeredX = width / 2 - buttonsWidth / 2;
+        boolean minimized = centeredX < titleWidth || titleWidth + buttonsWidth + 14 + 48 > width;
+
+        int x = minimized ? 14 : centeredX;
+        int y = minimized ? HEADER_HEIGHT : 8;
+        int lines = 1;
+        for (TabButton button : tabButtons) {
+            if (minimized && x + button.width > width - 8) {
+                x = 14;
+                y += 26;
+                lines++;
+            }
+            button.x = x;
+            button.y = y;
+            x += button.width + 4;
+        }
+        navigationHeight = minimized ? HEADER_HEIGHT + lines * 28 : HEADER_HEIGHT;
     }
 
     @Override
@@ -63,7 +112,14 @@ public final class VoiceSettingsScreen extends GuiScreen {
     }
 
     @Override
+    public void onGuiClosed() {
+        activeTab().removed();
+        state.save();
+    }
+
+    @Override
     protected void keyTyped(char typedChar, int keyCode) {
+        if (activeTab().keyTyped(typedChar, keyCode)) return;
         if (VoiceControls.isSettingsKey(keyCode)) {
             mc.displayGuiScreen(null);
             return;
@@ -72,52 +128,63 @@ public final class VoiceSettingsScreen extends GuiScreen {
     }
 
     @Override
+    protected void mouseClicked(int mouseX, int mouseY, int button) {
+        if (activeTab().mouseClicked(mouseX, mouseY, button)) return;
+        for (int i = 0; i < tabButtons.size(); i++) {
+            if (tabButtons.get(i).mouseClicked(mouseX, mouseY, button)) {
+                openTab(i);
+                return;
+            }
+        }
+        super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    protected void mouseClickMove(int mouseX, int mouseY, int button, long timeSinceClick) {
+        activeTab().mouseDragged(mouseX, mouseY);
+    }
+
+    @Override
+    protected void mouseMovedOrUp(int mouseX, int mouseY, int button) {
+        super.mouseMovedOrUp(mouseX, mouseY, button);
+        if (button >= 0) activeTab().mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public void handleMouseInput() {
+        super.handleMouseInput();
+        int wheel = Mouse.getEventDWheel();
+        if (wheel == 0) return;
+        int mouseX = Mouse.getEventX() * width / mc.displayWidth;
+        int mouseY = height - Mouse.getEventY() * height / mc.displayHeight - 1;
+        activeTab().scroll(wheel > 0 ? -1 : 1, mouseX, mouseY);
+    }
+
+    @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         drawDefaultBackground();
-        drawConnection(width / 2 - CONTAINER_WIDTH / 2, HEADER_HEIGHT + 4);
+        boolean overHeader = mouseY < navigationHeight;
+        activeTab().render(mc, overHeader ? -1 : mouseX, overHeader ? -1 : mouseY);
         drawHeader();
-        fontRendererObj.drawStringWithShadow(
-                I18n.format("gui.plasmovoice.title", "Plasmo Voice", PlasmoVoiceMod.VERSION), 14, 15, 0xFFFFFF);
+        fontRendererObj.drawStringWithShadow(title(), 14, 15, 0xFFFFFF);
+        for (int i = 0; i < tabButtons.size(); i++) {
+            TabButton button = tabButtons.get(i);
+            button.active = i != active;
+            button.render(mc, mouseX, mouseY);
+        }
         super.drawScreen(mouseX, mouseY, partialTicks);
 
         if (microphoneButton.isHovered()) {
             drawToggleTooltip("gui.plasmovoice.toggle.microphone", !state.isMicrophoneMuted(), mouseX, mouseY);
         } else if (voiceButton.isHovered()) {
             drawToggleTooltip("gui.plasmovoice.toggle.voice", !state.isVoiceDisabled(), mouseX, mouseY);
+        } else if (activeTab().getTooltip() != null) {
+            func_146283_a(activeTab().getTooltip(), mouseX, mouseY);
         }
     }
 
-    private void drawConnection(int left, int y) {
-        String category = I18n.format("gui.plasmovoice.connection");
-        fontRendererObj.drawStringWithShadow(category,
-                width / 2 - fontRendererObj.getStringWidth(category) / 2, rowTextY(y), 0xFFFFFF);
-        y += ROW_HEIGHT;
-
-        ClientConnectionState connection = state.getConnection();
-        InetSocketAddress endpoint = connection.getUdp() == null ? null : connection.getUdp().getRemoteAddress();
-        drawRow(left, y, "gui.plasmovoice.connection.connected", yesNo(connection.isConnected()));
-        drawRow(left, y += ROW_HEIGHT, "gui.plasmovoice.connection.udp_endpoint", endpoint == null
-                ? I18n.format("gui.plasmovoice.connection.none")
-                : endpoint.getHostString() + ":" + endpoint.getPort());
-        drawRow(left, y += ROW_HEIGHT, "gui.plasmovoice.connection.udp_confirmed", yesNo(connection.isUdpConfirmed()));
-        drawRow(left, y += ROW_HEIGHT, "gui.plasmovoice.connection.configured", yesNo(connection.isConfigured()));
-        drawRow(left, y + ROW_HEIGHT, "gui.plasmovoice.connection.players", String.valueOf(connection.getPlayers().size()));
-    }
-
-    private void drawRow(int left, int y, String label, String value) {
-        fontRendererObj.drawStringWithShadow(I18n.format(label), left, rowTextY(y), 0xFFFFFF);
-        fontRendererObj.drawStringWithShadow(value,
-                left + CONTAINER_WIDTH - fontRendererObj.getStringWidth(value), rowTextY(y), 0xFFFFFF);
-    }
-
-    private int rowTextY(int y) {
-        return y + ROW_HEIGHT / 2 - fontRendererObj.FONT_HEIGHT / 2;
-    }
-
-    private static String yesNo(boolean value) {
-        return value
-                ? EnumChatFormatting.GREEN + I18n.format("gui.plasmovoice.connection.yes")
-                : EnumChatFormatting.RED + I18n.format("gui.plasmovoice.connection.no");
+    private String title() {
+        return I18n.format("gui.plasmovoice.title", "Plasmo Voice", PlasmoVoiceMod.VERSION);
     }
 
     /** Same darkened options background the vanilla lists use for their header. */
@@ -127,12 +194,12 @@ public final class VoiceSettingsScreen extends GuiScreen {
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         tessellator.startDrawingQuads();
         tessellator.setColorRGBA_I(0x404040, 255);
-        tessellator.addVertexWithUV(0, HEADER_HEIGHT, 0, 0, HEADER_HEIGHT / 32.0);
-        tessellator.addVertexWithUV(width, HEADER_HEIGHT, 0, width / 32.0, HEADER_HEIGHT / 32.0);
+        tessellator.addVertexWithUV(0, navigationHeight, 0, 0, navigationHeight / 32.0);
+        tessellator.addVertexWithUV(width, navigationHeight, 0, width / 32.0, navigationHeight / 32.0);
         tessellator.addVertexWithUV(width, 0, 0, width / 32.0, 0);
         tessellator.addVertexWithUV(0, 0, 0, 0, 0);
         tessellator.draw();
-        drawGradientRect(0, HEADER_HEIGHT, width, HEADER_HEIGHT + 4, 0xFF000000, 0x00000000);
+        drawGradientRect(0, navigationHeight, width, navigationHeight + 4, 0xFF000000, 0x00000000);
     }
 
     private void drawToggleTooltip(String key, boolean enabled, int mouseX, int mouseY) {

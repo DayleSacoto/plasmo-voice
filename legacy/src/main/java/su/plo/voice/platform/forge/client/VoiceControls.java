@@ -1,7 +1,10 @@
 package su.plo.voice.platform.forge.client;
 
+import java.io.File;
+
 import cpw.mods.fml.client.registry.ClientRegistry;
 import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.InputEvent;
 import cpw.mods.fml.relauncher.Side;
@@ -21,6 +24,11 @@ public final class VoiceControls {
     }
 
     public static void register() {
+        ClientState state = ClientState.getInstance();
+        File settings = new File(Loader.instance().getConfigDir(), "plasmovoice/client.cfg");
+        state.setSettingsFile(settings);
+        ClientSettingsFile.load(settings, state);
+
         ClientRegistry.registerKeyBinding(SETTINGS_KEY);
         FMLCommonHandler.instance().bus().register(new VoiceControls());
     }

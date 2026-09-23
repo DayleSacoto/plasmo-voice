@@ -19,7 +19,13 @@ public final class CaptureActivation {
     private boolean active;
     private long lastActivation;
 
-    public Result process(short[] samples, Type type, boolean pushToTalkPressed, double thresholdDb, long now) {
+    /** {@code toggled} is upstream ConfigClientActivation.configToggle: it switches voice activation off. */
+    public Result process(short[] samples, Type type, boolean toggled, boolean pushToTalkPressed, double thresholdDb, long now) {
+        if (type == Type.VOICE && toggled) {
+            if (!active) return Result.NOT_ACTIVATED;
+            active = false;
+            return Result.END;
+        }
         if (type == Type.PUSH_TO_TALK) {
             if (pushToTalkPressed) {
                 active = true;

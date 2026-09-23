@@ -57,11 +57,11 @@ final class VoiceSource {
     }
 
     /** Playback thread, with the voice output context current. */
-    void pump(ClientConfig config, double[] listener, long now) {
+    void pump(ClientConfig config, double[] listener, double volume, long now) {
         Object next;
         while ((next = buffer.poll(now)) != null) {
             if (next instanceof SourceAudioPacket) {
-                process((SourceAudioPacket) next, config, listener, now);
+                process((SourceAudioPacket) next, config, listener, volume, now);
             } else if (activated) {
                 lastSequenceNumber = ((SourceAudioEndPacket) next).getSequenceNumber();
             }
@@ -92,7 +92,7 @@ final class VoiceSource {
         decoder = null;
     }
 
-    private void process(SourceAudioPacket packet, ClientConfig config, double[] listener, long now) {
+    private void process(SourceAudioPacket packet, ClientConfig config, double[] listener, double volume, long now) {
         SourceInfo current = info;
         long sequenceNumber = packet.getSequenceNumber();
         if (stateDiff(current.getState(), packet.getSourceState()) >= 10) return;
@@ -110,7 +110,7 @@ final class VoiceSource {
         }
         if (stream != null && stream.stereo != current.isStereo()) closeStream();
         if (stream == null) stream = new StreamSource(current.isStereo(), sampleRate, frameSize, now);
-        updateStream(current, packet.getDistance(), listener);
+        updateStream(current, packet.getDistance(), listener, sliderGain(volume));
 
         try {
             if (lastSequenceNumber >= 0) {
@@ -143,10 +143,10 @@ final class VoiceSource {
         stream.write(samples, now);
     }
 
-    private void updateStream(SourceInfo current, short distance, double[] listener) {
+    private void updateStream(SourceInfo current, short distance, double[] listener, double volume) {
         // ponytail: only player sources are positional; other types play centered until the API sources are backported.
         if (!(current instanceof PlayerSourceInfo)) {
-            stream.setGain(1F);
+            stream.setGain((float) volume);
             stream.setPosition(true, 0F, 0F, 0F);
             return;
         }
@@ -158,7 +158,7 @@ final class VoiceSource {
         double dx = source[0] - listener[0];
         double dy = source[1] - listener[1];
         double dz = source[2] - listener[2];
-        stream.setGain((float) distanceGain(Math.sqrt(dx * dx + dy * dy + dz * dz), distance));
+        stream.setGain((float) (volume * distanceGain(Math.sqrt(dx * dx + dy * dy + dz * dz), distance)));
         stream.setPosition(false, (float) source[0], (float) source[1], (float) source[2]);
     }
 
@@ -166,6 +166,11 @@ final class VoiceSource {
         if (!activated) return;
         if (decoder != null) decoder.reset();
         activated = false;
+    }
+
+    /** Upstream exponential_volume.volume_slider (default on): quieter settings follow a cubic curve. */
+    static double sliderGain(double volume) {
+        return volume < 1D ? volume * volume * volume : volume;
     }
 
     /** Upstream calculateDistanceGain with exponential_distance_gain (default on). */

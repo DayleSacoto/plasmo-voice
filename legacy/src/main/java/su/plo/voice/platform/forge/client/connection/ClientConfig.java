@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -31,11 +32,27 @@ public final class ClientConfig {
 
     /** Upstream VoiceClientActivationManager.register: the allowed distance for each server activation. */
     public Map<UUID, Integer> activationDistances() {
+        return activationDistances(activationId -> null);
+    }
+
+    /** Uses the player's stored choice for this server when the server still allows it (upstream Server config). */
+    public Map<UUID, Integer> activationDistances(Function<UUID, Integer> stored) {
         Map<UUID, Integer> distances = new LinkedHashMap<>();
         for (VoiceActivation activation : packet.getActivations()) {
-            distances.put(activation.getId(), activation.calculateAllowedDistance(activation.getDefaultDistance()));
+            distances.put(activation.getId(), allowedDistance(activation, stored.apply(activation.getId())));
         }
         return distances;
+    }
+
+    public VoiceActivation activation(UUID activationId) {
+        for (VoiceActivation activation : packet.getActivations()) {
+            if (activation.getId().equals(activationId)) return activation;
+        }
+        return null;
+    }
+
+    public static int allowedDistance(VoiceActivation activation, Integer stored) {
+        return activation.calculateAllowedDistance(stored == null ? activation.getDefaultDistance() : stored);
     }
 
     public static ClientConfig decode(ConfigPacket packet, PrivateKey privateKey) throws GeneralSecurityException {

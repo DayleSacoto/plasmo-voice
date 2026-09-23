@@ -64,6 +64,13 @@ public class PlaybackTest {
     }
 
     @Test
+    public void volumeSliderIsCubicBelowFullVolume() {
+        assertEquals(0.125D, VoiceSource.sliderGain(0.5D), 1e-9);
+        assertEquals(1D, VoiceSource.sliderGain(1D), 1e-9);
+        assertEquals(1.5D, VoiceSource.sliderGain(1.5D), 1e-9);
+    }
+
+    @Test
     public void stateDiffMatchesUpstreamByteDiff() {
         assertEquals(0, VoiceSource.stateDiff((byte) 5, (byte) 5));
         assertEquals(3, VoiceSource.stateDiff((byte) 5, (byte) 8));

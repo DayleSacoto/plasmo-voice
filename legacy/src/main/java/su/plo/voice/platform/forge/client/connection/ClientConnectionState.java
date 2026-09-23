@@ -12,6 +12,9 @@ import java.util.function.Consumer;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import lombok.Getter;
+import lombok.Setter;
+import su.plo.voice.proto.packets.Packet;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
 import su.plo.voice.proto.data.player.VoicePlayerInfo;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 
@@ -19,6 +22,9 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 @SideOnly(Side.CLIENT)
 public final class ClientConnectionState implements AutoCloseable {
     private final Consumer<? super PlayerStatePacket> stateSender;
+    /** TCP sender for the other serverbound packets; null in tests. */
+    @Setter
+    private Consumer<Packet<?>> packetSender;
     @Getter
     private boolean connected = true;
     @Getter
@@ -70,6 +76,13 @@ public final class ClientConnectionState implements AutoCloseable {
 
     public void clearConfig() {
         config = null;
+    }
+
+    /** Upstream VoiceClientActivation.onDistanceChange: tells the server the new activation distance. */
+    public void sendActivationDistance(UUID activationId, int distance) {
+        if (isStateSyncReady() && packetSender != null) {
+            packetSender.accept(new PlayerActivationDistancesPacket(Collections.singletonMap(activationId, distance)));
+        }
     }
 
     public void stateReported(boolean voiceDisabled, boolean microphoneMuted) {

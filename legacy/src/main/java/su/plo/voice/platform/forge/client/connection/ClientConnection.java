@@ -62,6 +62,7 @@ public final class ClientConnection implements AutoCloseable {
         this.connection = Objects.requireNonNull(connection);
         this.clientState = Objects.requireNonNull(clientState);
         this.state = clientState.openConnection(channel::sendToServer);
+        state.setPacketSender(channel::sendToServer);
         LOGGER.info("Voice client state opened: voiceDisabled={}, microphoneMuted={}, configured={}",
                 clientState.isVoiceDisabled(), clientState.isMicrophoneMuted(), state.isConfigured());
     }
@@ -185,11 +186,11 @@ public final class ClientConnection implements AutoCloseable {
             ClientVoiceSources created = new ClientVoiceSources(clientState::isVoiceDisabled,
                     sourceId -> requestSourceInfo(this.sources, sourceId));
             sources = created;
-            VoicePlayback startedPlayback = new VoicePlayback(accepted, created);
+            VoicePlayback startedPlayback = new VoicePlayback(accepted, clientState, created);
             playback = startedPlayback;
             startedPlayback.start();
             VoiceCapture startedCapture = new VoiceCapture(accepted, clientState, udpClient,
-                    accepted.activationDistances().getOrDefault(VoiceActivation.PROXIMITY_ID, 0),
+                    () -> proximityDistance(accepted),
                     end -> sendFromClientThread(end));
             capture = startedCapture;
             startedCapture.start();
@@ -199,7 +200,8 @@ public final class ClientConnection implements AutoCloseable {
                     packet.getServerId(), packet.getCaptureInfo().getSampleRate(),
                     packet.getCaptureInfo().getMtuSize(),
                     packet.getCaptureInfo().getEncoderInfo() == null ? "none" : packet.getCaptureInfo().getEncoderInfo().getName());
-            accepted.activationDistances().forEach((activationId, distance) -> channel.sendToServer(
+            accepted.activationDistances(activationId -> clientState.getActivationDistance(packet.getServerId(), activationId))
+                    .forEach((activationId, distance) -> channel.sendToServer(
                     new PlayerActivationDistancesPacket(Collections.singletonMap(activationId, distance))));
             // Settings changed after PlayerInfoPacket but before the server accepted state updates.
             clientState.syncState();
@@ -209,6 +211,13 @@ public final class ClientConnection implements AutoCloseable {
             udpClient = null;
             LOGGER.warn("Failed to decrypt voice configuration", e);
         }
+    }
+
+    /** Capture thread: the player's current proximity distance for this server. */
+    private int proximityDistance(ClientConfig config) {
+        VoiceActivation proximity = config.activation(VoiceActivation.PROXIMITY_ID);
+        return proximity == null ? 0 : ClientConfig.allowedDistance(proximity,
+                clientState.getActivationDistance(config.getPacket().getServerId(), VoiceActivation.PROXIMITY_ID));
     }
 
     private void clearConfig() {

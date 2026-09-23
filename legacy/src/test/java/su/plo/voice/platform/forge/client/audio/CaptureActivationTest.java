@@ -16,31 +16,54 @@ public class CaptureActivationTest {
     @Test
     public void pushToTalkHoldsBriefly() {
         CaptureActivation activation = new CaptureActivation();
-        assertEquals(Result.NOT_ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, false, THRESHOLD, T));
-        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, true, THRESHOLD, T));
-        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, false, THRESHOLD, T + 350));
-        assertEquals(Result.END, activation.process(SILENCE, Type.PUSH_TO_TALK, false, THRESHOLD, T + 351));
-        assertEquals(Result.NOT_ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, false, THRESHOLD, T + 400));
+        assertEquals(Result.NOT_ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, false, false, THRESHOLD, T));
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, false, true, THRESHOLD, T));
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, false, false, THRESHOLD, T + 350));
+        assertEquals(Result.END, activation.process(SILENCE, Type.PUSH_TO_TALK, false, false, THRESHOLD, T + 351));
+        assertEquals(Result.NOT_ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, false, false, THRESHOLD, T + 400));
     }
 
     @Test
     public void voiceActivationUsesThresholdAndHold() {
         CaptureActivation activation = new CaptureActivation();
-        assertEquals(Result.NOT_ACTIVATED, activation.process(QUIET, Type.VOICE, false, THRESHOLD, T));
-        assertEquals(Result.ACTIVATED, activation.process(LOUD, Type.VOICE, false, THRESHOLD, T + 20));
-        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Type.VOICE, false, THRESHOLD, T + 520));
-        assertEquals(Result.END, activation.process(SILENCE, Type.VOICE, false, THRESHOLD, T + 521));
+        assertEquals(Result.NOT_ACTIVATED, activation.process(QUIET, Type.VOICE, false, false, THRESHOLD, T));
+        assertEquals(Result.ACTIVATED, activation.process(LOUD, Type.VOICE, false, false, THRESHOLD, T + 20));
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Type.VOICE, false, false, THRESHOLD, T + 520));
+        assertEquals(Result.END, activation.process(SILENCE, Type.VOICE, false, false, THRESHOLD, T + 521));
         assertFalse(activation.isActive());
     }
 
     @Test
     public void resetStopsTheStream() {
         CaptureActivation activation = new CaptureActivation();
-        activation.process(LOUD, Type.VOICE, false, THRESHOLD, T);
+        activation.process(LOUD, Type.VOICE, false, false, THRESHOLD, T);
         assertTrue(activation.isActive());
         activation.reset();
         assertFalse(activation.isActive());
-        assertEquals(Result.NOT_ACTIVATED, activation.process(SILENCE, Type.VOICE, false, THRESHOLD, T + 10));
+        assertEquals(Result.NOT_ACTIVATED, activation.process(SILENCE, Type.VOICE, false, false, THRESHOLD, T + 10));
+    }
+
+    @Test
+    public void toggleSwitchesOnlyVoiceActivationOff() {
+        CaptureActivation activation = new CaptureActivation();
+        assertEquals(Result.ACTIVATED, activation.process(LOUD, Type.VOICE, false, false, THRESHOLD, T));
+        assertEquals(Result.END, activation.process(LOUD, Type.VOICE, true, false, THRESHOLD, T + 20));
+        assertEquals(Result.NOT_ACTIVATED, activation.process(LOUD, Type.VOICE, true, false, THRESHOLD, T + 40));
+        // Upstream ignores the toggle for push-to-talk.
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Type.PUSH_TO_TALK, true, true, THRESHOLD, T + 60));
+    }
+
+    @Test
+    public void microphoneGainNeverClips() {
+        short[] quiet = tone(1000);
+        short[] boosted = new MicrophoneGain().process(quiet.clone(), 2F);
+        assertEquals(2 * max(quiet), max(boosted), 2);
+
+        short[] loud = tone(30000);
+        MicrophoneGain gain = new MicrophoneGain();
+        assertTrue(max(gain.process(loud.clone(), 2F)) < Short.MAX_VALUE);
+        // The safe multiplier of a loud frame is remembered for the next frames.
+        assertTrue(max(gain.process(quiet.clone(), 2F)) < 2 * max(quiet) - 100);
     }
 
     @Test
@@ -58,6 +81,12 @@ public class CaptureActivationTest {
         assertFalse(VoiceCapture.isBrokenAlSoftVersion("1.1 ALSOFT 1.24.3"));
         assertFalse(VoiceCapture.isBrokenAlSoftVersion("1.1"));
         assertFalse(VoiceCapture.isBrokenAlSoftVersion(null));
+    }
+
+    private static int max(short[] pcm) {
+        int max = 0;
+        for (short sample : pcm) max = Math.max(max, Math.abs((int) sample));
+        return max;
     }
 
     private static short[] tone(int amplitude) {
