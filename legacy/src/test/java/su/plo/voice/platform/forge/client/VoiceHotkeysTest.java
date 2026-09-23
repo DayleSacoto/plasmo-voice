@@ -47,6 +47,8 @@ public class VoiceHotkeysTest {
         assertEquals(Collections.singletonList(KEY_M), hotkeys.getKeys(VoiceHotkeys.MUTE_MICROPHONE));
         assertTrue(hotkeys.getKeys(VoiceHotkeys.DISABLE_VOICE).isEmpty());
         assertTrue(hotkeys.getKeys(VoiceHotkeys.PROXIMITY_DISTANCE_INCREASE).isEmpty());
+        // Upstream GLFW_MOUSE_BUTTON_2: the right button, stored as button - 100.
+        assertEquals(Collections.singletonList(1 - 100), hotkeys.getKeys(VoiceHotkeys.ACTION));
     }
 
     @Test

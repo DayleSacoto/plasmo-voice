@@ -31,6 +31,7 @@ public final class ClientSettingsFile {
     private static final String KEY_BINDINGS = "key_bindings";
     private static final String OVERLAY = "overlay";
     private static final String SOURCE_STATES = OVERLAY + ".source_states";
+    private static final String VOLUMES = VOICE + ".volumes";
 
     private ClientSettingsFile() {
     }
@@ -66,6 +67,12 @@ public final class ClientSettingsFile {
                 HudOptions.OverlayStyle.NAME_SKIN.name()), HudOptions.OverlayStyle.NAME_SKIN, file));
         for (Map.Entry<String, Property> line : config.getCategory(SOURCE_STATES).getValues().entrySet()) {
             state.setOverlaySourceState(line.getKey(), enumValue(line.getValue(), HudOptions.OverlaySourceState.OFF, file));
+        }
+        state.setShowSourceIcons(Math.max(0, Math.min(2, config.get(OVERLAY, "show_source_icons", 0).getInt(0))));
+
+        for (ConfigCategory volume : config.getCategory(VOLUMES).getChildren()) {
+            if (volume.containsKey("volume")) state.setSourceVolume(volume.getName(), volume.get("volume").getDouble(1D));
+            if (volume.containsKey("muted")) state.setSourceMuted(volume.getName(), volume.get("muted").getBoolean(false));
         }
 
         VoiceHotkeys hotkeys = state.getHotkeys();
@@ -114,6 +121,11 @@ public final class ClientSettingsFile {
         config.get(OVERLAY, "overlay_position", "").set(state.getOverlayPosition().name());
         config.get(OVERLAY, "overlay_style", "").set(state.getOverlayStyle().name());
         state.overlaySourceStates().forEach((line, sourceState) -> config.get(SOURCE_STATES, line, "").set(sourceState.name()));
+        config.get(OVERLAY, "show_source_icons", 0).set(state.getShowSourceIcons());
+
+        config.removeCategory(config.getCategory(VOLUMES));
+        state.volumes().forEach((key, volume) -> config.get(VOLUMES + "." + key, "volume", 1D).set(volume));
+        state.mutes().forEach((key, muted) -> config.get(VOLUMES + "." + key, "muted", false).set(muted));
 
         VoiceHotkeys hotkeys = state.getHotkeys();
         for (String name : hotkeys.names()) {

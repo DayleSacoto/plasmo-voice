@@ -79,10 +79,15 @@ final class DevicesTab extends SettingsTab {
                 new SliderWidget(ELEMENT_WIDTH,
                         () -> current.getAsDouble() / 2D,
                         value -> set.accept(value * 2D),
-                        value -> Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) ? value : Math.round(value * 200D / 5D) * 5D / 200D,
+                        DevicesTab::snapVolume,
                         () -> Math.round(current.getAsDouble() * 100D) + "%"),
                 () -> current.getAsDouble() == 1D,
                 () -> set.accept(1D));
+    }
+
+    /** Slider value 0..1 for 0..200 %: 5 % steps unless left shift is held. */
+    static double snapVolume(double value) {
+        return Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) ? value : Math.round(value * 200D / 5D) * 5D / 200D;
     }
 
     private void addToggle(String labelKey, BooleanSupplier current, Consumer<Boolean> set) {

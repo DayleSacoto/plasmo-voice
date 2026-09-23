@@ -19,6 +19,10 @@ import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
+import su.plo.voice.proto.data.audio.codec.opus.OpusDecoderInfo;
+import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
+import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
+import su.plo.voice.proto.data.player.VoicePlayerInfo;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
 
@@ -134,5 +138,60 @@ public class ClientSettingsTest {
         state.setActivationDistance(serverId, VoiceActivation.PROXIMITY_ID, 17);
         assertEquals(Integer.valueOf(16), config.activationDistances(id -> state.getActivationDistance(serverId, id))
                 .get(VoiceActivation.PROXIMITY_ID));
+    }
+
+    @Test
+    public void volumesSurviveARestartAndApplyToPlayerSources() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair keys = generator.generateKeyPair();
+        ServerConfig serverConfig = new ServerConfig();
+        ClientConfig config = ClientConfig.decode(serverConfig.createPacket(keys.getPublic()), keys.getPrivate());
+        UUID playerId = UUID.randomUUID();
+        String playerKey = ClientState.playerVolumeKey(playerId);
+        PlayerSourceInfo source = new PlayerSourceInfo("plasmovoice", UUID.randomUUID(), serverConfig.getProximityLine().getId(),
+                null, (byte) 0, new OpusDecoderInfo(), false, true, 0,
+                new VoicePlayerInfo(playerId, "speaker", false, false, false));
+
+        File file = new File(folder.getRoot(), "client.cfg");
+        ClientState before = new ClientState();
+        before.setVolume(0.5D);
+        before.setSourceVolume(VoiceSourceLine.PROXIMITY_NAME, 0.5D);
+        before.setSourceVolume(playerKey, 1.5D);
+        before.setSourceMuted(playerKey, true);
+        before.setShowSourceIcons(1);
+        ClientSettingsFile.save(file, before);
+
+        ClientState after = new ClientState();
+        ClientSettingsFile.load(file, after);
+        assertEquals(1.5D, after.getSourceVolume(playerKey), 0D);
+        assertTrue(after.isSourceMuted(playerKey));
+        assertEquals(1, after.getShowSourceIcons());
+        // Upstream: global volume times the line volume times the player volume.
+        assertEquals(0.5D * 0.5D * 1.5D, after.volume(config, source), 1e-9);
+        assertTrue(after.isMuted(config, source));
+
+        // Defaults are not stored, and a muted line mutes every source on it.
+        after.setSourceVolume(playerKey, 1D);
+        after.setSourceMuted(playerKey, false);
+        assertFalse(after.isMuted(config, source));
+        after.setSourceMuted(VoiceSourceLine.PROXIMITY_NAME, true);
+        assertTrue(after.isMuted(config, source));
+        after.setSourceVolume(playerKey, 9D);
+        assertEquals(2D, after.getSourceVolume(playerKey), 0D);
+        ClientSettingsFile.save(file, after);
+        String saved = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        assertFalse(saved.contains("muted=false"));
+    }
+
+    @Test
+    public void localPlayerIsFoundByNameOnOfflineModeServers() {
+        ClientConnectionState connection = new ClientState().openConnection(packet -> {});
+        UUID session = UUID.randomUUID();
+        UUID offline = UUID.randomUUID();
+        assertEquals(session, connection.localPlayerId("VoiceTester", session));
+        connection.putPlayer(new VoicePlayerInfo(offline, "VoiceTester", false, false, false));
+        connection.putPlayer(new VoicePlayerInfo(UUID.randomUUID(), "Other", false, false, false));
+        assertEquals(offline, connection.localPlayerId("VoiceTester", session));
     }
 }

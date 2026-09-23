@@ -21,9 +21,11 @@ public final class VoiceHotkeys {
     public static final String PROXIMITY_DISTANCE_DECREASE = "key.plasmovoice.proximity.distance_decrease";
     public static final String MUTE_MICROPHONE = "key.plasmovoice.general.mute_microphone";
     public static final String DISABLE_VOICE = "key.plasmovoice.general.disable_voice";
+    public static final String ACTION = "key.plasmovoice.general.action";
     public static final int MAX_KEYS = 3;
     private static final int KEY_LMENU = 56;
     private static final int KEY_M = 50;
+    private static final int MOUSE_RIGHT = 1 - 100;
 
     private final Map<String, Hotkey> hotkeys = new LinkedHashMap<>();
 
@@ -35,6 +37,7 @@ public final class VoiceHotkeys {
         register(PROXIMITY_DISTANCE_DECREASE, false);
         register(MUTE_MICROPHONE, false, KEY_M);
         register(DISABLE_VOICE, false);
+        register(ACTION, false, MOUSE_RIGHT);
     }
 
     private void register(String name, boolean anyContext, Integer... defaultKeys) {

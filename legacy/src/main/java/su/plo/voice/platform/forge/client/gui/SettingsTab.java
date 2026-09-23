@@ -44,16 +44,21 @@ abstract class SettingsTab {
     /** Adds the rows; called again when the rows depend on a changed value. */
     abstract void build();
 
+    /** The tab opens or the screen is resized. */
     void init(int top, int bottom) {
         this.top = top;
         this.bottom = bottom;
+        rebuild();
+    }
+
+    void rebuild() {
         rows.clear();
         build();
         scroll = Math.max(0, Math.min(scroll, maxScroll()));
     }
 
-    void rebuild() {
-        init(top, bottom);
+    /** Every game tick while the tab is shown. */
+    void tick() {
     }
 
     /** Called when the tab or the screen closes. */
@@ -86,8 +91,29 @@ abstract class SettingsTab {
     /** Upstream OverlaySourceEntry: a 16px icon in front of the label. */
     void addIconOption(ResourceLocation labelIcon, String label, String tooltipKey, Widget element,
                        BooleanSupplier isDefault, Runnable reset, Widget... buttons) {
+        addRow(ROW_HEIGHT, labelIcon == null ? null : iconLabel(labelIcon), label, tooltipKey, element, isDefault, reset, buttons);
+    }
+
+    static LabelIcon iconLabel(ResourceLocation icon) {
+        return (mc, x, centerY) -> {
+            mc.getTextureManager().bindTexture(icon);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+            Gui.func_146110_a(x, centerY - 8, 0F, 0F, 16, 16, 16F, 16F);
+            return 20;
+        };
+    }
+
+    /** Option row with a custom label icon, e.g. upstream PlayerVolumeEntry's 24px head in a 30px row. */
+    void addRow(int height, LabelIcon labelIcon, String label, String tooltipKey, Widget element,
+                BooleanSupplier isDefault, Runnable reset, Widget... buttons) {
         IconWidget resetButton = new IconWidget(() -> RESET_ICON, reset, () -> !isDefault.getAsBoolean(), null);
-        rows.add(new OptionRow(labelIcon, label, tooltipKey, element, resetButton, Arrays.asList(buttons)));
+        rows.add(new OptionRow(height, labelIcon, label, tooltipKey, element, resetButton, Arrays.asList(buttons)));
+    }
+
+    /** Upstream FullWidthEntry: one widget across the whole list width. */
+    void addFullWidth(Widget widget, int height) {
+        rows.add(new FullWidthRow(widget, height));
     }
 
     void render(Minecraft mc, int mouseX, int mouseY) {
@@ -223,8 +249,17 @@ abstract class SettingsTab {
         return lines;
     }
 
+    /** Draws the label icon centered on the row and returns the label indent. */
+    interface LabelIcon {
+        int draw(Minecraft mc, int x, int centerY);
+    }
+
     abstract static class Row {
-        final int height = ROW_HEIGHT;
+        final int height;
+
+        Row(int height) {
+            this.height = height;
+        }
 
         abstract void layout(int left, int y);
 
@@ -245,6 +280,7 @@ abstract class SettingsTab {
         private int y;
 
         CategoryRow(String text) {
+            super(ROW_HEIGHT);
             this.text = text;
         }
 
@@ -262,8 +298,36 @@ abstract class SettingsTab {
         }
     }
 
+    private static final class FullWidthRow extends Row {
+        private final Widget widget;
+        private final List<Widget> widgets = new ArrayList<>();
+
+        FullWidthRow(Widget widget, int height) {
+            super(height);
+            this.widget = widget;
+            widgets.add(widget);
+        }
+
+        @Override
+        void layout(int left, int y) {
+            widget.x = left;
+            widget.y = y + height / 2 - widget.height / 2;
+            widget.width = CONTAINER_WIDTH;
+        }
+
+        @Override
+        void render(Minecraft mc, int mouseX, int mouseY) {
+            widget.render(mc, mouseX, mouseY);
+        }
+
+        @Override
+        List<Widget> widgets() {
+            return widgets;
+        }
+    }
+
     private static final class OptionRow extends Row {
-        private final ResourceLocation labelIcon;
+        private final LabelIcon labelIcon;
         private final String label;
         private final String tooltipKey;
         private final Widget element;
@@ -273,8 +337,9 @@ abstract class SettingsTab {
         private int left;
         private int y;
 
-        OptionRow(ResourceLocation labelIcon, String label, String tooltipKey, Widget element, IconWidget reset,
+        OptionRow(int height, LabelIcon labelIcon, String label, String tooltipKey, Widget element, IconWidget reset,
                   List<Widget> buttons) {
+            super(height);
             this.labelIcon = labelIcon;
             this.label = label;
             this.tooltipKey = tooltipKey;
@@ -310,13 +375,7 @@ abstract class SettingsTab {
         void render(Minecraft mc, int mouseX, int mouseY) {
             FontRenderer font = mc.fontRenderer;
             int labelX = left;
-            if (labelIcon != null) {
-                mc.getTextureManager().bindTexture(labelIcon);
-                GL11.glEnable(GL11.GL_BLEND);
-                GL11.glColor4f(1F, 1F, 1F, 1F);
-                Gui.func_146110_a(left, y + height / 2 - 8, 0F, 0F, 16, 16, 16F, 16F);
-                labelX += 20;
-            }
+            if (labelIcon != null) labelX += labelIcon.draw(mc, left, y + height / 2);
             int labelWidth = element.x - labelX - 4;
             font.drawStringWithShadow(Widget.fit(font, label, labelWidth), labelX, y + height / 2 - font.FONT_HEIGHT / 2, 0xFFFFFF);
             element.render(mc, mouseX, mouseY);

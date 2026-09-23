@@ -15,6 +15,9 @@ import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
+import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
+import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
+import su.plo.voice.proto.data.audio.source.SourceInfo;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 
@@ -79,6 +82,15 @@ public final class ClientState {
     private volatile HudOptions.OverlayStyle overlayStyle = HudOptions.OverlayStyle.NAME_SKIN;
     /** Upstream overlay.source_states by source line name; lines without players default to OFF. */
     private final Map<String, HudOptions.OverlaySourceState> overlaySourceStates = new ConcurrentHashMap<>();
+
+    /** Upstream overlay.show_source_icons: 0 hidden together with the HUD, 1 always, 2 never. */
+    @Getter
+    @Setter
+    private volatile int showSourceIcons;
+
+    /** Upstream voice.volumes: volume (0..2) and mute by source line name or {@link #playerVolumeKey}; defaults are not stored. */
+    private final Map<String, Double> volumes = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> mutes = new ConcurrentHashMap<>();
 
     /** Upstream key_bindings. */
     @Getter
@@ -176,6 +188,64 @@ public final class ClientState {
 
     Map<String, HudOptions.OverlaySourceState> overlaySourceStates() {
         return overlaySourceStates;
+    }
+
+    /** Upstream SourceLineVolumes.getPlayerVolume key. */
+    public static String playerVolumeKey(UUID playerId) {
+        return "source_" + playerId;
+    }
+
+    public double getSourceVolume(String key) {
+        return volumes.getOrDefault(key, 1D);
+    }
+
+    public void setSourceVolume(String key, double volume) {
+        volume = clamp(volume, 0D, 2D);
+        if (volume == 1D) {
+            volumes.remove(key);
+        } else {
+            volumes.put(key, volume);
+        }
+    }
+
+    public boolean isSourceMuted(String key) {
+        return mutes.getOrDefault(key, false);
+    }
+
+    public void setSourceMuted(String key, boolean muted) {
+        if (muted) {
+            mutes.put(key, true);
+        } else {
+            mutes.remove(key);
+        }
+    }
+
+    /** Upstream BaseClientAudioSource: global volume times the source line and the player volume, before the slider curve. */
+    public double volume(ClientConfig config, SourceInfo info) {
+        VoiceSourceLine line = config.sourceLine(info.getLineId());
+        double lineVolume = line == null ? 1D : getSourceVolume(line.getName());
+        return volume * lineVolume * getSourceVolume(sourceKey(info));
+    }
+
+    /** Upstream drops the audio of a muted source line and of a player muted in the Volume tab. */
+    public boolean isMuted(ClientConfig config, SourceInfo info) {
+        VoiceSourceLine line = config.sourceLine(info.getLineId());
+        if (line != null && isSourceMuted(line.getName())) return true;
+        return info instanceof PlayerSourceInfo && isSourceMuted(sourceKey(info));
+    }
+
+    private static String sourceKey(SourceInfo info) {
+        return info instanceof PlayerSourceInfo
+                ? playerVolumeKey(((PlayerSourceInfo) info).getPlayerInfo().getPlayerId())
+                : "source_" + info.getId();
+    }
+
+    Map<String, Double> volumes() {
+        return volumes;
+    }
+
+    Map<String, Boolean> mutes() {
+        return mutes;
     }
 
     Map<UUID, Map<UUID, Integer>> distancesByServer() {

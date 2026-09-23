@@ -22,6 +22,7 @@ final class HotKeysTab extends SettingsTab {
         addCategory("key.plasmovoice.general");
         addHotkey(VoiceHotkeys.MUTE_MICROPHONE, VoiceHotkeys.MUTE_MICROPHONE);
         addHotkey(VoiceHotkeys.DISABLE_VOICE, VoiceHotkeys.DISABLE_VOICE);
+        addHotkey(VoiceHotkeys.ACTION, VoiceHotkeys.ACTION);
 
         ClientConfig config = state.getConnection() == null ? null : state.getConnection().getConfig();
         VoiceActivation proximity = config == null ? null : config.activation(VoiceActivation.PROXIMITY_ID);

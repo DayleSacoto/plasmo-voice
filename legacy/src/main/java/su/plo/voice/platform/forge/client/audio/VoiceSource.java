@@ -42,7 +42,8 @@ final class VoiceSource {
     private StreamSource stream;
     private long lastSequenceNumber = -1L;
     private long lastActivation;
-    private boolean activated;
+    /** Upstream isActivated; written by the playback thread, read by the player icons. */
+    volatile boolean activated;
 
     VoiceSource(SourceInfo info) {
         this.info = info;

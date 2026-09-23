@@ -25,6 +25,7 @@ import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.gui.VoiceNotAvailableScreen;
 import su.plo.voice.platform.forge.client.gui.VoiceSettingsScreen;
+import su.plo.voice.platform.forge.client.hud.PlayerIcons;
 import su.plo.voice.platform.forge.client.hud.VoiceHud;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 
@@ -35,9 +36,11 @@ public final class VoiceControls {
             new KeyBinding("key.plasmovoice.settings", Keyboard.KEY_V, "Plasmo Voice");
 
     private final ClientState state;
+    private final PlayerVolumeAction volumeAction;
 
-    private VoiceControls(ClientState state) {
+    private VoiceControls(ClientState state, PlayerVolumeAction volumeAction) {
         this.state = state;
+        this.volumeAction = volumeAction;
     }
 
     public static void register() {
@@ -47,8 +50,11 @@ public final class VoiceControls {
         ClientSettingsFile.load(settings, state);
 
         ClientRegistry.registerKeyBinding(SETTINGS_KEY);
-        FMLCommonHandler.instance().bus().register(new VoiceControls(state));
+        PlayerVolumeAction volumeAction = new PlayerVolumeAction(state);
+        FMLCommonHandler.instance().bus().register(new VoiceControls(state, volumeAction));
+        MinecraftForge.EVENT_BUS.register(volumeAction);
         MinecraftForge.EVENT_BUS.register(new VoiceHud(state));
+        MinecraftForge.EVENT_BUS.register(new PlayerIcons(state, volumeAction));
     }
 
     /** Screens receive keys directly, so they close themselves on the settings key like upstream. */
@@ -75,6 +81,7 @@ public final class VoiceControls {
         // Upstream handlePTT ignores the key while typing in chat or on a sign.
         boolean typing = screen instanceof GuiChat || screen instanceof GuiEditSign;
         state.setPushToTalkPressed(hotkeys.isPressed(VoiceHotkeys.PROXIMITY_PTT) && !typing && !capturing);
+        volumeAction.update(hotkeys.isPressed(VoiceHotkeys.ACTION));
     }
 
     private void onPress(String name) {
@@ -86,6 +93,9 @@ public final class VoiceControls {
             case VoiceHotkeys.DISABLE_VOICE:
                 state.setVoiceDisabled(!state.isVoiceDisabled());
                 state.save();
+                break;
+            case VoiceHotkeys.ACTION:
+                volumeAction.onPress();
                 break;
             case VoiceHotkeys.PROXIMITY_TOGGLE:
                 toggleActivation();

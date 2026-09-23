@@ -118,8 +118,7 @@ public final class VoicePlayback implements AutoCloseable {
                 if (ensureDevice(now)) {
                     double[] current = listener;
                     updateListener(current);
-                    double volume = state.getVolume();
-                    for (VoiceSource source : sources.all()) source.pump(config, current, volume, now);
+                    for (VoiceSource source : sources.all()) source.pump(config, current, state.volume(config, source.info), now);
                 } else {
                     // Nothing can play; keep the jitter buffers from holding stale frames.
                     for (VoiceSource source : sources.all()) source.buffer.clear();

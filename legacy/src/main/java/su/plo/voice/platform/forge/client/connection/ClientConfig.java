@@ -17,6 +17,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import su.plo.voice.platform.forge.encryption.AesEncryption;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
+import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
 import su.plo.voice.proto.data.encryption.EncryptionInfo;
 import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
 
@@ -47,6 +48,13 @@ public final class ClientConfig {
     public VoiceActivation activation(UUID activationId) {
         for (VoiceActivation activation : packet.getActivations()) {
             if (activation.getId().equals(activationId)) return activation;
+        }
+        return null;
+    }
+
+    public VoiceSourceLine sourceLine(UUID lineId) {
+        for (VoiceSourceLine line : packet.getSourceLines()) {
+            if (line.getId().equals(lineId)) return line;
         }
         return null;
     }

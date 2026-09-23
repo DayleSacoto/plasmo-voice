@@ -109,6 +109,21 @@ public final class ClientConnectionState implements AutoCloseable {
         return Collections.unmodifiableCollection(players.values());
     }
 
+    /**
+     * The server's id of the local player. A 1.7.10 client keeps its session UUID, which an offline-mode server
+     * replaces with the offline UUID of the name, so the voice player list is matched by name first.
+     */
+    public UUID localPlayerId(String name, UUID sessionId) {
+        for (VoicePlayerInfo player : players.values()) {
+            if (player.getPlayerNick().equals(name)) return player.getPlayerId();
+        }
+        return sessionId;
+    }
+
+    public VoicePlayerInfo getPlayer(UUID playerId) {
+        return players.get(playerId);
+    }
+
     public void putPlayers(Collection<VoicePlayerInfo> infos) {
         if (!connected) return;
         infos.forEach(this::putPlayer);

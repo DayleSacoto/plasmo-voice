@@ -51,7 +51,7 @@ public class VoiceRoutingTest {
             Peer nether = new Peer(server, config, presence(false, false, -1, 5));
 
             List<UUID> requests = new CopyOnWriteArrayList<>();
-            ClientVoiceSources sources = new ClientVoiceSources(() -> false, sourceId -> {
+            ClientVoiceSources sources = new ClientVoiceSources(() -> false, info -> false, sourceId -> {
                 requests.add(sourceId);
                 // Stands in for the server's SourceInfoPacket reply on the client thread.
                 listener.sources.updateSourceInfo(sourceInfo(speaker, config));

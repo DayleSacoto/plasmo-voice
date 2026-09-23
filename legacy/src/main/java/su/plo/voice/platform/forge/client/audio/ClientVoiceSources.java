@@ -8,9 +8,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
+import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
 import su.plo.voice.proto.data.audio.source.SourceInfo;
 import su.plo.voice.proto.packets.tcp.clientbound.SourceAudioEndPacket;
 import su.plo.voice.proto.packets.udp.clientbound.SourceAudioPacket;
@@ -24,13 +26,15 @@ public final class ClientVoiceSources {
     private static final long SOURCE_INFO_REQUEST_INTERVAL_MS = 1_000L;
 
     private final BooleanSupplier voiceDisabled;
+    private final Predicate<SourceInfo> muted;
     private final Consumer<UUID> sourceInfoRequester;
     private final Map<UUID, VoiceSource> sources = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastRequestById = new ConcurrentHashMap<>();
     private volatile boolean closed;
 
-    public ClientVoiceSources(BooleanSupplier voiceDisabled, Consumer<UUID> sourceInfoRequester) {
+    public ClientVoiceSources(BooleanSupplier voiceDisabled, Predicate<SourceInfo> muted, Consumer<UUID> sourceInfoRequester) {
         this.voiceDisabled = voiceDisabled;
+        this.muted = muted;
         this.sourceInfoRequester = sourceInfoRequester;
     }
 
@@ -44,13 +48,14 @@ public final class ClientVoiceSources {
         VoiceSource source = sources.get(packet.getSourceId());
         // Upstream asks the server again when the source is unknown or its state changed.
         if (source == null || source.info.getState() != packet.getSourceState()) requestSourceInfo(packet.getSourceId());
-        if (source != null) source.offer(packet, System.currentTimeMillis());
+        // Upstream: a muted line or player drops the audio, so the source is never activated.
+        if (source != null && !muted.test(source.info)) source.offer(packet, System.currentTimeMillis());
     }
 
     public void onAudioEnd(SourceAudioEndPacket packet) {
         if (closed || voiceDisabled.getAsBoolean()) return;
         VoiceSource source = sources.get(packet.getSourceId());
-        if (source != null) source.end(packet, System.currentTimeMillis());
+        if (source != null && !muted.test(source.info)) source.end(packet, System.currentTimeMillis());
     }
 
     /** Stops accepting audio; the playback thread releases decoders and OpenAL sources. */
@@ -69,6 +74,17 @@ public final class ClientVoiceSources {
             if (source.canHear) audible.add(source.info);
         }
         return audible;
+    }
+
+    /** Upstream getPlayerSources filtered by isActivated and isIconVisible; client thread (player icons). */
+    public List<SourceInfo> activated(UUID playerId) {
+        List<SourceInfo> activated = new ArrayList<>();
+        for (VoiceSource source : sources.values()) {
+            SourceInfo info = source.info;
+            if (source.activated && info.isIconVisible() && info instanceof PlayerSourceInfo
+                    && ((PlayerSourceInfo) info).getPlayerInfo().getPlayerId().equals(playerId)) activated.add(info);
+        }
+        return activated;
     }
 
     Collection<VoiceSource> all() {

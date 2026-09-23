@@ -14,7 +14,7 @@ import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
 
 /**
- * Upstream OverlayTabWidget without the entity icon options, which belong to the player icons.
+ * Upstream OverlayTabWidget. "Show On Static Sources" is left out: static sources come only from server addons.
  * Source lines without a player list are switched on and off, like upstream.
  */
 @SideOnly(Side.CLIENT)
@@ -34,6 +34,16 @@ final class OverlayTab extends SettingsTab {
                         this::chooseIconPosition),
                 () -> state.getActivationIconPosition() == HudOptions.IconPosition.BOTTOM_CENTER,
                 () -> state.setActivationIconPosition(HudOptions.IconPosition.BOTTOM_CENTER));
+
+        addCategory("gui.plasmovoice.overlay.source_icons");
+        List<String> iconModes = new ArrayList<>();
+        for (String mode : new String[] {"hud", "always", "hidden"}) {
+            iconModes.add(I18n.format("gui.plasmovoice.overlay.show_source_icons." + mode));
+        }
+        addOption(I18n.format("gui.plasmovoice.overlay.show_source_icons"), null,
+                new DropDownWidget(ELEMENT_WIDTH, () -> iconModes.get(state.getShowSourceIcons()), iconModes,
+                        state::setShowSourceIcons),
+                () -> state.getShowSourceIcons() == 0, () -> state.setShowSourceIcons(0));
 
         addCategory("gui.plasmovoice.overlay");
         addOption(I18n.format("gui.plasmovoice.overlay.enable"), null,

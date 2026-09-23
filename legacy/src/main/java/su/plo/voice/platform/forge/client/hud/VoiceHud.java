@@ -65,7 +65,8 @@ public final class VoiceHud extends Gui {
     }
 
     private void renderActivationIcon(Minecraft mc, ClientConnectionState connection, int width, int height) {
-        ResourceLocation icon = activationIcon(connection, mc.thePlayer.getUniqueID());
+        ResourceLocation icon = activationIcon(connection,
+                connection.localPlayerId(mc.thePlayer.getCommandSenderName(), mc.thePlayer.getUniqueID()));
         if (icon == null) return;
         HudOptions.IconPosition position = state.getActivationIconPosition();
         // Upstream moves the bottom center icon out of the way of the creative hotbar.
@@ -118,7 +119,7 @@ public final class VoiceHud extends Gui {
 
         if (style.hasSkin() && source instanceof PlayerSourceInfo) {
             if (position.isRight()) x -= 16;
-            drawHead(mc, ((PlayerSourceInfo) source).getPlayerInfo().getPlayerId(), x, y);
+            drawHead(mc, ((PlayerSourceInfo) source).getPlayerInfo().getPlayerId(), x, y, 16);
             if (!position.isRight()) x += 16 + 1;
         }
 
@@ -143,15 +144,15 @@ public final class VoiceHud extends Gui {
      * ponytail: the skin of a player loaded in the world, Steve otherwise; 1.7.10 has no profile cache
      * for players out of render range. Load skins by profile if the overlay needs distant sources.
      */
-    private void drawHead(Minecraft mc, UUID playerId, int x, int y) {
+    public static void drawHead(Minecraft mc, UUID playerId, int x, int y, int size) {
         EntityPlayer player = mc.theWorld.func_152378_a(playerId);
         ResourceLocation skin = player instanceof AbstractClientPlayer
                 ? ((AbstractClientPlayer) player).getLocationSkin()
                 : AbstractClientPlayer.locationStevePng;
         mc.getTextureManager().bindTexture(skin);
         GL11.glColor4f(1F, 1F, 1F, 1F);
-        func_152125_a(x, y, 8F, 8F, 8, 8, 16, 16, 64F, 32F);
-        func_152125_a(x, y, 40F, 8F, 8, 8, 16, 16, 64F, 32F);
+        func_152125_a(x, y, 8F, 8F, 8, 8, size, size, 64F, 32F);
+        func_152125_a(x, y, 40F, 8F, 8, 8, size, size, 64F, 32F);
     }
 
     /** Upstream getSourceSenderName: the source name, the voice player's nick, or the line name. */

@@ -135,7 +135,7 @@ public final class ClientConnection implements AutoCloseable {
 
     private void handle(PlayerDisconnectPacket packet) {
         EntityPlayer self = Minecraft.getMinecraft().thePlayer;
-        if (self != null && self.getUniqueID().equals(packet.getPlayerId())) {
+        if (self != null && state.localPlayerId(self.getCommandSenderName(), self.getUniqueID()).equals(packet.getPlayerId())) {
             // Upstream: the server dropped our UDP session; its PlayerInfoRequest restarts the handshake.
             clearConfig();
             if (udpClient != null) udpClient.close();
@@ -184,6 +184,7 @@ public final class ClientConnection implements AutoCloseable {
             ClientConfig accepted = ClientConfig.decode(packet, getKeyPair().getPrivate());
             state.acceptConfig(accepted);
             ClientVoiceSources created = new ClientVoiceSources(clientState::isVoiceDisabled,
+                    info -> clientState.isMuted(accepted, info),
                     sourceId -> requestSourceInfo(this.sources, sourceId));
             sources = created;
             state.setSources(created);
