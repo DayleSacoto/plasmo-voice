@@ -27,6 +27,7 @@ public final class UdpServer implements AutoCloseable {
     private final int bindPort;
     private final String advertisedHost;
     private final int advertisedPort;
+    private final int keepAliveTimeoutMs;
     private final Map<UUID, Session> byPlayer = new ConcurrentHashMap<>();
     private final Map<UUID, Session> bySecret = new ConcurrentHashMap<>();
     private volatile boolean closed;
@@ -34,7 +35,8 @@ public final class UdpServer implements AutoCloseable {
     private volatile InetSocketAddress boundAddress;
     private Thread worker;
 
-    public UdpServer(Logger logger, String bindHost, int bindPort, String advertisedHost, int advertisedPort) {
+    public UdpServer(Logger logger, String bindHost, int bindPort, String advertisedHost, int advertisedPort,
+                     int keepAliveTimeoutMs) {
         if (bindHost == null || bindHost.isEmpty() || advertisedHost == null || advertisedHost.isEmpty()
                 || advertisedHost.equals("::")
                 || bindPort < 0 || bindPort > 65535 || advertisedPort < 0 || advertisedPort > 65535) {
@@ -45,14 +47,12 @@ public final class UdpServer implements AutoCloseable {
         this.bindPort = bindPort;
         this.advertisedHost = advertisedHost;
         this.advertisedPort = advertisedPort;
+        this.keepAliveTimeoutMs = keepAliveTimeoutMs;
     }
 
-    public static UdpServer fromProperties(Logger logger) {
-        return new UdpServer(logger,
-                System.getProperty("plasmovoice.udp.bind_host", "0.0.0.0"),
-                Integer.parseInt(System.getProperty("plasmovoice.udp.bind_port", "0")),
-                System.getProperty("plasmovoice.udp.advertised_host", "0.0.0.0"),
-                Integer.parseInt(System.getProperty("plasmovoice.udp.advertised_port", "0")));
+    public static UdpServer create(Logger logger, ServerSettings settings, int minecraftPort) {
+        return new UdpServer(logger, settings.getHostIp(), settings.bindPort(minecraftPort),
+                settings.advertisedIp(), settings.advertisedPort(), settings.getKeepAliveTimeoutMs());
     }
 
     public void start() {
@@ -157,7 +157,7 @@ public final class UdpServer implements AutoCloseable {
         for (Session session : bySecret.values()) {
             synchronized (session) {
                 if (!session.active || !session.authenticated) continue;
-                if (now - session.lastReceived > 15_000L) {
+                if (now - session.lastReceived > keepAliveTimeoutMs) {
                     removeSession(session);
                     logger.info("UDP session timed out for player {}", session.playerId);
                 } else if (now - session.sentKeepAlive >= 1_000L) {

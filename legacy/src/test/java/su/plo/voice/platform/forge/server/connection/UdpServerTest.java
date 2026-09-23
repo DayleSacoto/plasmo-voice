@@ -13,7 +13,7 @@ import static org.junit.Assert.*;
 public class UdpServerTest {
     @Test
     public void sessionsBelongToPlayersAndExpireOnLogout() {
-        UdpServer server = new UdpServer(LogManager.getLogger("test"), "127.0.0.1", 0, "127.0.0.1", 0);
+        UdpServer server = new UdpServer(LogManager.getLogger("test"), "127.0.0.1", 0, "127.0.0.1", 0, 15_000);
         UUID player = UUID.randomUUID();
         UdpServer.Session first = server.createSession(player);
         assertSame(first, server.createSession(player));
@@ -34,7 +34,7 @@ public class UdpServerTest {
 
     @Test
     public void wildcardSentinelPreservesHostAndUsesBoundPort() throws Exception {
-        try (UdpServer server = new UdpServer(LogManager.getLogger("test"), "0.0.0.0", 0, "0.0.0.0", 0)) {
+        try (UdpServer server = new UdpServer(LogManager.getLogger("test"), "0.0.0.0", 0, "0.0.0.0", 0, 15_000)) {
             UdpServer.Session session = server.createSession(UUID.randomUUID());
             server.start();
             ConnectionPacket packet = null;
@@ -58,11 +58,11 @@ public class UdpServerTest {
     public void emptyHostsAndUnsupportedIpv6SentinelAreRejected() {
         for (String host : new String[] {null, ""}) {
             assertThrows(IllegalArgumentException.class,
-                    () -> new UdpServer(LogManager.getLogger("test"), host, 0, "0.0.0.0", 0));
+                    () -> new UdpServer(LogManager.getLogger("test"), host, 0, "0.0.0.0", 0, 15_000));
             assertThrows(IllegalArgumentException.class,
-                    () -> new UdpServer(LogManager.getLogger("test"), "0.0.0.0", 0, host, 0));
+                    () -> new UdpServer(LogManager.getLogger("test"), "0.0.0.0", 0, host, 0, 15_000));
         }
         assertThrows(IllegalArgumentException.class,
-                () -> new UdpServer(LogManager.getLogger("test"), "0.0.0.0", 0, "::", 0));
+                () -> new UdpServer(LogManager.getLogger("test"), "0.0.0.0", 0, "::", 0, 15_000));
     }
 }

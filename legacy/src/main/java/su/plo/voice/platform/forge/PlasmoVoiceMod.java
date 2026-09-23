@@ -1,5 +1,8 @@
 package su.plo.voice.platform.forge;
 
+import java.io.File;
+
+import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
@@ -25,6 +28,7 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.platform.forge.server.connection.ServerConnection;
 import su.plo.voice.platform.forge.server.connection.UdpServer;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
+import su.plo.voice.platform.forge.server.connection.ServerSettings;
 import su.plo.voice.platform.forge.server.connection.ServerVoicePlayers;
 
 @Getter
@@ -90,7 +94,9 @@ public final class PlasmoVoiceMod {
             ServerConnection connection = existing != null ? existing : new ServerConnection(player);
 
             ServerConnection.PlayerInfoResult result =
-                    connection.handle(info, VERSION, ServerConnection.DEFAULT_CLIENT_MOD_MIN_VERSION);
+                    connection.handle(info, VERSION, serverConfig == null
+                            ? ServerConnection.DEFAULT_CLIENT_MOD_MIN_VERSION
+                            : serverConfig.getSettings().getClientModMinVersion());
             if (result != ServerConnection.PlayerInfoResult.ACCEPTED) {
                 if (result == ServerConnection.PlayerInfoResult.UNSUPPORTED_VERSION) {
                     connection.suggestSupportedVersion(info.getMinecraftVersion());
@@ -129,8 +135,12 @@ public final class PlasmoVoiceMod {
     @Mod.EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) throws java.security.GeneralSecurityException {
         voicePlayers.clear();
-        serverConfig = new ServerConfig();
-        udpServer = UdpServer.fromProperties(LOGGER);
+        ServerSettings settings = ServerSettings.load(
+                new File(Loader.instance().getConfigDir(), "plasmovoice/server.cfg"), LOGGER);
+        serverConfig = new ServerConfig(settings);
+        // getServerPort() is @SideOnly(SERVER): singleplayer has no fixed port, so upstream falls back to a random one.
+        int minecraftPort = event.getServer().isDedicatedServer() ? event.getServer().getServerPort() : -1;
+        udpServer = UdpServer.create(LOGGER, settings, minecraftPort);
         udpServer.start();
     }
 
