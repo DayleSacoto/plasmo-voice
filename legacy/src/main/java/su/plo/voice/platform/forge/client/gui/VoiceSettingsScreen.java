@@ -13,6 +13,7 @@ import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
+import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 import su.plo.voice.platform.forge.PlasmoVoiceMod;
@@ -54,6 +55,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
         tabButtons.clear();
         addTab("gui.plasmovoice.devices", "devices", new DevicesTab(this, state));
         addTab("gui.plasmovoice.activation", "activation", new ActivationTab(this, state));
+        addTab("gui.plasmovoice.hotkeys", "hotkeys", new HotKeysTab(this, state));
         layoutTabs();
         activeTab().init(navigationHeight, height);
     }
@@ -115,6 +117,17 @@ public final class VoiceSettingsScreen extends GuiScreen {
     public void onGuiClosed() {
         activeTab().removed();
         state.save();
+    }
+
+    /** The hotkey tab records combinations, so key releases matter too. */
+    @Override
+    public void handleKeyboardInput() {
+        if (!Keyboard.getEventKeyState()) activeTab().keyReleased(Keyboard.getEventKey());
+        super.handleKeyboardInput();
+    }
+
+    public boolean isCapturingHotkey() {
+        return !tabs.isEmpty() && activeTab().getRecording() != null;
     }
 
     @Override

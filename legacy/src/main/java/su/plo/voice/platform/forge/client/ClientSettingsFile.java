@@ -1,6 +1,8 @@
 package su.plo.voice.platform.forge.client;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,6 +27,7 @@ public final class ClientSettingsFile {
     private static final String VOICE = "voice";
     private static final String ACTIVATIONS = "activations";
     private static final String SERVERS = "servers";
+    private static final String KEY_BINDINGS = "key_bindings";
 
     private ClientSettingsFile() {
     }
@@ -49,6 +52,17 @@ public final class ClientSettingsFile {
             LOGGER.warn("Unknown activation type {} in {}; using push-to-talk", type, file.getName());
         }
         state.setActivationToggled(config.get(proximity, "toggle", false).getBoolean(false));
+
+        VoiceHotkeys hotkeys = state.getHotkeys();
+        for (String name : hotkeys.names()) {
+            Property keys = config.get(KEY_BINDINGS, name, codes(hotkeys.getKeys(name)));
+            try {
+                hotkeys.setKeys(name, parseCodes(keys.getString()));
+            } catch (NumberFormatException e) {
+                LOGGER.warn("Invalid key binding {}={} in {}; using the default", name, keys.getString(), file.getName());
+                hotkeys.reset(name);
+            }
+        }
 
         for (ConfigCategory server : config.getCategory(SERVERS).getChildren()) {
             UUID serverId = uuid(server.getName());
@@ -79,10 +93,33 @@ public final class ClientSettingsFile {
         config.get(proximity, "type", CaptureActivation.Type.PUSH_TO_TALK.name()).set(state.getActivationType().name());
         config.get(proximity, "toggle", false).set(state.isActivationToggled());
 
+        VoiceHotkeys hotkeys = state.getHotkeys();
+        for (String name : hotkeys.names()) {
+            config.get(KEY_BINDINGS, name, "").set(codes(hotkeys.getKeys(name)));
+        }
+        config.getCategory(KEY_BINDINGS).setComment("Keyboard key codes and mouse buttons (button - 100), comma separated; empty is unbound");
+
         config.removeCategory(config.getCategory(SERVERS));
         state.distancesByServer().forEach((serverId, distances) -> distances.forEach((activationId, distance) ->
                 config.get(SERVERS + "." + serverId, activationId.toString(), 0).set(distance)));
         config.save();
+    }
+
+    static String codes(List<Integer> keys) {
+        StringBuilder text = new StringBuilder();
+        for (int key : keys) {
+            if (text.length() > 0) text.append(',');
+            text.append(key);
+        }
+        return text.toString();
+    }
+
+    static List<Integer> parseCodes(String text) {
+        List<Integer> keys = new ArrayList<>();
+        for (String part : text.split(",")) {
+            if (!part.trim().isEmpty()) keys.add(Integer.parseInt(part.trim()));
+        }
+        return keys;
     }
 
     private static UUID uuid(String value) {

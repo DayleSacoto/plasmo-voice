@@ -60,6 +60,11 @@ public final class ClientState {
     /** Upstream Servers: chosen activation distance per server id and activation id. */
     private final Map<UUID, Map<UUID, Integer>> distancesByServer = new ConcurrentHashMap<>();
 
+    /** Upstream key_bindings. */
+    @Getter
+    private final VoiceHotkeys hotkeys = new VoiceHotkeys();
+
+    /** Runtime push-to-talk state from {@link VoiceControls}; read by the capture thread. */
     @Getter
     @Setter
     private volatile boolean pushToTalkPressed;

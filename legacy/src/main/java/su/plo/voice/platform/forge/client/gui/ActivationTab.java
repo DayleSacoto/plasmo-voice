@@ -9,6 +9,7 @@ import net.minecraft.client.resources.I18n;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 import su.plo.voice.platform.forge.client.ClientState;
+import su.plo.voice.platform.forge.client.VoiceHotkeys;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
@@ -31,6 +32,12 @@ final class ActivationTab extends SettingsTab {
 
         addCategory(proximity.getTranslation());
         addType(I18n.format(proximity.getTranslation()));
+        // Upstream createActivationButton: the push-to-talk key, or the toggle key for voice activation.
+        if (state.getActivationType() == CaptureActivation.Type.PUSH_TO_TALK) {
+            addHotkey("gui.plasmovoice.activation.ptt_button", VoiceHotkeys.PROXIMITY_PTT);
+        } else {
+            addHotkey("gui.plasmovoice.activation.toggle_button", VoiceHotkeys.PROXIMITY_TOGGLE);
+        }
         addDistance(config, proximity);
     }
 

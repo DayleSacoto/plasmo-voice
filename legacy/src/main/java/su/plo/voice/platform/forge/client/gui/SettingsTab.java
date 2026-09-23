@@ -32,6 +32,8 @@ abstract class SettingsTab {
     private int bottom;
     private int scroll;
     private Widget dragging;
+    /** Upstream AbstractHotKeysTabWidget.focusedHotKey: receives every key and click while recording. */
+    private HotKeyWidget recording;
     private List<String> tooltip;
 
     SettingsTab(VoiceSettingsScreen screen, ClientState state) {
@@ -56,6 +58,20 @@ abstract class SettingsTab {
 
     /** Called when the tab or the screen closes. */
     void removed() {
+        recording = null;
+    }
+
+    HotKeyWidget getRecording() {
+        return recording;
+    }
+
+    void setRecording(HotKeyWidget recording) {
+        this.recording = recording;
+    }
+
+    void addHotkey(String labelKey, String name) {
+        addOption(I18n.format(labelKey), null, new HotKeyWidget(this, state.getHotkeys(), name),
+                () -> state.getHotkeys().isDefault(name), () -> state.getHotkeys().reset(name));
     }
 
     void addCategory(String translationKey, Object... args) {
@@ -104,6 +120,7 @@ abstract class SettingsTab {
     }
 
     boolean mouseClicked(int mouseX, int mouseY, int button) {
+        if (recording != null) return recording.mouseClicked(mouseX, mouseY, button);
         DropDownWidget open = openDropDown();
         if (open != null) {
             open.mouseClicked(mouseX, mouseY, button);
@@ -126,17 +143,26 @@ abstract class SettingsTab {
     }
 
     void mouseReleased(int mouseX, int mouseY, int button) {
+        if (recording != null) {
+            recording.mouseReleased(mouseX, mouseY, button);
+            return;
+        }
         if (dragging != null) dragging.mouseReleased(mouseX, mouseY, button);
         dragging = null;
     }
 
     boolean keyTyped(char typedChar, int keyCode) {
+        if (recording != null) return recording.keyTyped(typedChar, keyCode);
         for (Row row : rows) {
             for (Widget widget : row.widgets()) {
                 if (widget.keyTyped(typedChar, keyCode)) return true;
             }
         }
         return false;
+    }
+
+    void keyReleased(int keyCode) {
+        if (recording != null) recording.keyReleased(keyCode);
     }
 
     void scroll(int direction, int mouseX, int mouseY) {
