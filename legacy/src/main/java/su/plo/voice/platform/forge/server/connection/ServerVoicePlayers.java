@@ -8,11 +8,19 @@ import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
 import su.plo.voice.platform.forge.network.VoiceChannel;
+import su.plo.voice.proto.data.audio.capture.VoiceActivation;
+import su.plo.voice.proto.data.audio.codec.opus.OpusDecoderInfo;
+import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
+import su.plo.voice.proto.data.audio.source.SelfSourceInfo;
 import su.plo.voice.proto.data.player.VoicePlayerInfo;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerDisconnectPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoUpdatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerListPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.SelfSourceInfoPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.SourceAudioEndPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.SourceInfoPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerAudioEndPacket;
 
 /** Server-thread registry of voice connections and the upstream player list broadcasts. */
 @RequiredArgsConstructor
@@ -66,6 +74,58 @@ public final class ServerVoicePlayers {
                 broadcast(new PlayerInfoUpdatePacket(connection.createPlayerInfo()));
             }
         }
+        for (ServerConnection connection : connections.values()) {
+            UdpServer.Session session = connection.getUdpSession();
+            if (session == null) continue;
+            session.setPresence(connection.presence());
+        }
+        for (ServerConnection connection : connections.values()) {
+            UdpServer.Session session = connection.getUdpSession();
+            // The UDP worker cannot write TCP, so the first frame of a source is announced here.
+            if (session != null && session.getLastDistance() >= 0 && session.getSourceInfoDirty().compareAndSet(true, false)) {
+                PlayerSourceInfo sourceInfo = sourceInfo(connection, session, config);
+                sendToListeners(session, session.getLastDistance(), new SourceInfoPacket(sourceInfo));
+                channel.sendToPlayer(connection.getPlayer(), new SelfSourceInfoPacket(new SelfSourceInfo(
+                        sourceInfo, connection.getPlayer().getUniqueID(), config.getProximityActivation().getId(), -1L)));
+            }
+        }
+    }
+
+    /** Upstream PlayerChannelHandler.handle(SourceInfoRequestPacket). */
+    public void handleSourceInfoRequest(ServerConnection requester, UUID sourceId, ServerConfig config) {
+        if (!requester.isVoiceConnected() || requester.isVoiceDisabled()) return;
+        for (ServerConnection connection : connections.values()) {
+            UdpServer.Session session = connection.getUdpSession();
+            if (session == null || !session.getSourceId().equals(sourceId)) continue;
+            if (connection != requester) {
+                channel.sendToPlayer(requester.getPlayer(), new SourceInfoPacket(sourceInfo(connection, session, config)));
+            }
+            return;
+        }
+    }
+
+    /** Upstream PlayerChannelHandler.handle(PlayerAudioEndPacket) with the proximity activation. */
+    public void handleAudioEnd(ServerConnection speaker, PlayerAudioEndPacket packet, ServerConfig config) {
+        UdpServer.Session session = speaker.getUdpSession();
+        VoiceActivation activation = config.getProximityActivation();
+        if (session == null || !speaker.isVoiceConnected() || speaker.isMicrophoneMuted()
+                || !activation.getId().equals(packet.getActivationId())) return;
+        short distance = (short) activation.calculateAllowedDistance(packet.getDistance());
+        sendToListeners(session, distance, new SourceAudioEndPacket(session.getSourceId(), packet.getSequenceNumber()));
+    }
+
+    private void sendToListeners(UdpServer.Session speaker, short distance, Packet<?> packet) {
+        for (ServerConnection connection : connections.values()) {
+            UdpServer.Session session = connection.getUdpSession();
+            if (session != null && UdpServer.isListener(speaker, session, distance)) {
+                channel.sendToPlayer(connection.getPlayer(), packet);
+            }
+        }
+    }
+
+    private static PlayerSourceInfo sourceInfo(ServerConnection connection, UdpServer.Session session, ServerConfig config) {
+        return new PlayerSourceInfo("plasmovoice", session.getSourceId(), config.getProximityLine().getId(), null,
+                session.getSourceState(), new OpusDecoderInfo(), false, true, 0, connection.createPlayerInfo());
     }
 
     private List<VoicePlayerInfo> voicePlayers() {

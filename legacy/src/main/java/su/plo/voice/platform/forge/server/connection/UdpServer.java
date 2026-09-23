@@ -6,23 +6,34 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.google.common.io.ByteStreams;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.Value;
 import org.apache.logging.log4j.Logger;
+import su.plo.voice.proto.data.audio.capture.VoiceActivation;
+import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.PacketDirection;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
 import su.plo.voice.proto.packets.udp.PacketUdp;
 import su.plo.voice.proto.packets.udp.PacketUdpCodec;
 import su.plo.voice.proto.packets.udp.bothbound.PingPacket;
+import su.plo.voice.proto.packets.udp.clientbound.SelfAudioInfoPacket;
+import su.plo.voice.proto.packets.udp.clientbound.SourceAudioPacket;
+import su.plo.voice.proto.packets.udp.serverbound.PlayerAudioPacket;
 
 public final class UdpServer implements AutoCloseable {
     private static final long KEEP_ALIVE_TICK_MS = 100L;
+    /** Upstream voice.max_extra_audio_broadcast_distance default. */
+    private static final int MAX_EXTRA_BROADCAST_DISTANCE = 16;
     private final Logger logger;
     private final String bindHost;
     private final int bindPort;
@@ -34,6 +45,7 @@ public final class UdpServer implements AutoCloseable {
     private volatile boolean closed;
     private volatile DatagramSocket socket;
     private volatile InetSocketAddress boundAddress;
+    private volatile VoiceActivation proximityActivation;
     private Thread worker;
 
     public UdpServer(Logger logger, String bindHost, int bindPort, String advertisedHost, int advertisedPort,
@@ -112,7 +124,7 @@ public final class UdpServer implements AutoCloseable {
                 DatagramPacket datagram = new DatagramPacket(buffer, buffer.length);
                 try {
                     endpoint.receive(datagram);
-                    receive(datagram);
+                    receive(endpoint, datagram);
                 } catch (SocketTimeoutException ignored) {
                 }
                 // Upstream NettyUdpKeepAlive ticks every 100 ms instead of after every datagram.
@@ -130,13 +142,24 @@ public final class UdpServer implements AutoCloseable {
         }
     }
 
-    private void receive(DatagramPacket datagram) {
+    private void receive(DatagramSocket endpoint, DatagramPacket datagram) {
         try {
             PacketUdp packet = PacketUdpCodec.decodeThrowing(
                     ByteStreams.newDataInput(Arrays.copyOf(datagram.getData(), datagram.getLength())),
                     PacketDirection.SERVER);
             Session session = bySecret.get(packet.getSecret());
-            if (session == null || packet.getPacketClass() != PingPacket.class) return;
+            if (session == null) return;
+            if (packet.getPacketClass() == PlayerAudioPacket.class) {
+                PlayerAudioPacket audio = (PlayerAudioPacket) packet.getPacketUntyped();
+                synchronized (session) {
+                    if (!session.active || !session.authenticated) return;
+                    session.remoteAddress = (InetSocketAddress) datagram.getSocketAddress();
+                    session.lastReceived = System.currentTimeMillis();
+                }
+                routeAudio(endpoint, session, audio);
+                return;
+            }
+            if (packet.getPacketClass() != PingPacket.class) return;
             PingPacket ping = (PingPacket) packet.getPacketUntyped();
             synchronized (session) {
                 if (!session.active) return;
@@ -156,6 +179,57 @@ public final class UdpServer implements AutoCloseable {
             }
         } catch (IOException | IllegalArgumentException | IllegalStateException ignored) {
             // Untrusted datagrams are dropped without a per-packet stack trace.
+        }
+    }
+
+    public void setProximityActivation(VoiceActivation activation) {
+        this.proximityActivation = activation;
+    }
+
+    Collection<Session> sessions() {
+        return bySecret.values();
+    }
+
+    /** Upstream NettyUdpServerConnection + ProximityServerActivationHelper, run on the UDP worker. */
+    private void routeAudio(DatagramSocket endpoint, Session speaker, PlayerAudioPacket audio) {
+        Presence presence = speaker.presence;
+        VoiceActivation activation = proximityActivation;
+        if (presence == null || !presence.isVoiceConnected() || presence.isMicrophoneMuted()
+                || activation == null || !activation.getId().equals(audio.getActivationId())) return;
+
+        short distance = (short) activation.calculateAllowedDistance(audio.getDistance());
+        speaker.lastDistance = distance;
+        // Audio stays encrypted: every client shares the lifecycle AES key, the server only relays it.
+        SourceAudioPacket packet = new SourceAudioPacket(audio.getSequenceNumber(), speaker.sourceState,
+                audio.getData(), speaker.sourceId, distance);
+        for (Session listener : bySecret.values()) {
+            if (isListener(speaker, listener, distance)) send(endpoint, packet, listener);
+        }
+        send(endpoint, new SelfAudioInfoPacket(speaker.sourceId, audio.getSequenceNumber(), null, distance), speaker);
+    }
+
+    /** Upstream VoiceServerProximitySource listeners: not the speaker, voice enabled, same world, in range. */
+    static boolean isListener(Session speaker, Session listener, short distance) {
+        if (listener == speaker || !listener.active || !listener.authenticated) return false;
+        Presence from = speaker.presence;
+        Presence to = listener.presence;
+        if (from == null || to == null || !to.isVoiceConnected() || to.isVoiceDisabled()
+                || from.getDimension() != to.getDimension()) return false;
+        double range = Math.min(distance + MAX_EXTRA_BROADCAST_DISTANCE, distance * 2);
+        double dx = from.getX() - to.getX();
+        double dy = from.getY() - to.getY();
+        double dz = from.getZ() - to.getZ();
+        return dx * dx + dy * dy + dz * dz <= range * range;
+    }
+
+    private void send(DatagramSocket endpoint, Packet<?> packet, Session to) {
+        InetSocketAddress address = to.remoteAddress; // written only by this worker
+        if (address == null) return;
+        try {
+            byte[] data = PacketUdpCodec.encodeThrowing(packet, to.secret);
+            endpoint.send(new DatagramPacket(data, data.length, address));
+        } catch (IOException ignored) {
+            // An unreachable peer loses the datagram, like any UDP packet.
         }
     }
 
@@ -209,5 +283,25 @@ public final class UdpServer implements AutoCloseable {
         private InetSocketAddress connectionAddress;
         private long lastReceived;
         private long sentKeepAlive;
+        /** Proximity source of this player; a new session is a new source, like upstream on UDP reconnect. */
+        private final UUID sourceId = UUID.randomUUID();
+        private final byte sourceState = 1;
+        /** Published by the server thread every tick, read by the UDP worker. */
+        @Setter
+        private volatile Presence presence;
+        /** Distance of the last routed frame; -1 until the player speaks. */
+        private volatile short lastDistance = -1;
+        private final AtomicBoolean sourceInfoDirty = new AtomicBoolean(true);
+    }
+
+    @Value
+    public static class Presence {
+        boolean voiceConnected;
+        boolean voiceDisabled;
+        boolean microphoneMuted;
+        int dimension;
+        double x;
+        double y;
+        double z;
     }
 }

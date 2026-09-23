@@ -5,6 +5,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.UUID;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -17,6 +18,7 @@ import org.apache.logging.log4j.Logger;
 
 import su.plo.voice.platform.forge.PlasmoVoiceMod;
 import su.plo.voice.platform.forge.client.ClientState;
+import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
@@ -26,6 +28,10 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacke
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerDisconnectPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoUpdatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerListPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.SourceAudioEndPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.SourceInfoPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.SourceInfoRequestPacket;
+import su.plo.voice.proto.packets.udp.clientbound.SourceAudioPacket;
 
 @SideOnly(Side.CLIENT)
 public final class ClientConnection implements AutoCloseable {
@@ -43,6 +49,8 @@ public final class ClientConnection implements AutoCloseable {
     @Getter
     private final ClientConnectionState state;
     private final ClientState clientState;
+    /** Remote sources of the accepted config; read by the UDP worker. */
+    private volatile ClientVoiceSources sources;
 
     public ClientConnection(VoiceChannel channel, NetworkManager connection, ClientState clientState) {
         this.channel = Objects.requireNonNull(channel);
@@ -85,7 +93,26 @@ public final class ClientConnection implements AutoCloseable {
             state.putPlayer(((PlayerInfoUpdatePacket) packet).getPlayerInfo());
         } else if (packet instanceof PlayerDisconnectPacket) {
             handle((PlayerDisconnectPacket) packet);
+        } else if (packet instanceof SourceInfoPacket) {
+            ClientVoiceSources current = sources;
+            if (current != null) current.updateSourceInfo(((SourceInfoPacket) packet).getSourceInfo());
+        } else if (packet instanceof SourceAudioEndPacket) {
+            ClientVoiceSources current = sources;
+            if (current != null) current.onAudioEnd((SourceAudioEndPacket) packet);
         }
+    }
+
+    /** UDP worker thread. SelfAudioInfoPacket feeds the talking indicator, which arrives with the HUD. */
+    private void onUdpAudio(Packet<?> packet) {
+        ClientVoiceSources current = sources;
+        if (current != null && packet instanceof SourceAudioPacket) current.onAudio((SourceAudioPacket) packet);
+    }
+
+    /** TCP writes stay on the client thread; a request for a replaced config is dropped. */
+    private void requestSourceInfo(ClientVoiceSources owner, UUID sourceId) {
+        Minecraft.getMinecraft().func_152344_a(() -> {
+            if (state.isConnected() && sources == owner) channel.sendToServer(new SourceInfoRequestPacket(sourceId));
+        });
     }
 
     private void handle(PlayerDisconnectPacket packet) {
@@ -110,7 +137,7 @@ public final class ClientConnection implements AutoCloseable {
             host = connection.getSocketAddress() instanceof java.net.InetSocketAddress
                     ? ((java.net.InetSocketAddress) connection.getSocketAddress()).getHostString() : "127.0.0.1";
         }
-        udpClient = new UdpClient(LOGGER, packet.getSecret(), host, packet.getPort(), state.replaceUdp());
+        udpClient = new UdpClient(LOGGER, packet.getSecret(), host, packet.getPort(), state.replaceUdp(), this::onUdpAudio);
         LOGGER.info("ConnectionPacket received: host={}, port={}, session present; voice configuration pending",
                 packet.getIp(), packet.getPort());
         udpClient.start();
@@ -138,6 +165,11 @@ public final class ClientConnection implements AutoCloseable {
         try {
             ClientConfig accepted = ClientConfig.decode(packet, getKeyPair().getPrivate());
             state.acceptConfig(accepted);
+            ClientVoiceSources created = new ClientVoiceSources(accepted, clientState::isVoiceDisabled,
+                    sourceId -> requestSourceInfo(this.sources, sourceId),
+                    // Positional playback consumes decoded PCM once the OpenAL output exists.
+                    (source, sequenceNumber, pcm) -> {});
+            sources = created;
             if (accepted.getAesKey() != null) LOGGER.info("RSA encryption data decrypted; algorithm={}",
                     packet.getEncryption().getAlgorithm());
             LOGGER.info("Voice configuration accepted: serverId={}, sampleRate={}, mtu={}, codec={}; audio not started",
@@ -159,6 +191,9 @@ public final class ClientConnection implements AutoCloseable {
     private void clearConfig() {
         if (state.isConfigured()) LOGGER.info("Voice client config/encryption state cleared");
         state.clearConfig();
+        ClientVoiceSources current = sources;
+        sources = null;
+        if (current != null) current.close();
     }
 
     private void handle(PlayerInfoRequestPacket packet) {

@@ -24,7 +24,7 @@ public class UdpBootstrapTest {
 
             ClientConnectionState state = new ClientConnectionState(sent -> {});
             ClientConnectionState.UdpState udp = state.replaceUdp();
-            UdpClient client = new UdpClient(LOGGER, packet.getSecret(), packet.getIp(), packet.getPort(), udp);
+            UdpClient client = new UdpClient(LOGGER, packet.getSecret(), packet.getIp(), packet.getPort(), udp, received -> {});
             client.start();
 
             await(session::isAuthenticated); // client ping reached the server

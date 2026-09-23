@@ -101,6 +101,12 @@ public final class ServerConnection {
         channel.sendToPlayer(player, new PlayerInfoRequestPacket());
     }
 
+    /** Snapshot for the UDP worker; EntityPlayerMP must only be read on the server thread. */
+    UdpServer.Presence presence() {
+        return new UdpServer.Presence(voiceConnected, voiceDisabled, microphoneMuted,
+                player.dimension, player.posX, player.posY, player.posZ);
+    }
+
     VoicePlayerInfo createPlayerInfo() {
         // No server mute manager yet, so "muted" (server-side mute) is always false.
         return new VoicePlayerInfo(player.getUniqueID(), player.getCommandSenderName(), false,

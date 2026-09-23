@@ -23,6 +23,8 @@ import su.plo.voice.platform.forge.client.VoiceControls;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerAudioEndPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.SourceInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.platform.forge.server.connection.ServerConnection;
@@ -75,6 +77,16 @@ public final class PlasmoVoiceMod {
                     LOGGER.info("Voice state updated for {}: voiceDisabled={}, microphoneMuted={}",
                             player.getCommandSenderName(), state.isVoiceDisabled(), state.isMicrophoneMuted());
                     voicePlayers.stateChanged(connection, System.currentTimeMillis());
+                }
+                return;
+            }
+            if (packet instanceof SourceInfoRequestPacket || packet instanceof PlayerAudioEndPacket) {
+                ServerConnection connection = voicePlayers.get(player.getUniqueID());
+                if (connection == null || serverConfig == null) return;
+                if (packet instanceof SourceInfoRequestPacket) {
+                    voicePlayers.handleSourceInfoRequest(connection, ((SourceInfoRequestPacket) packet).getSourceId(), serverConfig);
+                } else {
+                    voicePlayers.handleAudioEnd(connection, (PlayerAudioEndPacket) packet, serverConfig);
                 }
                 return;
             }
@@ -141,6 +153,7 @@ public final class PlasmoVoiceMod {
         // getServerPort() is @SideOnly(SERVER): singleplayer has no fixed port, so upstream falls back to a random one.
         int minecraftPort = event.getServer().isDedicatedServer() ? event.getServer().getServerPort() : -1;
         udpServer = UdpServer.create(LOGGER, settings, minecraftPort);
+        udpServer.setProximityActivation(serverConfig.getProximityActivation());
         udpServer.start();
     }
 
