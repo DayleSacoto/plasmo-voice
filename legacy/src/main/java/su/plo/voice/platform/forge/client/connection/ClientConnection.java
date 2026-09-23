@@ -8,6 +8,8 @@ import java.util.Objects;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import lombok.Getter;
+import net.minecraft.client.Minecraft;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.network.NetworkManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -19,6 +21,9 @@ import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.PlayerDisconnectPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoUpdatePacket;
+import su.plo.voice.proto.packets.tcp.clientbound.PlayerListPacket;
 
 @SideOnly(Side.CLIENT)
 public final class ClientConnection implements AutoCloseable {
@@ -72,7 +77,26 @@ public final class ClientConnection implements AutoCloseable {
             handle((ConnectionPacket) packet);
         } else if (packet instanceof ConfigPacket) {
             handle((ConfigPacket) packet);
+        } else if (packet instanceof PlayerListPacket) {
+            state.putPlayers(((PlayerListPacket) packet).getPlayers());
+        } else if (packet instanceof PlayerInfoUpdatePacket) {
+            state.putPlayer(((PlayerInfoUpdatePacket) packet).getPlayerInfo());
+        } else if (packet instanceof PlayerDisconnectPacket) {
+            handle((PlayerDisconnectPacket) packet);
         }
+    }
+
+    private void handle(PlayerDisconnectPacket packet) {
+        EntityPlayer self = Minecraft.getMinecraft().thePlayer;
+        if (self != null && self.getUniqueID().equals(packet.getPlayerId())) {
+            // Upstream: the server dropped our UDP session; its PlayerInfoRequest restarts the handshake.
+            clearConfig();
+            if (udpClient != null) udpClient.close();
+            udpClient = null;
+            LOGGER.info("Voice UDP session closed by server; waiting for a new handshake");
+            return;
+        }
+        state.removePlayer(packet.getPlayerId());
     }
 
     private void handle(ConnectionPacket packet) {

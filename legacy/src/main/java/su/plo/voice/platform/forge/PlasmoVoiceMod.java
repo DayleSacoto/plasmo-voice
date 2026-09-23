@@ -1,9 +1,5 @@
 package su.plo.voice.platform.forge;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
@@ -28,6 +24,7 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.platform.forge.server.connection.ServerConnection;
 import su.plo.voice.platform.forge.server.connection.UdpServer;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
+import su.plo.voice.platform.forge.server.connection.ServerVoicePlayers;
 
 @Getter
 @Mod(
@@ -45,7 +42,7 @@ public final class PlasmoVoiceMod {
     private UdpServer udpServer;
     private ServerConfig serverConfig;
 
-    private final Map<UUID, ServerConnection> serverConnections = new HashMap<>();
+    private ServerVoicePlayers voicePlayers;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -56,6 +53,7 @@ public final class PlasmoVoiceMod {
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
         voiceChannel = new VoiceChannel(LOGGER);
+        voicePlayers = new ServerVoicePlayers(voiceChannel);
 
         voiceChannel.setClientListener((connection, packet) -> {
             if (packet instanceof PlayerInfoRequestPacket) {
@@ -67,10 +65,11 @@ public final class PlasmoVoiceMod {
             // Exact class: PlayerInfoPacket extends PlayerStatePacket in the upstream protocol.
             if (packet.getClass() == PlayerStatePacket.class) {
                 PlayerStatePacket state = (PlayerStatePacket) packet;
-                ServerConnection connection = serverConnections.get(player.getUniqueID());
+                ServerConnection connection = voicePlayers.get(player.getUniqueID());
                 if (connection != null && connection.handle(state)) {
                     LOGGER.info("Voice state updated for {}: voiceDisabled={}, microphoneMuted={}",
                             player.getCommandSenderName(), state.isVoiceDisabled(), state.isMicrophoneMuted());
+                    voicePlayers.stateChanged(connection, System.currentTimeMillis());
                 }
                 return;
             }
@@ -79,7 +78,7 @@ public final class PlasmoVoiceMod {
             }
 
             PlayerInfoPacket info = (PlayerInfoPacket) packet;
-            ServerConnection existing = serverConnections.get(player.getUniqueID());
+            ServerConnection existing = voicePlayers.get(player.getUniqueID());
             ServerConnection connection = existing != null ? existing : new ServerConnection(player);
 
             ServerConnection.PlayerInfoResult result =
@@ -93,7 +92,7 @@ public final class PlasmoVoiceMod {
                 return;
             }
 
-            serverConnections.put(player.getUniqueID(), connection);
+            voicePlayers.put(connection);
             LOGGER.info(
                     "Voice server connection initialized for {}: minecraft={}, version={}, key={}, voiceDisabled={}, microphoneMuted={}",
                     player.getCommandSenderName(),
@@ -115,13 +114,13 @@ public final class PlasmoVoiceMod {
     @SubscribeEvent
     public void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.player.worldObj.isRemote) return;
-        serverConnections.remove(event.player.getUniqueID());
+        voicePlayers.remove(event.player.getUniqueID());
         if (udpServer != null) udpServer.removeSession(event.player.getUniqueID());
     }
 
     @Mod.EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) throws java.security.GeneralSecurityException {
-        serverConnections.clear();
+        voicePlayers.clear();
         serverConfig = new ServerConfig();
         udpServer = UdpServer.fromProperties(LOGGER);
         udpServer.start();
@@ -130,7 +129,7 @@ public final class PlasmoVoiceMod {
     @SubscribeEvent
     public void serverTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || udpServer == null) return;
-        serverConnections.values().forEach(connection -> connection.tick(udpServer, voiceChannel, serverConfig));
+        voicePlayers.tick(udpServer, serverConfig, System.currentTimeMillis());
     }
 
     @Mod.EventHandler
@@ -157,7 +156,7 @@ public final class PlasmoVoiceMod {
         if (udpServer != null) udpServer.close();
         udpServer = null;
         serverConfig = null;
-        serverConnections.clear();
+        voicePlayers.clear();
 
         if (voiceChannel != null) {
             voiceChannel.clearServer();

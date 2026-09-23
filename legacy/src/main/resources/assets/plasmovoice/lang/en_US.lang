@@ -14,6 +14,7 @@ gui.plasmovoice.connection.connected=Connected
 gui.plasmovoice.connection.udp_endpoint=UDP endpoint
 gui.plasmovoice.connection.udp_confirmed=UDP confirmed
 gui.plasmovoice.connection.configured=Configured
+gui.plasmovoice.connection.players=Voice players
 gui.plasmovoice.connection.yes=Yes
 gui.plasmovoice.connection.no=No
 gui.plasmovoice.connection.none=None

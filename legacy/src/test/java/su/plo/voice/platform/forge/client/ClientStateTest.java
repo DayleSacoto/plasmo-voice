@@ -10,6 +10,7 @@ import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.proto.data.audio.capture.CaptureInfo;
 import su.plo.voice.proto.data.config.PlayerIconConfig;
 import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
+import su.plo.voice.proto.data.player.VoicePlayerInfo;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 
 import static org.junit.Assert.*;
@@ -91,6 +92,30 @@ public class ClientStateTest {
         assertFalse(client.isVoiceAvailable());
         connection.close();
         assertFalse(client.isVoiceAvailable());
+    }
+
+    @Test
+    public void voicePlayerListFollowsServerAndResetsWithSessions() {
+        ClientConnectionState connection = new ClientState().openConnection(packet -> {});
+        UUID alice = UUID.randomUUID();
+        UUID bob = UUID.randomUUID();
+        connection.putPlayers(java.util.Arrays.asList(
+                new VoicePlayerInfo(alice, "alice", false, false, false),
+                new VoicePlayerInfo(bob, "bob", false, false, false)));
+        connection.putPlayer(new VoicePlayerInfo(alice, "alice", false, true, true));
+        assertEquals(2, connection.getPlayers().size());
+        assertTrue(connection.getPlayers().stream()
+                .anyMatch(info -> info.getPlayerId().equals(alice) && info.isVoiceDisabled() && info.isMicrophoneMuted()));
+        connection.removePlayer(bob);
+        assertEquals(1, connection.getPlayers().size());
+
+        connection.replaceUdp(); // a new UDP session gets a fresh PlayerListPacket
+        assertTrue(connection.getPlayers().isEmpty());
+        connection.putPlayer(new VoicePlayerInfo(bob, "bob", false, false, false));
+        connection.close();
+        assertTrue(connection.getPlayers().isEmpty());
+        connection.putPlayer(new VoicePlayerInfo(alice, "alice", false, false, false)); // late packet
+        assertTrue(connection.getPlayers().isEmpty());
     }
 
     private ClientConfig config() throws Exception {

@@ -1,12 +1,18 @@
 package su.plo.voice.platform.forge.client.connection;
 
 import java.net.InetSocketAddress;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import lombok.Getter;
+import su.plo.voice.proto.data.player.VoicePlayerInfo;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 
 /** Independent connection facts; configuration and ping confirmation have no ordering dependency. */
@@ -21,6 +27,7 @@ public final class ClientConnectionState implements AutoCloseable {
     private UdpState udp;
     // Last voice state the server was told through PlayerInfoPacket or PlayerStatePacket.
     private PlayerStatePacket reportedState;
+    private final Map<UUID, VoicePlayerInfo> players = new LinkedHashMap<>();
 
     public ClientConnectionState(Consumer<? super PlayerStatePacket> stateSender) {
         this.stateSender = Objects.requireNonNull(stateSender);
@@ -29,6 +36,8 @@ public final class ClientConnectionState implements AutoCloseable {
     public UdpState replaceUdp() {
         if (!connected) throw new IllegalStateException("Connection is closed");
         clearConfig();
+        // The server sends the full PlayerListPacket again after the new UDP session authenticates.
+        players.clear();
         if (udp != null) udp.close();
         udp = new UdpState();
         return udp;
@@ -77,10 +86,28 @@ public final class ClientConnectionState implements AutoCloseable {
         reportedState = packet;
     }
 
+    public Collection<VoicePlayerInfo> getPlayers() {
+        return Collections.unmodifiableCollection(players.values());
+    }
+
+    public void putPlayers(Collection<VoicePlayerInfo> infos) {
+        if (!connected) return;
+        infos.forEach(this::putPlayer);
+    }
+
+    public void putPlayer(VoicePlayerInfo info) {
+        if (connected) players.put(info.getPlayerId(), info);
+    }
+
+    public void removePlayer(UUID playerId) {
+        players.remove(playerId);
+    }
+
     @Override
     public void close() {
         connected = false;
         clearConfig();
+        players.clear();
         if (udp != null) udp.close();
     }
 

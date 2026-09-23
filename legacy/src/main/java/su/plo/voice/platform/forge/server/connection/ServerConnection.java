@@ -6,6 +6,7 @@ import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.regex.Pattern;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import net.minecraft.event.HoverEvent;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
+import su.plo.voice.proto.data.player.VoicePlayerInfo;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
@@ -40,6 +42,10 @@ public final class ServerConnection {
     private UdpServer.Session udpSession;
     private boolean connectionInfoSent;
     private boolean configSent;
+    /** Upstream hasVoiceChat(): from the config sent after UDP authentication until the session is lost. */
+    private boolean voiceConnected;
+    @Getter(AccessLevel.NONE)
+    final StateBroadcastThrottle stateThrottle = new StateBroadcastThrottle();
 
     public void prepareUdp(UdpServer server) {
         udpSession = server.createSession(player.getUniqueID());
@@ -47,48 +53,64 @@ public final class ServerConnection {
         configSent = false;
     }
 
-    public void tick(UdpServer server, VoiceChannel channel, ServerConfig config) {
-        if (udpSession == null) return;
+    /** Server-thread handshake step; the result tells the player registry what to broadcast. */
+    TickResult tick(UdpServer server, VoiceChannel channel, ServerConfig config) {
+        if (udpSession == null) return TickResult.NONE;
         if (!udpSession.isActive()) {
             udpSession = null;
-            channel.sendToPlayer(player, new PlayerInfoRequestPacket());
-            return;
+            boolean hadVoiceChat = voiceConnected;
+            voiceConnected = false;
+            return hadVoiceChat ? TickResult.VOICE_DISCONNECTED : TickResult.SESSION_LOST;
         }
         if (connectionInfoSent) {
             // The UDP worker publishes authentication through the volatile session flag.
             // TCP writes stay on the Minecraft server tick thread.
             synchronized (udpSession) {
-                if (configSent || !udpSession.isActive() || !udpSession.isAuthenticated()) return;
+                if (configSent || !udpSession.isActive() || !udpSession.isAuthenticated()) return TickResult.NONE;
                 try {
                     channel.sendToPlayer(player, config.createPacket(publicKey));
                     configSent = true;
+                    voiceConnected = true;
                     LogManager.getLogger("Plasmo Voice").info("ConfigPacket sent to {} after UDP authentication",
                             player.getCommandSenderName());
+                    return TickResult.VOICE_CONNECTED;
                 } catch (java.security.GeneralSecurityException e) {
                     server.removeSession(player.getUniqueID());
                     LogManager.getLogger("Plasmo Voice").warn("Failed to encrypt voice configuration", e);
                 }
             }
-            return;
+            return TickResult.NONE;
         }
         ConnectionPacket packet = server.connectionPacket(udpSession);
-        if (packet == null) return;
+        if (packet == null) return TickResult.NONE;
         channel.sendToPlayer(player, packet);
         connectionInfoSent = true;
         LogManager.getLogger("Plasmo Voice").info("ConnectionPacket sent to {}: host={}, port={}, session present",
                 player.getCommandSenderName(), packet.getIp(), packet.getPort());
+        return TickResult.NONE;
+    }
+
+    void requestPlayerInfo(VoiceChannel channel) {
+        channel.sendToPlayer(player, new PlayerInfoRequestPacket());
+    }
+
+    VoicePlayerInfo createPlayerInfo() {
+        // No server mute manager yet, so "muted" (server-side mute) is always false.
+        return new VoicePlayerInfo(player.getUniqueID(), player.getCommandSenderName(), false,
+                voiceDisabled, microphoneMuted);
     }
 
     /**
      * Upstream accepts live state only while the player has voice chat, i.e. after the first UDP ping.
-     * Returns whether the state was applied. PlayerInfoUpdate broadcast needs the player list layer.
+     * Returns whether the state was applied and actually changed.
      */
     public boolean handle(PlayerStatePacket packet) {
         UdpServer.Session session = udpSession;
         if (session == null || !session.isActive() || !session.isAuthenticated()) return false;
+        boolean changed = voiceDisabled != packet.isVoiceDisabled() || microphoneMuted != packet.isMicrophoneMuted();
         voiceDisabled = packet.isVoiceDisabled();
         microphoneMuted = packet.isMicrophoneMuted();
-        return true;
+        return changed;
     }
 
     /** Upstream PlayerChannelHandler.handle(PlayerInfoPacket): nothing changes unless the client is accepted. */
@@ -145,6 +167,13 @@ public final class ServerConnection {
                 .setChatHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ChatComponentText(link))));
         player.addChatMessage(new ChatComponentText("Sorry, your Plasmo Voice version is not supported on this server. ")
                 .appendSibling(click));
+    }
+
+    enum TickResult {
+        NONE,
+        VOICE_CONNECTED,
+        VOICE_DISCONNECTED,
+        SESSION_LOST
     }
 
     public enum PlayerInfoResult {

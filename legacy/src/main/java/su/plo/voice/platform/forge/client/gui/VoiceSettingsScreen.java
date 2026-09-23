@@ -100,7 +100,8 @@ public final class VoiceSettingsScreen extends GuiScreen {
                 ? I18n.format("gui.plasmovoice.connection.none")
                 : endpoint.getHostString() + ":" + endpoint.getPort());
         drawRow(left, y += ROW_HEIGHT, "gui.plasmovoice.connection.udp_confirmed", yesNo(connection.isUdpConfirmed()));
-        drawRow(left, y + ROW_HEIGHT, "gui.plasmovoice.connection.configured", yesNo(connection.isConfigured()));
+        drawRow(left, y += ROW_HEIGHT, "gui.plasmovoice.connection.configured", yesNo(connection.isConfigured()));
+        drawRow(left, y + ROW_HEIGHT, "gui.plasmovoice.connection.players", String.valueOf(connection.getPlayers().size()));
     }
 
     private void drawRow(int left, int y, String label, String value) {
