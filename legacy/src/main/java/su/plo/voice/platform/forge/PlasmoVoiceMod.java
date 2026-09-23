@@ -19,6 +19,7 @@ import su.plo.voice.proto.packets.PacketRegistry;
 import su.plo.voice.platform.forge.client.VoiceControls;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.platform.forge.server.connection.ServerConnection;
@@ -70,6 +71,13 @@ public final class PlasmoVoiceMod {
                     LOGGER.info("Voice state updated for {}: voiceDisabled={}, microphoneMuted={}",
                             player.getCommandSenderName(), state.isVoiceDisabled(), state.isMicrophoneMuted());
                     voicePlayers.stateChanged(connection, System.currentTimeMillis());
+                }
+                return;
+            }
+            if (packet instanceof PlayerActivationDistancesPacket) {
+                ServerConnection connection = voicePlayers.get(player.getUniqueID());
+                if (connection != null && serverConfig != null) {
+                    connection.handle((PlayerActivationDistancesPacket) packet, serverConfig);
                 }
                 return;
             }

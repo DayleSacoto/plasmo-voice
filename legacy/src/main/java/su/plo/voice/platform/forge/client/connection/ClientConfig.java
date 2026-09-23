@@ -3,6 +3,9 @@ package su.plo.voice.platform.forge.client.connection;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -11,6 +14,7 @@ import cpw.mods.fml.relauncher.SideOnly;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.encryption.EncryptionInfo;
 import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
 
@@ -21,6 +25,15 @@ import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
 public final class ClientConfig {
     private final ConfigPacket packet;
     private final SecretKeySpec aesKey;
+
+    /** Upstream VoiceClientActivationManager.register: the allowed distance for each server activation. */
+    public Map<UUID, Integer> activationDistances() {
+        Map<UUID, Integer> distances = new LinkedHashMap<>();
+        for (VoiceActivation activation : packet.getActivations()) {
+            distances.put(activation.getId(), activation.calculateAllowedDistance(activation.getDefaultDistance()));
+        }
+        return distances;
+    }
 
     public static ClientConfig decode(ConfigPacket packet, PrivateKey privateKey) throws GeneralSecurityException {
         EncryptionInfo encryption = packet.getEncryption();

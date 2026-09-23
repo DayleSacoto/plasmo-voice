@@ -3,6 +3,7 @@ package su.plo.voice.platform.forge.client.connection;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.util.Collections;
 import java.util.Objects;
 
 import cpw.mods.fml.relauncher.Side;
@@ -21,6 +22,7 @@ import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerDisconnectPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoUpdatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerListPacket;
@@ -142,6 +144,8 @@ public final class ClientConnection implements AutoCloseable {
                     packet.getServerId(), packet.getCaptureInfo().getSampleRate(),
                     packet.getCaptureInfo().getMtuSize(),
                     packet.getCaptureInfo().getEncoderInfo() == null ? "none" : packet.getCaptureInfo().getEncoderInfo().getName());
+            accepted.activationDistances().forEach((activationId, distance) -> channel.sendToServer(
+                    new PlayerActivationDistancesPacket(Collections.singletonMap(activationId, distance))));
             // Settings changed after PlayerInfoPacket but before the server accepted state updates.
             clientState.syncState();
         } catch (GeneralSecurityException e) {

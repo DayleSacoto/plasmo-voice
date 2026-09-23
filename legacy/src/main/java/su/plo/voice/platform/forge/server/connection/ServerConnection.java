@@ -4,6 +4,9 @@ import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import lombok.AccessLevel;
@@ -17,6 +20,7 @@ import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 import su.plo.voice.proto.data.player.VoicePlayerInfo;
+import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
@@ -46,6 +50,7 @@ public final class ServerConnection {
     private boolean voiceConnected;
     @Getter(AccessLevel.NONE)
     final StateBroadcastThrottle stateThrottle = new StateBroadcastThrottle();
+    private final Map<UUID, Integer> activationDistances = new HashMap<>();
 
     public void prepareUdp(UdpServer server) {
         udpSession = server.createSession(player.getUniqueID());
@@ -60,6 +65,8 @@ public final class ServerConnection {
             udpSession = null;
             boolean hadVoiceChat = voiceConnected;
             voiceConnected = false;
+            // Upstream BaseVoicePlayer.reset() on UDP disconnect.
+            activationDistances.clear();
             return hadVoiceChat ? TickResult.VOICE_DISCONNECTED : TickResult.SESSION_LOST;
         }
         if (connectionInfoSent) {
@@ -111,6 +118,10 @@ public final class ServerConnection {
         voiceDisabled = packet.isVoiceDisabled();
         microphoneMuted = packet.isMicrophoneMuted();
         return changed;
+    }
+
+    public void handle(PlayerActivationDistancesPacket packet, ServerConfig config) {
+        activationDistances.putAll(config.knownActivationDistances(packet.getDistanceByActivationId()));
     }
 
     /** Upstream PlayerChannelHandler.handle(PlayerInfoPacket): nothing changes unless the client is accepted. */
