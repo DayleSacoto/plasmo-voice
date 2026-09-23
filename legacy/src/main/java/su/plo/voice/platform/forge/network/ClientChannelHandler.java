@@ -59,4 +59,9 @@ public final class ClientChannelHandler {
             connection = null;
         }
     }
+
+    @SubscribeEvent
+    public void renderTick(TickEvent.RenderTickEvent event) {
+        if (event.phase == TickEvent.Phase.START && connection != null) connection.updatePlayback(event.renderTickTime);
+    }
 }

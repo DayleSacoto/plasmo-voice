@@ -20,6 +20,7 @@ import su.plo.voice.platform.forge.PlasmoVoiceMod;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
 import su.plo.voice.platform.forge.client.audio.VoiceCapture;
+import su.plo.voice.platform.forge.client.audio.VoicePlayback;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.Packet;
@@ -54,6 +55,7 @@ public final class ClientConnection implements AutoCloseable {
     /** Remote sources of the accepted config; read by the UDP worker. */
     private volatile ClientVoiceSources sources;
     private VoiceCapture capture;
+    private VoicePlayback playback;
 
     public ClientConnection(VoiceChannel channel, NetworkManager connection, ClientState clientState) {
         this.channel = Objects.requireNonNull(channel);
@@ -118,6 +120,11 @@ public final class ClientConnection implements AutoCloseable {
         });
     }
 
+    /** Client thread, every frame. */
+    public void updatePlayback(float partialTicks) {
+        if (playback != null) playback.updatePositions(partialTicks);
+    }
+
     /** TCP writes stay on the client thread; a request for a replaced config is dropped. */
     private void requestSourceInfo(ClientVoiceSources owner, UUID sourceId) {
         Minecraft.getMinecraft().func_152344_a(() -> {
@@ -175,11 +182,12 @@ public final class ClientConnection implements AutoCloseable {
         try {
             ClientConfig accepted = ClientConfig.decode(packet, getKeyPair().getPrivate());
             state.acceptConfig(accepted);
-            ClientVoiceSources created = new ClientVoiceSources(accepted, clientState::isVoiceDisabled,
-                    sourceId -> requestSourceInfo(this.sources, sourceId),
-                    // Positional playback consumes decoded PCM once the OpenAL output exists.
-                    (source, sequenceNumber, pcm) -> {});
+            ClientVoiceSources created = new ClientVoiceSources(clientState::isVoiceDisabled,
+                    sourceId -> requestSourceInfo(this.sources, sourceId));
             sources = created;
+            VoicePlayback startedPlayback = new VoicePlayback(accepted, created);
+            playback = startedPlayback;
+            startedPlayback.start();
             VoiceCapture startedCapture = new VoiceCapture(accepted, clientState, udpClient,
                     accepted.activationDistances().getOrDefault(VoiceActivation.PROXIMITY_ID, 0),
                     end -> sendFromClientThread(end));
@@ -187,7 +195,7 @@ public final class ClientConnection implements AutoCloseable {
             startedCapture.start();
             if (accepted.getAesKey() != null) LOGGER.info("RSA encryption data decrypted; algorithm={}",
                     packet.getEncryption().getAlgorithm());
-            LOGGER.info("Voice configuration accepted: serverId={}, sampleRate={}, mtu={}, codec={}; audio not started",
+            LOGGER.info("Voice configuration accepted: serverId={}, sampleRate={}, mtu={}, codec={}",
                     packet.getServerId(), packet.getCaptureInfo().getSampleRate(),
                     packet.getCaptureInfo().getMtuSize(),
                     packet.getCaptureInfo().getEncoderInfo() == null ? "none" : packet.getCaptureInfo().getEncoderInfo().getName());
@@ -206,9 +214,9 @@ public final class ClientConnection implements AutoCloseable {
     private void clearConfig() {
         if (state.isConfigured()) LOGGER.info("Voice client config/encryption state cleared");
         state.clearConfig();
-        ClientVoiceSources current = sources;
         sources = null;
-        if (current != null) current.close();
+        if (playback != null) playback.close();
+        playback = null;
         if (capture != null) capture.close();
         capture = null;
     }

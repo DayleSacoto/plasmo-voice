@@ -2,6 +2,8 @@ package su.plo.voice.platform.forge.server.connection;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -10,6 +12,7 @@ import java.util.function.BooleanSupplier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.Test;
+import su.plo.voice.platform.forge.audio.codec.AudioDecoder;
 import su.plo.voice.platform.forge.audio.codec.AudioEncoder;
 import su.plo.voice.platform.forge.audio.codec.OpusCodec;
 import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
@@ -47,13 +50,12 @@ public class VoiceRoutingTest {
             Peer deafened = new Peer(server, config, presence(true, false, 0, 5));
             Peer nether = new Peer(server, config, presence(false, false, -1, 5));
 
-            List<short[]> heard = new CopyOnWriteArrayList<>();
             List<UUID> requests = new CopyOnWriteArrayList<>();
-            ClientVoiceSources sources = new ClientVoiceSources(listener.config, () -> false, sourceId -> {
+            ClientVoiceSources sources = new ClientVoiceSources(() -> false, sourceId -> {
                 requests.add(sourceId);
                 // Stands in for the server's SourceInfoPacket reply on the client thread.
                 listener.sources.updateSourceInfo(sourceInfo(speaker, config));
-            }, (source, sequenceNumber, pcm) -> heard.add(pcm));
+            });
             listener.sources = sources;
 
             try (AudioEncoder encoder = OpusCodec.createEncoder(
@@ -63,11 +65,11 @@ public class VoiceRoutingTest {
                     Thread.sleep(5L);
                 }
             }
-            await(() -> heard.size() >= 50);
+            await(() -> listener.audio.size() >= 55);
 
             assertEquals(1, requests.size()); // throttled, answered once
             assertEquals(speaker.session.getSourceId(), requests.get(0));
-            assertToneHeard(heard.subList(heard.size() - 30, heard.size()));
+            assertToneHeard(decode(listener));
             assertTrue(far.audio.isEmpty());
             assertTrue(deafened.audio.isEmpty());
             assertTrue(nether.audio.isEmpty());
@@ -133,6 +135,25 @@ public class VoiceRoutingTest {
 
     private static UdpServer.Presence presence(boolean voiceDisabled, boolean microphoneMuted, int dimension, double x) {
         return new UdpServer.Presence(true, voiceDisabled, microphoneMuted, dimension, x, 64, 0);
+    }
+
+    /** Decrypts and decodes the routed frames in sequence order, as the playback thread does. */
+    private static List<short[]> decode(Peer listener) throws Exception {
+        List<short[]> heard = new ArrayList<>();
+        try (AudioDecoder decoder = OpusCodec.createDecoder(SAMPLE_RATE, false, FRAME_SIZE)) {
+            listener.audio.stream()
+                    .filter(packet -> packet instanceof SourceAudioPacket)
+                    .map(packet -> (SourceAudioPacket) packet)
+                    .sorted(Comparator.comparingLong(SourceAudioPacket::getSequenceNumber))
+                    .forEach(packet -> {
+                        try {
+                            heard.add(decoder.decode(listener.config.getEncryption().decrypt(packet.getData())));
+                        } catch (Exception e) {
+                            throw new AssertionError(e);
+                        }
+                    });
+        }
+        return heard.subList(heard.size() - 30, heard.size());
     }
 
     private static void assertToneHeard(List<short[]> frames) {
