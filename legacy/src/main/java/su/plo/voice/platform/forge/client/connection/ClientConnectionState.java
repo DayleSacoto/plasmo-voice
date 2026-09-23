@@ -97,6 +97,10 @@ public final class ClientConnectionState implements AutoCloseable {
             if (!closed) this.remoteAddress = Objects.requireNonNull(remoteAddress);
         }
 
+        public synchronized boolean isClosed() {
+            return closed;
+        }
+
         public synchronized void confirm() {
             if (!closed && remoteAddress != null) confirmed = true;
         }

@@ -44,6 +44,11 @@ public final class ClientState {
         return connection != null && connection.isConnected();
     }
 
+    /** Upstream opens settings only with a live UDP client and accepted server info. */
+    public boolean isVoiceAvailable() {
+        return isConnected() && connection.isConfigured() && connection.hasUdpEndpoint();
+    }
+
     /** Sends a live PlayerStatePacket if the current connection is ready and the server state is stale. */
     public void syncState() {
         if (connection != null) connection.syncState(voiceDisabled, microphoneMuted);

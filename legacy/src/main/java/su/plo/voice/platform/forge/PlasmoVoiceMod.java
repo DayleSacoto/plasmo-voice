@@ -20,6 +20,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import su.plo.voice.proto.packets.PacketRegistry;
+import su.plo.voice.platform.forge.client.VoiceControls;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
@@ -107,6 +108,7 @@ public final class PlasmoVoiceMod {
         });
 
         FMLCommonHandler.instance().bus().register(this);
+        if (event.getSide().isClient()) VoiceControls.register();
 
         LOGGER.info("{} initialized", MOD_NAME);
     }

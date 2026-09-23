@@ -75,6 +75,24 @@ public class ClientStateTest {
         assertFalse(connection.isUdpConfirmed());
     }
 
+    @Test
+    public void voiceAvailableNeedsConnectionConfigAndUdpEndpoint() throws Exception {
+        ClientState client = new ClientState();
+        assertFalse(client.isVoiceAvailable());
+        ClientConnectionState connection = client.openConnection(packet -> {});
+        ClientConnectionState.UdpState udp = connection.replaceUdp();
+        assertFalse(client.isVoiceAvailable());
+        udp.opened(new InetSocketAddress("127.0.0.1", 24454));
+        assertFalse(client.isVoiceAvailable()); // endpoint without server config
+        connection.acceptConfig(config());
+        assertTrue(client.isVoiceAvailable());
+        udp.close(); // worker timed out; config alone is not enough
+        assertTrue(udp.isClosed());
+        assertFalse(client.isVoiceAvailable());
+        connection.close();
+        assertFalse(client.isVoiceAvailable());
+    }
+
     private ClientConfig config() throws Exception {
         return ClientConfig.decode(new ConfigPacket(UUID.randomUUID(), new CaptureInfo(48000, 1024, null),
                 null, Collections.emptySet(), Collections.emptySet(), Collections.emptyMap(), new PlayerIconConfig()), null);
