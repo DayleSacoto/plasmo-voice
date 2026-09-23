@@ -10,6 +10,7 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 
 import lombok.Getter;
+import su.plo.slib.api.position.Pos3d;
 import su.plo.voice.proto.data.audio.capture.CaptureInfo;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.audio.codec.CodecInfo;
@@ -45,6 +46,11 @@ public final class ServerConfig {
 
     /** The AES key is new for every server lifecycle, like upstream (it is not stored in the config file). */
     public ServerConfig(ServerSettings settings) throws GeneralSecurityException {
+        this(settings, null);
+    }
+
+    /** Upstream reload keeps the AES key of the running server. */
+    public ServerConfig(ServerSettings settings, ServerConfig previous) throws GeneralSecurityException {
         this.settings = settings;
         this.serverId = settings.getServerId();
         this.captureInfo = new CaptureInfo(settings.getSampleRate(), settings.getMtuSize(), new CodecInfo("opus",
@@ -60,9 +66,13 @@ public final class ServerConfig {
                 true,
                 null,
                 1);
-        KeyGenerator generator = KeyGenerator.getInstance("AES");
-        generator.init(128);
-        aesKey = generator.generateKey().getEncoded();
+        if (previous != null) {
+            aesKey = previous.aesKey;
+        } else {
+            KeyGenerator generator = KeyGenerator.getInstance("AES");
+            generator.init(128);
+            aesKey = generator.generateKey().getEncoded();
+        }
     }
 
     public ConfigPacket createPacket(PublicKey publicKey) throws GeneralSecurityException {
@@ -73,7 +83,7 @@ public final class ServerConfig {
                 Collections.singleton(proximityLine),
                 Collections.singleton(proximityActivation),
                 synchronizedPermissions(),
-                new PlayerIconConfig());
+                new PlayerIconConfig(settings.getPlayerIconVisibility(), new Pos3d(0D, settings.getPlayerIconYOffset(), 0D)));
     }
 
     /** Keeps distances only for activations this server registered, like upstream PlayerChannelHandler. */

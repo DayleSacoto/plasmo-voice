@@ -87,6 +87,11 @@ public class ServerSettingsTest {
         config.get("voice.opus", "bitrate", -1000).set("64000");
         config.get("voice.proximity", "distances", new int[] {8, 16, 32}).set(new String[] {"48", "8", "24"});
         config.get("voice.proximity", "default_distance", 16).set("24");
+        config.get("voice.player_icon", "visibility", new String[0]).set(new String[] {"HIDE_NOT_INSTALLED", "BOGUS"});
+        config.get("voice.player_icon", "y_offset", 0D).set("0.5");
+        config.get("general", "forced_language", "").set("RU_RU");
+        config.get("notifications", "muted", true).set(false);
+        config.get("voice", "max_extra_audio_broadcast_distance", 16).set("4");
         config.save();
 
         ServerSettings settings = ServerSettings.load(file, LOGGER);
@@ -102,6 +107,16 @@ public class ServerSettingsTest {
         VoiceActivation activation = packet.getActivations().iterator().next();
         assertEquals(Arrays.asList(8, 24, 48), activation.getDistances());
         assertEquals(24, activation.getDefaultDistance());
+        // Upstream voice.player_icon reaches the client; unknown flags are ignored.
+        assertEquals(java.util.Collections.singleton(su.plo.voice.proto.data.config.PlayerIconVisibility.HIDE_NOT_INSTALLED),
+                packet.getPlayerIconConfig().getIconVisibility());
+        assertEquals(0.5D, packet.getPlayerIconConfig().getIconOffset().getY(), 0D);
+        assertEquals("ru_ru", settings.getForcedLanguage());
+        assertFalse(settings.isNotifyMuted());
+        assertTrue(settings.isNotifyUnmuted());
+        assertEquals(4, settings.getMaxExtraAudioBroadcastDistance());
+        assertTrue(settings.sameUdpEndpoint(ServerSettings.load(file, LOGGER)));
+        assertFalse(settings.sameUdpEndpoint(ServerSettings.defaults()));
     }
 
     @Test

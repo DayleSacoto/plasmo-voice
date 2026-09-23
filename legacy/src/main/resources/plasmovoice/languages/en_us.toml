@@ -1,0 +1,57 @@
+[server.pv.error]
+no_permissions = "&cI'm sorry, but you do not have permission to perform this command. Please contact the server administrators if you believe that this is in error."
+player_only_command = "Only player can execute this command"
+player_not_found = "Player not found"
+mod_missing_kick_message = """
+Sorry, you need to install the Plasmo Voice mod to play on this server.
+Download here: https://modrinth.com/plugin/plasmo-voice"""
+version_not_supported = "Sorry, your Plasmo Voice version is not supported on this server. %s"
+version_not_supported_click = "Download supported version"
+version_not_supported_hover = "%s"
+
+[server.pv.mutes]
+empty_reason = "not specified"
+temporarily_muted = "You've been muted %1$s. Reason: %2$s"
+permanently_muted = "You've been permanently muted. Reason: %s"
+unmuted = "You've been unmuted"
+
+  [server.pv.mutes.durations]
+  seconds = "for %s sec"
+  minutes = "for %s min"
+  hours = "for %s h"
+  days = "for %s d"
+  weeks = "for %s w"
+
+[server.pv.command.mute]
+usage = "Usage: /vmute <player> [duration] [reason]"
+already_muted = "%s already muted"
+temporarily_muted = "Muted %1$s %2$s. Reason: %3$s"
+permanently_muted = "%1$s is permanently muted. Reason: %2$s"
+
+[server.pv.command.unmute]
+usage = "Usage: /vunmute <player>"
+not_muted = "%s not muted"
+unmuted = "Unmuted %s"
+
+[server.pv.command.mute_list]
+header = "Muted players:"
+entry = "%1$s, expires: %2$s. Reason: %3$s"
+entry_muted_by = "%1$s muted by %2$s, expires: %3$s. Reason: %4$s"
+empty = "No players are muted"
+expire_at = "%1$s at %2$s"
+never_expires = "never"
+expiration_date = "yyyy.MM.dd"
+expiration_time = "HH:mm:ss"
+
+[server.pv.command.list]
+message = "Clients (%1$s/%2$s): %3$s"
+empty = "no players with Plasmo Voice installed"
+
+[server.pv.command.reconnect]
+message = "Reconnect packet sent"
+
+[server.pv.command.reload]
+message = "Config reloaded"
+
+[client.pv.activation]
+proximity = "Proximity"

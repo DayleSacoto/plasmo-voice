@@ -30,8 +30,8 @@ final class ActivationTab extends SettingsTab {
         VoiceActivation proximity = config == null ? null : config.activation(VoiceActivation.PROXIMITY_ID);
         if (proximity == null) return;
 
-        addCategory(proximity.getTranslation());
-        addType(I18n.format(proximity.getTranslation()));
+        addCategoryText(state.translate(proximity.getTranslation()));
+        addType(state.translate(proximity.getTranslation()));
         // Upstream createActivationButton: the push-to-talk key, or the toggle key for voice activation.
         if (state.getActivationType() == CaptureActivation.Type.PUSH_TO_TALK) {
             addHotkey("gui.plasmovoice.activation.ptt_button", VoiceHotkeys.PROXIMITY_PTT);
@@ -78,7 +78,7 @@ final class ActivationTab extends SettingsTab {
         // ponytail: a free distance range (-1, max) gets no control until a server needs the upstream text field.
         if (distances.isEmpty() || distances.get(0) == -1) return;
         int last = distances.size() - 1;
-        addOption(I18n.format("gui.plasmovoice.activation.distance", I18n.format(activation.getTranslation())), null,
+        addOption(I18n.format("gui.plasmovoice.activation.distance", state.translate(activation.getTranslation())), null,
                 new SliderWidget(ELEMENT_WIDTH,
                         () -> last == 0 ? 0D : distances.indexOf(current(config, activation)) / (double) last,
                         value -> state.changeActivationDistance(activation.getId(), distances.get((int) Math.round(value * last))),

@@ -13,6 +13,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.event.ClickEvent;
 import net.minecraft.event.HoverEvent;
@@ -51,6 +52,16 @@ public final class ServerConnection {
     @Getter(AccessLevel.NONE)
     final StateBroadcastThrottle stateThrottle = new StateBroadcastThrottle();
     private final Map<UUID, Integer> activationDistances = new HashMap<>();
+    /** Upstream MuteManager state of this player, kept in sync by the player registry. */
+    @Setter
+    private boolean serverMuted;
+    /** Upstream PlayerChannelHandler language response throttle. */
+    @Getter(AccessLevel.NONE)
+    String requestedLanguage;
+    @Getter(AccessLevel.NONE)
+    long lastLanguageResponse;
+    @Getter(AccessLevel.NONE)
+    boolean languageResponsePending;
 
     public void prepareUdp(UdpServer server) {
         udpSession = server.createSession(player.getUniqueID());
@@ -103,13 +114,12 @@ public final class ServerConnection {
 
     /** Snapshot for the UDP worker; EntityPlayerMP must only be read on the server thread. */
     UdpServer.Presence presence() {
-        return new UdpServer.Presence(voiceConnected, voiceDisabled, microphoneMuted,
+        return new UdpServer.Presence(voiceConnected, voiceDisabled, microphoneMuted, serverMuted,
                 player.dimension, player.posX, player.posY, player.posZ);
     }
 
     VoicePlayerInfo createPlayerInfo() {
-        // No server mute manager yet, so "muted" (server-side mute) is always false.
-        return new VoicePlayerInfo(player.getUniqueID(), player.getCommandSenderName(), false,
+        return new VoicePlayerInfo(player.getUniqueID(), player.getCommandSenderName(), serverMuted,
                 voiceDisabled, microphoneMuted);
     }
 

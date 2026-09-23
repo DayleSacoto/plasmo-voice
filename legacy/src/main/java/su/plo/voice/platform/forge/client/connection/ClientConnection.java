@@ -27,6 +27,8 @@ import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.LanguagePacket;
+import su.plo.voice.proto.packets.tcp.serverbound.LanguageRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerDisconnectPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoUpdatePacket;
@@ -56,6 +58,8 @@ public final class ClientConnection implements AutoCloseable {
     private volatile ClientVoiceSources sources;
     private VoiceCapture capture;
     private VoicePlayback playback;
+    /** Client language of the last LanguageRequestPacket; null until the config is accepted. */
+    private String requestedLanguage;
 
     public ClientConnection(VoiceChannel channel, NetworkManager connection, ClientState clientState) {
         this.channel = Objects.requireNonNull(channel);
@@ -102,6 +106,8 @@ public final class ClientConnection implements AutoCloseable {
         } else if (packet instanceof SourceInfoPacket) {
             ClientVoiceSources current = sources;
             if (current != null) current.updateSourceInfo(((SourceInfoPacket) packet).getSourceInfo());
+        } else if (packet instanceof LanguagePacket) {
+            state.setServerLanguage(((LanguagePacket) packet).getLanguage());
         } else if (packet instanceof SourceAudioEndPacket) {
             ClientVoiceSources current = sources;
             if (current != null) current.onAudioEnd((SourceAudioEndPacket) packet);
@@ -124,6 +130,19 @@ public final class ClientConnection implements AutoCloseable {
     /** Client thread, every frame. */
     public void updatePlayback(float partialTicks) {
         if (playback != null) playback.updatePositions(partialTicks);
+        // Upstream LanguageChangedEvent: the server sends the translations of the new language.
+        if (requestedLanguage != null && !requestedLanguage.equals(clientLanguage())) requestLanguage();
+    }
+
+    /** Upstream requests the language once the server info is initialized. */
+    private void requestLanguage() {
+        requestedLanguage = clientLanguage();
+        channel.sendToServer(new LanguageRequestPacket(requestedLanguage));
+    }
+
+    /** 1.7.10 codes are like en_US; upstream language files are lower case. */
+    private static String clientLanguage() {
+        return Minecraft.getMinecraft().gameSettings.language.toLowerCase(java.util.Locale.ROOT);
     }
 
     /** TCP writes stay on the client thread; a request for a replaced config is dropped. */
@@ -182,6 +201,8 @@ public final class ClientConnection implements AutoCloseable {
         }
         try {
             ClientConfig accepted = ClientConfig.decode(packet, getKeyPair().getPrivate());
+            // A server reload sends the config again: the previous capture and playback stop first.
+            clearConfig();
             state.acceptConfig(accepted);
             ClientVoiceSources created = new ClientVoiceSources(clientState::isVoiceDisabled,
                     info -> clientState.isMuted(accepted, info),
@@ -207,6 +228,7 @@ public final class ClientConnection implements AutoCloseable {
                     new PlayerActivationDistancesPacket(Collections.singletonMap(activationId, distance))));
             // Settings changed after PlayerInfoPacket but before the server accepted state updates.
             clientState.syncState();
+            requestLanguage();
         } catch (GeneralSecurityException e) {
             clearConfig();
             udpClient.close();
@@ -226,6 +248,7 @@ public final class ClientConnection implements AutoCloseable {
         if (state.isConfigured()) LOGGER.info("Voice client config/encryption state cleared");
         state.clearConfig();
         sources = null;
+        requestedLanguage = null;
         if (playback != null) playback.close();
         playback = null;
         if (capture != null) capture.close();

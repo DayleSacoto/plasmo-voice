@@ -68,7 +68,7 @@ final class VolumeTab extends SettingsTab {
         List<VoiceSourceLine> lines = new ArrayList<>(config.getPacket().getSourceLines());
         lines.sort((a, b) -> Integer.compare(a.getWeight(), b.getWeight()));
         for (VoiceSourceLine line : lines) {
-            addVolume(ROW_HEIGHT, iconLabel(new ResourceLocation(line.getIcon())), I18n.format(line.getTranslation()), line.getName());
+            addVolume(ROW_HEIGHT, iconLabel(new ResourceLocation(line.getIcon())), state.translate(line.getTranslation()), line.getName());
         }
 
         addCategory("gui.plasmovoice.volume.players");

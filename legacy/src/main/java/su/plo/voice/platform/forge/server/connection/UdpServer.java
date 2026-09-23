@@ -32,8 +32,6 @@ import su.plo.voice.proto.packets.udp.serverbound.PlayerAudioPacket;
 
 public final class UdpServer implements AutoCloseable {
     private static final long KEEP_ALIVE_TICK_MS = 100L;
-    /** Upstream voice.max_extra_audio_broadcast_distance default. */
-    private static final int MAX_EXTRA_BROADCAST_DISTANCE = 16;
     private final Logger logger;
     private final String bindHost;
     private final int bindPort;
@@ -46,6 +44,9 @@ public final class UdpServer implements AutoCloseable {
     private volatile DatagramSocket socket;
     private volatile InetSocketAddress boundAddress;
     private volatile VoiceActivation proximityActivation;
+    /** Upstream voice.max_extra_audio_broadcast_distance. */
+    @Setter
+    private volatile int maxExtraBroadcastDistance = 16;
     private Thread worker;
 
     public UdpServer(Logger logger, String bindHost, int bindPort, String advertisedHost, int advertisedPort,
@@ -64,8 +65,10 @@ public final class UdpServer implements AutoCloseable {
     }
 
     public static UdpServer create(Logger logger, ServerSettings settings, int minecraftPort) {
-        return new UdpServer(logger, settings.getHostIp(), settings.bindPort(minecraftPort),
+        UdpServer server = new UdpServer(logger, settings.getHostIp(), settings.bindPort(minecraftPort),
                 settings.advertisedIp(), settings.advertisedPort(), settings.getKeepAliveTimeoutMs());
+        server.setMaxExtraBroadcastDistance(settings.getMaxExtraAudioBroadcastDistance());
+        return server;
     }
 
     public void start() {
@@ -190,32 +193,40 @@ public final class UdpServer implements AutoCloseable {
         return bySecret.values();
     }
 
-    /** Upstream NettyUdpServerConnection + ProximityServerActivationHelper, run on the UDP worker. */
+    /**
+     * Upstream NettyUdpServerConnection (server mute, microphone mute), VoiceServerActivationManager.onPlayerSpeak
+     * and ProximityServerActivationHelper, run on the UDP worker.
+     */
     private void routeAudio(DatagramSocket endpoint, Session speaker, PlayerAudioPacket audio) {
         Presence presence = speaker.presence;
         VoiceActivation activation = proximityActivation;
-        if (presence == null || !presence.isVoiceConnected() || presence.isMicrophoneMuted()
+        if (presence == null || !presence.isVoiceConnected() || presence.isServerMuted() || presence.isMicrophoneMuted()
                 || activation == null || !activation.getId().equals(audio.getActivationId())) return;
 
         short distance = (short) activation.calculateAllowedDistance(audio.getDistance());
         speaker.lastDistance = distance;
+        // A late frame right after the activation ended does not start it again.
+        long sequenceNumber = audio.getSequenceNumber();
+        long lastEnd = speaker.lastActivationEnd;
+        if (sequenceNumber > lastEnd || Math.abs(sequenceNumber - lastEnd) > 10) speaker.activationActive = true;
+        int extra = maxExtraBroadcastDistance;
         // Audio stays encrypted: every client shares the lifecycle AES key, the server only relays it.
         SourceAudioPacket packet = new SourceAudioPacket(audio.getSequenceNumber(), speaker.sourceState,
                 audio.getData(), speaker.sourceId, distance);
         for (Session listener : bySecret.values()) {
-            if (isListener(speaker, listener, distance)) send(endpoint, packet, listener);
+            if (isListener(speaker, listener, distance, extra)) send(endpoint, packet, listener);
         }
         send(endpoint, new SelfAudioInfoPacket(speaker.sourceId, audio.getSequenceNumber(), null, distance), speaker);
     }
 
     /** Upstream VoiceServerProximitySource listeners: not the speaker, voice enabled, same world, in range. */
-    static boolean isListener(Session speaker, Session listener, short distance) {
+    static boolean isListener(Session speaker, Session listener, short distance, int maxExtraDistance) {
         if (listener == speaker || !listener.active || !listener.authenticated) return false;
         Presence from = speaker.presence;
         Presence to = listener.presence;
         if (from == null || to == null || !to.isVoiceConnected() || to.isVoiceDisabled()
                 || from.getDimension() != to.getDimension()) return false;
-        double range = Math.min(distance + MAX_EXTRA_BROADCAST_DISTANCE, distance * 2);
+        double range = Math.min(distance + maxExtraDistance, distance * 2);
         double dx = from.getX() - to.getX();
         double dy = from.getY() - to.getY();
         double dz = from.getZ() - to.getZ();
@@ -292,6 +303,18 @@ public final class UdpServer implements AutoCloseable {
         /** Distance of the last routed frame; -1 until the player speaks. */
         private volatile short lastDistance = -1;
         private final AtomicBoolean sourceInfoDirty = new AtomicBoolean(true);
+        /** Upstream activeActivations: set by routed audio, cleared by PlayerAudioEndPacket on the server thread. */
+        private volatile boolean activationActive;
+        /** Upstream lastActivationSequenceNumber. */
+        private volatile long lastActivationEnd;
+
+        /** Server thread: ends the activation once; false when it was not active. */
+        boolean endActivation(long sequenceNumber) {
+            if (!activationActive) return false;
+            activationActive = false;
+            lastActivationEnd = sequenceNumber;
+            return true;
+        }
     }
 
     @Value
@@ -299,6 +322,8 @@ public final class UdpServer implements AutoCloseable {
         boolean voiceConnected;
         boolean voiceDisabled;
         boolean microphoneMuted;
+        /** Upstream MuteManager: a server mute drops the player's audio. */
+        boolean serverMuted;
         int dimension;
         double x;
         double y;

@@ -4,7 +4,11 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import lombok.AccessLevel;
@@ -13,6 +17,7 @@ import lombok.Getter;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.common.config.Property;
 import org.apache.logging.log4j.Logger;
+import su.plo.voice.proto.data.config.PlayerIconVisibility;
 
 /** Persisted subset of upstream VoiceServerConfig, stored as a Forge config file. */
 @Getter
@@ -35,10 +40,23 @@ public final class ServerSettings {
     private final int proximityDefaultDistance;
     private final String opusMode;
     private final int opusBitrate;
+    /** Upstream default_language and forced_language (null when every client gets its own language). */
+    private final String defaultLanguage;
+    private final String forcedLanguage;
+    /** Upstream notifications.muted / notifications.unmuted. */
+    private final boolean notifyMuted;
+    private final boolean notifyUnmuted;
+    private final int maxExtraAudioBroadcastDistance;
+    private final boolean clientModRequired;
+    private final long clientModRequiredCheckTimeoutMs;
+    /** Upstream voice.player_icon. */
+    private final Set<PlayerIconVisibility> playerIconVisibility;
+    private final double playerIconYOffset;
 
     public static ServerSettings defaults() {
         return new ServerSettings(UUID.randomUUID(), "0.0.0.0", 0, null, 0, 48_000, 1024, 15_000,
-                ServerConnection.DEFAULT_CLIENT_MOD_MIN_VERSION, Arrays.asList(8, 16, 32), 16, "VOIP", -1000);
+                ServerConnection.DEFAULT_CLIENT_MOD_MIN_VERSION, Arrays.asList(8, 16, 32), 16, "VOIP", -1000,
+                "en_us", null, true, true, 16, false, 3_000L, Collections.emptySet(), 0D);
     }
 
     public static ServerSettings load(File file, Logger logger) {
@@ -103,10 +121,65 @@ public final class ServerSettings {
             opusBitrate = invalid(logger, "voice.opus.bitrate", opusBitrate, defaults.opusBitrate);
         }
 
+        String defaultLanguage = config.get("general", "default_language", defaults.defaultLanguage,
+                "Language used when client's language doesn't exist\n\n"
+                        + "By default, client's language used for translations\n"
+                        + "For example, if default_language is set to ja_jp but the client uses en_us, then en_us will be used\n"
+                        + "If you want to use one specific language for all clients, set forced_language below")
+                .getString().trim().toLowerCase(Locale.ROOT);
+        if (defaultLanguage.isEmpty()) defaultLanguage = invalid(logger, "general.default_language", defaultLanguage, defaults.defaultLanguage);
+        String forcedLanguage = config.get("general", "forced_language", "",
+                "Language used for all clients, e.g. ja_jp\nEmpty = not forced").getString().trim().toLowerCase(Locale.ROOT);
+
+        boolean notifyMuted = config.get("notifications", "muted", true,
+                "Notify a player when their voice chat is muted (\"You've been muted ...\" message)").getBoolean(true);
+        boolean notifyUnmuted = config.get("notifications", "unmuted", true,
+                "Notify a player when their voice chat is unmuted (\"You've been unmuted\" message)").getBoolean(true);
+
+        int maxExtraDistance = intValue(config.get("voice", "max_extra_audio_broadcast_distance",
+                defaults.maxExtraAudioBroadcastDistance,
+                "The maximum amount, in blocks, to broadcast audio packets past the audible proximity distance.\n"
+                        + "The plugin will send audio packets to players within 2x the proximity distance, "
+                        + "or the distance plus this number - whichever is smaller."), 0, Integer.MAX_VALUE, logger,
+                "voice.max_extra_audio_broadcast_distance");
+        boolean clientModRequired = config.get("voice", "client_mod_required", false,
+                "Requires players to have the Plasmo Voice mod installed").getBoolean(false);
+        int clientModRequiredCheckTimeoutMs = intValue(config.get("voice", "client_mod_required_check_timeout_ms",
+                (int) defaults.clientModRequiredCheckTimeoutMs,
+                "Time before player is kicked if the mod is required but not installed"), 0, Integer.MAX_VALUE, logger,
+                "voice.client_mod_required_check_timeout_ms");
+
+        Property visibilityProperty = config.get("voice.player_icon", "visibility", new String[0],
+                "Controls which icons are hidden above player heads\nLeave empty to show all icons (default)\n"
+                        + "Available options:\n"
+                        + "HIDE_NOT_INSTALLED - hides icon when player doesn't have Plasmo Voice installed\n"
+                        + "HIDE_VOICE_CHAT_DISABLED - hides icon when player disables voice chat on the client\n"
+                        + "HIDE_SERVER_MUTED - hides icon when player's voice chat is muted on the server\n"
+                        + "HIDE_CLIENT_MUTED - hides icon when player is muted on the client using Volume tab\n"
+                        + "HIDE_SOURCE_ICON - hides icon when player is talking");
+        Set<PlayerIconVisibility> visibility = EnumSet.noneOf(PlayerIconVisibility.class);
+        for (String name : visibilityProperty.getStringList()) {
+            try {
+                visibility.add(PlayerIconVisibility.valueOf(name.trim()));
+            } catch (IllegalArgumentException e) {
+                invalid(logger, "voice.player_icon.visibility", name, "ignored");
+            }
+        }
+        double playerIconYOffset = config.get("voice.player_icon", "y_offset", 0D,
+                "Controls the y offset of the icon above player heads").getDouble(0D);
+
         if (config.hasChanged()) config.save();
         return new ServerSettings(serverId, hostIp, hostPort, publicIp.isEmpty() ? null : publicIp, publicPort,
                 sampleRate, mtuSize, keepAliveTimeoutMs, clientModMinVersion, Collections.unmodifiableList(distances),
-                defaultDistance, opusMode, opusBitrate);
+                defaultDistance, opusMode, opusBitrate, defaultLanguage, forcedLanguage.isEmpty() ? null : forcedLanguage,
+                notifyMuted, notifyUnmuted, maxExtraDistance, clientModRequired, clientModRequiredCheckTimeoutMs,
+                Collections.unmodifiableSet(visibility), playerIconYOffset);
+    }
+
+    /** Upstream reload restarts the UDP server only when the host settings changed. */
+    public boolean sameUdpEndpoint(ServerSettings other) {
+        return hostIp.equals(other.hostIp) && hostPort == other.hostPort && Objects.equals(publicIp, other.publicIp)
+                && publicPort == other.publicPort && keepAliveTimeoutMs == other.keepAliveTimeoutMs;
     }
 
     /** Upstream: 0 means the Minecraft server port, and a random port when that is unknown (singleplayer). */

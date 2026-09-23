@@ -69,7 +69,7 @@ final class OverlayTab extends SettingsTab {
         lines.sort((a, b) -> Integer.compare(a.getWeight(), b.getWeight()));
         for (VoiceSourceLine line : lines) {
             String name = line.getName();
-            addIconOption(new ResourceLocation(line.getIcon()), I18n.format(line.getTranslation()), null,
+            addIconOption(new ResourceLocation(line.getIcon()), state.translate(line.getTranslation()), null,
                     new ToggleWidget(ELEMENT_WIDTH,
                             () -> state.getOverlaySourceState(name) == HudOptions.OverlaySourceState.ON,
                             on -> state.setOverlaySourceState(name,

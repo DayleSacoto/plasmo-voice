@@ -29,7 +29,7 @@ final class HotKeysTab extends SettingsTab {
         if (proximity == null) return;
         List<Integer> distances = proximity.getDistances();
         if (distances.isEmpty() || distances.get(0) == -1) return;
-        addCategory("key.plasmovoice.distance", I18n.format(proximity.getTranslation()));
+        addCategory("key.plasmovoice.distance", state.translate(proximity.getTranslation()));
         addHotkey("key.plasmovoice.distance.increase", VoiceHotkeys.PROXIMITY_DISTANCE_INCREASE);
         addHotkey("key.plasmovoice.distance.decrease", VoiceHotkeys.PROXIMITY_DISTANCE_DECREASE);
     }

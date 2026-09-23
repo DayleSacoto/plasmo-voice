@@ -83,6 +83,24 @@ public class VoiceRoutingTest {
             speaker.send(100, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}));
             Thread.sleep(200L);
             assertEquals(before, listener.audio.size());
+
+            // So is a server mute (upstream MuteManager).
+            speaker.session.setPresence(new UdpServer.Presence(true, false, false, true, 0, 0, 64, 0));
+            speaker.send(101, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}));
+            Thread.sleep(200L);
+            assertEquals(before, listener.audio.size());
+
+            // Routed audio started the activation; PlayerAudioEndPacket ends it once, and a late frame
+            // of the ended activation does not start it again (upstream lastActivationSequenceNumber).
+            speaker.session.setPresence(presence(false, false, 0, 0));
+            assertTrue(speaker.session.isActivationActive());
+            assertTrue(speaker.session.endActivation(59));
+            assertFalse(speaker.session.endActivation(59));
+            speaker.send(58, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}));
+            await(() -> listener.audio.size() > before);
+            assertFalse(speaker.session.isActivationActive());
+            speaker.send(60, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}));
+            await(speaker.session::isActivationActive);
         }
     }
 
@@ -91,8 +109,8 @@ public class VoiceRoutingTest {
         UdpServer.Session speaker = new UdpServer.Session(UUID.randomUUID(), UUID.randomUUID());
         UdpServer.Session listener = new UdpServer.Session(UUID.randomUUID(), UUID.randomUUID());
         speaker.setPresence(presence(false, false, 0, 0));
-        assertFalse(UdpServer.isListener(speaker, listener, (short) 16)); // not authenticated
-        assertFalse(UdpServer.isListener(speaker, speaker, (short) 16));
+        assertFalse(UdpServer.isListener(speaker, listener, (short) 16, 16)); // not authenticated
+        assertFalse(UdpServer.isListener(speaker, speaker, (short) 16, 16));
     }
 
     private static final class Peer {
@@ -134,7 +152,7 @@ public class VoiceRoutingTest {
     }
 
     private static UdpServer.Presence presence(boolean voiceDisabled, boolean microphoneMuted, int dimension, double x) {
-        return new UdpServer.Presence(true, voiceDisabled, microphoneMuted, dimension, x, 64, 0);
+        return new UdpServer.Presence(true, voiceDisabled, microphoneMuted, false, dimension, x, 64, 0);
     }
 
     /** Decrypts and decodes the routed frames in sequence order, as the playback thread does. */

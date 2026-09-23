@@ -168,7 +168,7 @@ public final class VoiceHud extends Gui {
             }
             return ((PlayerSourceInfo) source).getPlayerInfo().getPlayerNick();
         }
-        return I18n.format(line.getTranslation());
+        return connection.translate(line.getTranslation());
     }
 
     private static ResourceLocation icon(String name) {

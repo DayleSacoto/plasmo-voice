@@ -83,6 +83,11 @@ abstract class SettingsTab {
         rows.add(new CategoryRow(I18n.format(translationKey, args)));
     }
 
+    /** A category with a server translated name. */
+    void addCategoryText(String text) {
+        rows.add(new CategoryRow(text));
+    }
+
     /** Upstream OptionEntry / ButtonOptionEntry: label, element, optional icon buttons, reset. */
     void addOption(String label, String tooltipKey, Widget element, BooleanSupplier isDefault, Runnable reset, Widget... buttons) {
         addIconOption(null, label, tooltipKey, element, isDefault, reset, buttons);

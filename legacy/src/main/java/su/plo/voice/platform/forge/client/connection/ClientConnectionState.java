@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import lombok.Getter;
+import net.minecraft.client.resources.I18n;
 import lombok.Setter;
 import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
 import su.plo.voice.proto.packets.Packet;
@@ -39,6 +40,9 @@ public final class ClientConnectionState implements AutoCloseable {
     // Last voice state the server was told through PlayerInfoPacket or PlayerStatePacket.
     private PlayerStatePacket reportedState;
     private final Map<UUID, VoicePlayerInfo> players = new LinkedHashMap<>();
+    /** Upstream LanguagePacket: the server's client translations (activation and source line names). */
+    @Setter
+    private volatile Map<String, String> serverLanguage = Collections.emptyMap();
 
     public ClientConnectionState(Consumer<? super PlayerStatePacket> stateSender) {
         this.stateSender = Objects.requireNonNull(stateSender);
@@ -103,6 +107,12 @@ public final class ClientConnectionState implements AutoCloseable {
         PlayerStatePacket packet = new PlayerStatePacket(voiceDisabled, microphoneMuted);
         stateSender.accept(packet);
         reportedState = packet;
+    }
+
+    /** Upstream translatable server names: the server language first, then the client's resources. */
+    public String translate(String key) {
+        String value = serverLanguage.get(key);
+        return value != null ? value : I18n.format(key);
     }
 
     public Collection<VoicePlayerInfo> getPlayers() {

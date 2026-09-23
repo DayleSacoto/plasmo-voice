@@ -274,6 +274,11 @@ public final class ClientState {
                 && !connection.getUdp().isTimedOut();
     }
 
+    /** A server translation key, e.g. an activation name; the client's resources without a connection. */
+    public String translate(String key) {
+        return connection != null ? connection.translate(key) : net.minecraft.client.resources.I18n.format(key);
+    }
+
     /** Sends a live PlayerStatePacket if the current connection is ready and the server state is stale. */
     public void syncState() {
         if (connection != null) connection.syncState(voiceDisabled, microphoneMuted);

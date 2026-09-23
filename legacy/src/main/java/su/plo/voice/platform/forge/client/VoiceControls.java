@@ -116,7 +116,7 @@ public final class VoiceControls {
         if (state.getActivationType() == CaptureActivation.Type.PUSH_TO_TALK) return;
         state.setActivationToggled(!state.isActivationToggled());
         state.save();
-        actionBar(I18n.format("message.plasmovoice.activation.toggle", I18n.format(proximityTranslation()),
+        actionBar(I18n.format("message.plasmovoice.activation.toggle", state.translate(proximityTranslation()),
                 I18n.format(state.isActivationToggled() ? "message.plasmovoice.off" : "message.plasmovoice.on")));
     }
 
@@ -133,7 +133,7 @@ public final class VoiceControls {
         int index = Math.floorMod(distances.indexOf(current) + step, distances.size());
         state.changeActivationDistance(proximity.getId(), distances.get(index));
         state.save();
-        actionBar(I18n.format("message.plasmovoice.distance_changed", I18n.format(proximity.getTranslation()), distances.get(index)));
+        actionBar(I18n.format("message.plasmovoice.distance_changed", state.translate(proximity.getTranslation()), distances.get(index)));
     }
 
     private String proximityTranslation() {
