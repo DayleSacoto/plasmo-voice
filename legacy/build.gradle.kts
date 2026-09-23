@@ -51,6 +51,10 @@ dependencies {
     implementation("it.unimi.dsi:fastutil:8.5.18")
     implementation("su.plo.slib:api-common:1.7.4")
 
+    // Upstream Opus stack: native JNI first, pure-Java Concentus fallback. Shipped inside the mod jar.
+    shadowImplementation("com.plasmoverse:opus-jni-rust:1.0.3")
+    shadowImplementation("com.plasmoverse:concentus:1.0.0")
+
     compileOnly("org.jetbrains:annotations:23.0.0")
 
     compileOnly("org.projectlombok:lombok:1.18.44")
