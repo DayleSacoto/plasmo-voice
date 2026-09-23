@@ -22,6 +22,7 @@ import su.plo.voice.proto.packets.udp.PacketUdpCodec;
 import su.plo.voice.proto.packets.udp.bothbound.PingPacket;
 
 public final class UdpServer implements AutoCloseable {
+    private static final long KEEP_ALIVE_TICK_MS = 100L;
     private final Logger logger;
     private final String bindHost;
     private final int bindPort;
@@ -106,6 +107,7 @@ public final class UdpServer implements AutoCloseable {
             logger.info("UDP endpoint bound: {}; advertised: {}:{} (bootstrap only)", boundAddress,
                     advertisedHost, advertisedPort == 0 ? boundAddress.getPort() : advertisedPort);
             byte[] buffer = new byte[65507];
+            long lastKeepAlive = 0L;
             while (!closed) {
                 DatagramPacket datagram = new DatagramPacket(buffer, buffer.length);
                 try {
@@ -113,7 +115,12 @@ public final class UdpServer implements AutoCloseable {
                     receive(datagram);
                 } catch (SocketTimeoutException ignored) {
                 }
-                keepAlive(endpoint);
+                // Upstream NettyUdpKeepAlive ticks every 100 ms instead of after every datagram.
+                long now = System.currentTimeMillis();
+                if (now - lastKeepAlive >= KEEP_ALIVE_TICK_MS) {
+                    lastKeepAlive = now;
+                    keepAlive(endpoint, now);
+                }
             }
         } catch (Exception e) {
             if (!closed) logger.warn("UDP server stopped unexpectedly", e);
@@ -152,8 +159,7 @@ public final class UdpServer implements AutoCloseable {
         }
     }
 
-    private void keepAlive(DatagramSocket endpoint) throws IOException {
-        long now = System.currentTimeMillis();
+    private void keepAlive(DatagramSocket endpoint, long now) throws IOException {
         for (Session session : bySecret.values()) {
             synchronized (session) {
                 if (!session.active || !session.authenticated) continue;

@@ -112,18 +112,15 @@ public final class UdpClient implements AutoCloseable {
         endpoint.send(new DatagramPacket(data, data.length));
     }
 
+    /**
+     * Never blocks: callers are on the client game thread. The state is closed first so a worker still
+     * resolving the address cannot revive it; closing the socket wakes a blocked receive.
+     */
     @Override
     public void close() {
         state.close();
         closed = true;
         DatagramSocket endpoint = socket;
         if (endpoint != null) endpoint.close();
-        try {
-            worker.join(2000L);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        if (worker.isAlive()) logger.warn("UDP client worker is still finishing address resolution");
-        else logger.info("UDP client worker stopped");
     }
 }
