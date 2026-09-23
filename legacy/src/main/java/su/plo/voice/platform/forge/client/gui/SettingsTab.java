@@ -80,8 +80,14 @@ abstract class SettingsTab {
 
     /** Upstream OptionEntry / ButtonOptionEntry: label, element, optional icon buttons, reset. */
     void addOption(String label, String tooltipKey, Widget element, BooleanSupplier isDefault, Runnable reset, Widget... buttons) {
+        addIconOption(null, label, tooltipKey, element, isDefault, reset, buttons);
+    }
+
+    /** Upstream OverlaySourceEntry: a 16px icon in front of the label. */
+    void addIconOption(ResourceLocation labelIcon, String label, String tooltipKey, Widget element,
+                       BooleanSupplier isDefault, Runnable reset, Widget... buttons) {
         IconWidget resetButton = new IconWidget(() -> RESET_ICON, reset, () -> !isDefault.getAsBoolean(), null);
-        rows.add(new OptionRow(label, tooltipKey, element, resetButton, Arrays.asList(buttons)));
+        rows.add(new OptionRow(labelIcon, label, tooltipKey, element, resetButton, Arrays.asList(buttons)));
     }
 
     void render(Minecraft mc, int mouseX, int mouseY) {
@@ -257,6 +263,7 @@ abstract class SettingsTab {
     }
 
     private static final class OptionRow extends Row {
+        private final ResourceLocation labelIcon;
         private final String label;
         private final String tooltipKey;
         private final Widget element;
@@ -266,7 +273,9 @@ abstract class SettingsTab {
         private int left;
         private int y;
 
-        OptionRow(String label, String tooltipKey, Widget element, IconWidget reset, List<Widget> buttons) {
+        OptionRow(ResourceLocation labelIcon, String label, String tooltipKey, Widget element, IconWidget reset,
+                  List<Widget> buttons) {
+            this.labelIcon = labelIcon;
             this.label = label;
             this.tooltipKey = tooltipKey;
             this.element = element;
@@ -300,8 +309,16 @@ abstract class SettingsTab {
         @Override
         void render(Minecraft mc, int mouseX, int mouseY) {
             FontRenderer font = mc.fontRenderer;
-            int labelWidth = element.x - left - 4;
-            font.drawStringWithShadow(Widget.fit(font, label, labelWidth), left, y + height / 2 - font.FONT_HEIGHT / 2, 0xFFFFFF);
+            int labelX = left;
+            if (labelIcon != null) {
+                mc.getTextureManager().bindTexture(labelIcon);
+                GL11.glEnable(GL11.GL_BLEND);
+                GL11.glColor4f(1F, 1F, 1F, 1F);
+                Gui.func_146110_a(left, y + height / 2 - 8, 0F, 0F, 16, 16, 16F, 16F);
+                labelX += 20;
+            }
+            int labelWidth = element.x - labelX - 4;
+            font.drawStringWithShadow(Widget.fit(font, label, labelWidth), labelX, y + height / 2 - font.FONT_HEIGHT / 2, 0xFFFFFF);
             element.render(mc, mouseX, mouseY);
             for (Widget button : buttons) button.render(mc, mouseX, mouseY);
             reset.render(mc, mouseX, mouseY);

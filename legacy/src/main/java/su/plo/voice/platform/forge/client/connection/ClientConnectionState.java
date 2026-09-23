@@ -13,6 +13,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import lombok.Getter;
 import lombok.Setter;
+import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
 import su.plo.voice.proto.data.player.VoicePlayerInfo;
@@ -22,6 +23,10 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 @SideOnly(Side.CLIENT)
 public final class ClientConnectionState implements AutoCloseable {
     private final Consumer<? super PlayerStatePacket> stateSender;
+    /** Remote sources of the accepted config, for the overlay; null while not configured. */
+    @Getter
+    @Setter
+    private volatile ClientVoiceSources sources;
     /** TCP sender for the other serverbound packets; null in tests. */
     @Setter
     private Consumer<Packet<?>> packetSender;
@@ -76,6 +81,7 @@ public final class ClientConnectionState implements AutoCloseable {
 
     public void clearConfig() {
         config = null;
+        sources = null;
     }
 
     /** Upstream VoiceClientActivation.onDistanceChange: tells the server the new activation distance. */
@@ -131,6 +137,10 @@ public final class ClientConnectionState implements AutoCloseable {
         private volatile InetSocketAddress remoteAddress;
         @Getter
         private volatile boolean confirmed;
+        /** Upstream soft keep-alive timeout: no server ping for 7 seconds, shown with the disconnected icon. */
+        @Getter
+        @Setter
+        private volatile boolean timedOut;
         private boolean closed;
 
         public synchronized void opened(InetSocketAddress remoteAddress) {

@@ -117,6 +117,7 @@ public final class VoiceCapture implements AutoCloseable {
                 CaptureActivation.Result result = activation.process(samples, state.getActivationType(),
                         state.isActivationToggled(), state.isPushToTalkPressed(), state.getActivationThreshold(),
                         System.currentTimeMillis());
+                state.setActivationActive(activation.isActive());
                 if (result == CaptureActivation.Result.ACTIVATED) {
                     sendFrame(samples);
                 } else if (result == CaptureActivation.Result.END) {
@@ -128,6 +129,7 @@ public final class VoiceCapture implements AutoCloseable {
         } catch (RuntimeException e) {
             LOGGER.error("Voice capture stopped unexpectedly", e);
         } finally {
+            state.setActivationActive(false);
             closeDevice();
             if (encoder != null) encoder.close();
         }

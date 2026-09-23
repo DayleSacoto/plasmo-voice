@@ -14,6 +14,7 @@ import net.minecraftforge.common.config.Property;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
+import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 
 /**
@@ -28,6 +29,8 @@ public final class ClientSettingsFile {
     private static final String ACTIVATIONS = "activations";
     private static final String SERVERS = "servers";
     private static final String KEY_BINDINGS = "key_bindings";
+    private static final String OVERLAY = "overlay";
+    private static final String SOURCE_STATES = OVERLAY + ".source_states";
 
     private ClientSettingsFile() {
     }
@@ -52,6 +55,18 @@ public final class ClientSettingsFile {
             LOGGER.warn("Unknown activation type {} in {}; using push-to-talk", type, file.getName());
         }
         state.setActivationToggled(config.get(proximity, "toggle", false).getBoolean(false));
+
+        state.setShowActivationIcon(config.get(OVERLAY, "show_activation_icon", true).getBoolean(true));
+        state.setActivationIconPosition(enumValue(config.get(OVERLAY, "activation_icon_position",
+                HudOptions.IconPosition.BOTTOM_CENTER.name()), HudOptions.IconPosition.BOTTOM_CENTER, file));
+        state.setOverlayEnabled(config.get(OVERLAY, "overlay_enabled", true).getBoolean(true));
+        state.setOverlayPosition(enumValue(config.get(OVERLAY, "overlay_position",
+                HudOptions.OverlayPosition.TOP_LEFT.name()), HudOptions.OverlayPosition.TOP_LEFT, file));
+        state.setOverlayStyle(enumValue(config.get(OVERLAY, "overlay_style",
+                HudOptions.OverlayStyle.NAME_SKIN.name()), HudOptions.OverlayStyle.NAME_SKIN, file));
+        for (Map.Entry<String, Property> line : config.getCategory(SOURCE_STATES).getValues().entrySet()) {
+            state.setOverlaySourceState(line.getKey(), enumValue(line.getValue(), HudOptions.OverlaySourceState.OFF, file));
+        }
 
         VoiceHotkeys hotkeys = state.getHotkeys();
         for (String name : hotkeys.names()) {
@@ -93,6 +108,13 @@ public final class ClientSettingsFile {
         config.get(proximity, "type", CaptureActivation.Type.PUSH_TO_TALK.name()).set(state.getActivationType().name());
         config.get(proximity, "toggle", false).set(state.isActivationToggled());
 
+        config.get(OVERLAY, "show_activation_icon", true).set(state.isShowActivationIcon());
+        config.get(OVERLAY, "activation_icon_position", "").set(state.getActivationIconPosition().name());
+        config.get(OVERLAY, "overlay_enabled", true).set(state.isOverlayEnabled());
+        config.get(OVERLAY, "overlay_position", "").set(state.getOverlayPosition().name());
+        config.get(OVERLAY, "overlay_style", "").set(state.getOverlayStyle().name());
+        state.overlaySourceStates().forEach((line, sourceState) -> config.get(SOURCE_STATES, line, "").set(sourceState.name()));
+
         VoiceHotkeys hotkeys = state.getHotkeys();
         for (String name : hotkeys.names()) {
             config.get(KEY_BINDINGS, name, "").set(codes(hotkeys.getKeys(name)));
@@ -103,6 +125,15 @@ public final class ClientSettingsFile {
         state.distancesByServer().forEach((serverId, distances) -> distances.forEach((activationId, distance) ->
                 config.get(SERVERS + "." + serverId, activationId.toString(), 0).set(distance)));
         config.save();
+    }
+
+    private static <E extends Enum<E>> E enumValue(Property property, E fallback, File file) {
+        try {
+            return Enum.valueOf(fallback.getDeclaringClass(), property.getString());
+        } catch (IllegalArgumentException e) {
+            LOGGER.warn("Unknown value {}={} in {}; using {}", property.getName(), property.getString(), file.getName(), fallback);
+            return fallback;
+        }
     }
 
     static String codes(List<Integer> keys) {

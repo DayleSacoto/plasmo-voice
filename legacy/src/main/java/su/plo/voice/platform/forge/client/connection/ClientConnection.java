@@ -186,6 +186,7 @@ public final class ClientConnection implements AutoCloseable {
             ClientVoiceSources created = new ClientVoiceSources(clientState::isVoiceDisabled,
                     sourceId -> requestSourceInfo(this.sources, sourceId));
             sources = created;
+            state.setSources(created);
             VoicePlayback startedPlayback = new VoicePlayback(accepted, clientState, created);
             playback = startedPlayback;
             startedPlayback.start();

@@ -16,6 +16,7 @@ import org.junit.rules.TemporaryFolder;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
+import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.packets.Packet;
@@ -54,6 +55,12 @@ public class ClientSettingsTest {
         before.setActivationToggled(true);
         before.setActivationDistance(serverId, VoiceActivation.PROXIMITY_ID, 32);
         before.setPushToTalkPressed(true);
+        before.setShowActivationIcon(false);
+        before.setActivationIconPosition(HudOptions.IconPosition.TOP_RIGHT);
+        before.setOverlayEnabled(false);
+        before.setOverlayPosition(HudOptions.OverlayPosition.BOTTOM_LEFT);
+        before.setOverlayStyle(HudOptions.OverlayStyle.NAME);
+        before.setOverlaySourceState("proximity", HudOptions.OverlaySourceState.ON);
         ClientSettingsFile.save(file, before);
 
         ClientState after = new ClientState();
@@ -70,6 +77,13 @@ public class ClientSettingsTest {
         assertEquals(CaptureActivation.Type.VOICE, after.getActivationType());
         assertTrue(after.isActivationToggled());
         assertEquals(Integer.valueOf(32), after.getActivationDistance(serverId, VoiceActivation.PROXIMITY_ID));
+        assertFalse(after.isShowActivationIcon());
+        assertEquals(HudOptions.IconPosition.TOP_RIGHT, after.getActivationIconPosition());
+        assertFalse(after.isOverlayEnabled());
+        assertEquals(HudOptions.OverlayPosition.BOTTOM_LEFT, after.getOverlayPosition());
+        assertEquals(HudOptions.OverlayStyle.NAME, after.getOverlayStyle());
+        assertEquals(HudOptions.OverlaySourceState.ON, after.getOverlaySourceState("proximity"));
+        assertEquals(HudOptions.OverlaySourceState.OFF, after.getOverlaySourceState("radio"));
         // Key state is runtime-only.
         assertFalse(after.isPushToTalkPressed());
     }

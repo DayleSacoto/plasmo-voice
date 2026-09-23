@@ -31,6 +31,8 @@ final class VoiceSource {
     volatile SourceInfo info;
     /** Eye position of the source player, or null while the entity is not loaded; set on the client thread. */
     volatile double[] position;
+    /** Upstream BaseClientAudioSource.canHear, read by the overlay. */
+    volatile boolean canHear;
     private volatile long endRequestedAt = -1L;
     private volatile long endSequenceNumber = -1L;
 
@@ -87,6 +89,7 @@ final class VoiceSource {
 
     /** Playback thread, on shutdown. */
     void release() {
+        canHear = false;
         closeStream();
         if (decoder != null) decoder.close();
         decoder = null;
@@ -153,16 +156,20 @@ final class VoiceSource {
         double[] source = position;
         if (source == null || listener == null) {
             stream.setGain(0F);
+            if (distance > 0) canHear = false;
             return;
         }
         double dx = source[0] - listener[0];
         double dy = source[1] - listener[1];
         double dz = source[2] - listener[2];
-        stream.setGain((float) (volume * distanceGain(Math.sqrt(dx * dx + dy * dy + dz * dz), distance)));
+        double sourceDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        stream.setGain((float) (volume * distanceGain(sourceDistance, distance)));
+        if (distance > 0) canHear = sourceDistance <= distance;
         stream.setPosition(false, (float) source[0], (float) source[1], (float) source[2]);
     }
 
     private void reset() {
+        canHear = false;
         if (!activated) return;
         if (decoder != null) decoder.reset();
         activated = false;

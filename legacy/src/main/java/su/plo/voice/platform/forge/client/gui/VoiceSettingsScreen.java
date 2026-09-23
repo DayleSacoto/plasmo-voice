@@ -55,6 +55,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
         tabButtons.clear();
         addTab("gui.plasmovoice.devices", "devices", new DevicesTab(this, state));
         addTab("gui.plasmovoice.activation", "activation", new ActivationTab(this, state));
+        addTab("gui.plasmovoice.overlay", "overlay", new OverlayTab(this, state));
         addTab("gui.plasmovoice.hotkeys", "hotkeys", new HotKeysTab(this, state));
         layoutTabs();
         activeTab().init(navigationHeight, height);

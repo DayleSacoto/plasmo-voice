@@ -1,6 +1,8 @@
 package su.plo.voice.platform.forge.client.audio;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,6 +60,15 @@ public final class ClientVoiceSources {
 
     public boolean isClosed() {
         return closed;
+    }
+
+    /** Upstream canHear sources: activated and within their distance; client thread (overlay). */
+    public List<SourceInfo> audible() {
+        List<SourceInfo> audible = new ArrayList<>();
+        for (VoiceSource source : sources.values()) {
+            if (source.canHear) audible.add(source.info);
+        }
+        return audible;
     }
 
     Collection<VoiceSource> all() {

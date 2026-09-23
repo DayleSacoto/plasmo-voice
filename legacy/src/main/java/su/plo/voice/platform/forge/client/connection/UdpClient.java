@@ -23,6 +23,8 @@ import su.plo.voice.proto.packets.udp.clientbound.SourceAudioPacket;
 
 @SideOnly(Side.CLIENT)
 public final class UdpClient implements AutoCloseable {
+    /** Upstream MAX_SOFT_KEEP_ALIVE_TIMEOUT. */
+    private static final long SOFT_TIMEOUT_MS = 7_000L;
     private final Logger logger;
     private final UUID secret;
     private final String host;
@@ -78,6 +80,7 @@ public final class UdpClient implements AutoCloseable {
             byte[] buffer = new byte[65507];
             while (!closed) {
                 long now = System.currentTimeMillis();
+                state.setTimedOut(state.isConfirmed() && now - keepAlive > SOFT_TIMEOUT_MS);
                 if (now - keepAlive > 30_000L) {
                     logger.info("UDP bootstrap timed out");
                     break;

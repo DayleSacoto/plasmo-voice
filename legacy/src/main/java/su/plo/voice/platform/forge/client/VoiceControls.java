@@ -17,6 +17,7 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.inventory.GuiEditSign;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.KeyBinding;
+import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
@@ -24,6 +25,7 @@ import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.gui.VoiceNotAvailableScreen;
 import su.plo.voice.platform.forge.client.gui.VoiceSettingsScreen;
+import su.plo.voice.platform.forge.client.hud.VoiceHud;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 
 /** The vanilla settings key plus the upstream voice hotkeys (HotkeyActions and VoiceClientActivation). */
@@ -46,6 +48,7 @@ public final class VoiceControls {
 
         ClientRegistry.registerKeyBinding(SETTINGS_KEY);
         FMLCommonHandler.instance().bus().register(new VoiceControls(state));
+        MinecraftForge.EVENT_BUS.register(new VoiceHud(state));
     }
 
     /** Screens receive keys directly, so they close themselves on the settings key like upstream. */

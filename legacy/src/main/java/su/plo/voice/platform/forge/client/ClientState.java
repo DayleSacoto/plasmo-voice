@@ -13,6 +13,7 @@ import lombok.Setter;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
+import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
@@ -60,9 +61,33 @@ public final class ClientState {
     /** Upstream Servers: chosen activation distance per server id and activation id. */
     private final Map<UUID, Map<UUID, Integer>> distancesByServer = new ConcurrentHashMap<>();
 
+    /** Upstream overlay config. */
+    @Getter
+    @Setter
+    private volatile boolean showActivationIcon = true;
+    @Getter
+    @Setter
+    private volatile HudOptions.IconPosition activationIconPosition = HudOptions.IconPosition.BOTTOM_CENTER;
+    @Getter
+    @Setter
+    private volatile boolean overlayEnabled = true;
+    @Getter
+    @Setter
+    private volatile HudOptions.OverlayPosition overlayPosition = HudOptions.OverlayPosition.TOP_LEFT;
+    @Getter
+    @Setter
+    private volatile HudOptions.OverlayStyle overlayStyle = HudOptions.OverlayStyle.NAME_SKIN;
+    /** Upstream overlay.source_states by source line name; lines without players default to OFF. */
+    private final Map<String, HudOptions.OverlaySourceState> overlaySourceStates = new ConcurrentHashMap<>();
+
     /** Upstream key_bindings. */
     @Getter
     private final VoiceHotkeys hotkeys = new VoiceHotkeys();
+
+    /** Runtime: the capture activation is sending, which the HUD shows with the activation icon. */
+    @Getter
+    @Setter
+    private volatile boolean activationActive;
 
     /** Runtime push-to-talk state from {@link VoiceControls}; read by the capture thread. */
     @Getter
@@ -141,6 +166,18 @@ public final class ClientState {
         connection.sendActivationDistance(activationId, distance);
     }
 
+    public HudOptions.OverlaySourceState getOverlaySourceState(String lineName) {
+        return overlaySourceStates.getOrDefault(lineName, HudOptions.OverlaySourceState.OFF);
+    }
+
+    public void setOverlaySourceState(String lineName, HudOptions.OverlaySourceState state) {
+        overlaySourceStates.put(lineName, state);
+    }
+
+    Map<String, HudOptions.OverlaySourceState> overlaySourceStates() {
+        return overlaySourceStates;
+    }
+
     Map<UUID, Map<UUID, Integer>> distancesByServer() {
         return distancesByServer;
     }
@@ -161,9 +198,10 @@ public final class ClientState {
         return connection != null && connection.isConnected();
     }
 
-    /** Upstream opens settings only with a live UDP client and accepted server info. */
+    /** Upstream opens settings only with a live, not timed out UDP client and accepted server info. */
     public boolean isVoiceAvailable() {
-        return isConnected() && connection.isConfigured() && connection.hasUdpEndpoint();
+        return isConnected() && connection.isConfigured() && connection.hasUdpEndpoint()
+                && !connection.getUdp().isTimedOut();
     }
 
     /** Sends a live PlayerStatePacket if the current connection is ready and the server state is stale. */
