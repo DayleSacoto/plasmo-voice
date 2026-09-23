@@ -5,6 +5,8 @@ import java.util.function.Consumer;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import lombok.Getter;
+import lombok.Setter;
+import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
@@ -14,10 +16,22 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 public final class ClientState {
     @Getter
     private static final ClientState instance = new ClientState();
+    // Read by the capture thread.
     @Getter
-    private boolean voiceDisabled;
+    private volatile boolean voiceDisabled;
     @Getter
-    private boolean microphoneMuted;
+    private volatile boolean microphoneMuted;
+    /** Upstream default: the proximity activation is push-to-talk. */
+    @Getter
+    @Setter
+    private volatile CaptureActivation.Type activationType = CaptureActivation.Type.PUSH_TO_TALK;
+    @Getter
+    @Setter
+    private volatile boolean pushToTalkPressed;
+    /** Upstream voice activation threshold in dB (-60..0). */
+    @Getter
+    @Setter
+    private volatile double activationThreshold = -30D;
     @Getter
     private ClientConnectionState connection;
 
