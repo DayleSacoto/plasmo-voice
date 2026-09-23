@@ -79,32 +79,31 @@ public final class PlasmoVoiceMod {
             }
 
             PlayerInfoPacket info = (PlayerInfoPacket) packet;
+            ServerConnection existing = serverConnections.get(player.getUniqueID());
+            ServerConnection connection = existing != null ? existing : new ServerConnection(player);
 
-            try {
-                ServerConnection connection = serverConnections.computeIfAbsent(
-                        player.getUniqueID(),
-                        uuid -> new ServerConnection(player)
-                );
-
-                connection.handle(info);
-
-                LOGGER.info(
-                        "Voice server connection initialized for {}: minecraft={}, version={}, key={}, voiceDisabled={}, microphoneMuted={}",
-                        player.getCommandSenderName(),
-                        connection.getMinecraftVersion(),
-                        connection.getModVersion(),
-                        connection.getPublicKey().getAlgorithm(),
-                        connection.isVoiceDisabled(),
-                        connection.isMicrophoneMuted()
-                );
-                if (udpServer != null) connection.prepareUdp(udpServer);
-            } catch (Exception e) {
-                LOGGER.error(
-                        "Failed to initialize voice server connection for {}",
-                        player.getCommandSenderName(),
-                        e
-                );
+            ServerConnection.PlayerInfoResult result =
+                    connection.handle(info, VERSION, ServerConnection.DEFAULT_CLIENT_MOD_MIN_VERSION);
+            if (result != ServerConnection.PlayerInfoResult.ACCEPTED) {
+                if (result == ServerConnection.PlayerInfoResult.UNSUPPORTED_VERSION) {
+                    connection.suggestSupportedVersion(info.getMinecraftVersion());
+                }
+                LOGGER.warn("Voice connection rejected for {}: {} (version={})",
+                        player.getCommandSenderName(), result, info.getVersion());
+                return;
             }
+
+            serverConnections.put(player.getUniqueID(), connection);
+            LOGGER.info(
+                    "Voice server connection initialized for {}: minecraft={}, version={}, key={}, voiceDisabled={}, microphoneMuted={}",
+                    player.getCommandSenderName(),
+                    connection.getMinecraftVersion(),
+                    connection.getModVersion(),
+                    connection.getPublicKey().getAlgorithm(),
+                    connection.isVoiceDisabled(),
+                    connection.isMicrophoneMuted()
+            );
+            if (udpServer != null) connection.prepareUdp(udpServer);
         });
 
         FMLCommonHandler.instance().bus().register(this);

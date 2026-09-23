@@ -1,13 +1,20 @@
 package su.plo.voice.platform.forge.server.connection;
 
+import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.regex.Pattern;
 
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.event.ClickEvent;
+import net.minecraft.event.HoverEvent;
+import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.ChatStyle;
+import net.minecraft.util.EnumChatFormatting;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
@@ -18,6 +25,9 @@ import org.apache.logging.log4j.LogManager;
 @Getter
 @RequiredArgsConstructor
 public final class ServerConnection {
+    public static final String DEFAULT_CLIENT_MOD_MIN_VERSION = "2.0.0";
+    private static final String MODRINTH_LINK = "https://modrinth.com/plugin/plasmo-voice";
+    private static final Pattern MINECRAFT_VERSION_PATTERN = Pattern.compile("[a-zA-Z0-9._-]{1,32}");
 
     @NonNull
     private final EntityPlayerMP player;
@@ -81,16 +91,66 @@ public final class ServerConnection {
         return true;
     }
 
-    public void handle(PlayerInfoPacket packet) throws Exception {
-        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-        X509EncodedKeySpec publicKeySpec =
-                new X509EncodedKeySpec(packet.getPublicKey());
+    /** Upstream PlayerChannelHandler.handle(PlayerInfoPacket): nothing changes unless the client is accepted. */
+    public PlayerInfoResult handle(PlayerInfoPacket packet, String serverVersion, String clientModMinVersion) {
+        PlayerInfoResult result = checkVersion(packet.getVersion(), serverVersion, clientModMinVersion);
+        if (result != PlayerInfoResult.ACCEPTED) return result;
 
-        publicKey = keyFactory.generatePublic(publicKeySpec);
+        PublicKey key = decodePublicKey(packet.getPublicKey());
+        if (key == null) return PlayerInfoResult.INVALID_PUBLIC_KEY;
 
+        publicKey = key;
         modVersion = packet.getVersion();
         minecraftVersion = packet.getMinecraftVersion();
         voiceDisabled = packet.isVoiceDisabled();
         microphoneMuted = packet.isMicrophoneMuted();
+        return PlayerInfoResult.ACCEPTED;
+    }
+
+    static PlayerInfoResult checkVersion(String clientVersion, String serverVersion, String clientModMinVersion) {
+        VoiceVersion client;
+        try {
+            client = VoiceVersion.parse(clientVersion);
+        } catch (IllegalArgumentException e) {
+            return PlayerInfoResult.MALFORMED_VERSION;
+        }
+        if (client.major != VoiceVersion.parse(serverVersion).major) return PlayerInfoResult.UNSUPPORTED_VERSION;
+
+        VoiceVersion minVersion = VoiceVersion.parse(DEFAULT_CLIENT_MOD_MIN_VERSION);
+        try {
+            minVersion = VoiceVersion.parse(clientModMinVersion);
+        } catch (IllegalArgumentException ignored) {
+            // Upstream falls back to 2.0.0 for an unparsable config value.
+        }
+        return client.asInt() < minVersion.asInt() ? PlayerInfoResult.UNSUPPORTED_VERSION : PlayerInfoResult.ACCEPTED;
+    }
+
+    static PublicKey decodePublicKey(byte[] encoded) {
+        try {
+            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(encoded));
+        } catch (GeneralSecurityException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /** Upstream ServerVersionUtil.suggestSupportedVersion with the en_us server translation. */
+    public void suggestSupportedVersion(String clientMinecraftVersion) {
+        String link = MINECRAFT_VERSION_PATTERN.matcher(clientMinecraftVersion).matches()
+                ? MODRINTH_LINK + "/versions?g=" + clientMinecraftVersion
+                : MODRINTH_LINK;
+        ChatComponentText click = new ChatComponentText("Download supported version");
+        click.setChatStyle(new ChatStyle()
+                .setColor(EnumChatFormatting.YELLOW)
+                .setChatClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, link))
+                .setChatHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ChatComponentText(link))));
+        player.addChatMessage(new ChatComponentText("Sorry, your Plasmo Voice version is not supported on this server. ")
+                .appendSibling(click));
+    }
+
+    public enum PlayerInfoResult {
+        ACCEPTED,
+        MALFORMED_VERSION,
+        UNSUPPORTED_VERSION,
+        INVALID_PUBLIC_KEY
     }
 }
