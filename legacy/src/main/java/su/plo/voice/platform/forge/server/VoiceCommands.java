@@ -55,6 +55,12 @@ public final class VoiceCommands {
             return name;
         }
 
+        /** Upstream registers the commands under the "plasmovoice" namespace too. */
+        @Override
+        public List getCommandAliases() {
+            return Collections.singletonList("plasmovoice:" + name);
+        }
+
         @Override
         public String getCommandUsage(ICommandSender sender) {
             return "/" + name;

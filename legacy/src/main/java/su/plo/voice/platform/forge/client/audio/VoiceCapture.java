@@ -52,6 +52,7 @@ public final class VoiceCapture implements AutoCloseable {
     // Capture thread only.
     private final CaptureActivation activation = new CaptureActivation();
     private final MicrophoneGain gain = new MicrophoneGain();
+    private final NoiseSuppression noiseSuppression;
     private String openedDevice;
     private final IntBuffer intBuffer = BufferUtils.createIntBuffer(1);
     private ALCdevice device;
@@ -75,6 +76,7 @@ public final class VoiceCapture implements AutoCloseable {
         this.endSender = endSender;
         this.sampleRate = config.getPacket().getCaptureInfo().getSampleRate();
         this.frameSize = sampleRate / 1000 * 20;
+        this.noiseSuppression = new NoiseSuppression(state);
         this.thread = new Thread(this::run, "plasmo-voice-capture");
         thread.setDaemon(true);
     }
@@ -115,6 +117,8 @@ public final class VoiceCapture implements AutoCloseable {
                     continue;
                 }
                 gain.process(samples, (float) state.getMicrophoneVolume());
+                // Upstream input filters: stereo to mono (in read()), gain, then noise suppression.
+                samples = noiseSuppression.process(samples);
                 MicrophoneTest test = state.getMicrophoneTest();
                 test.onCaptured(samples, System.currentTimeMillis());
                 if (test.isActive()) {
@@ -143,6 +147,7 @@ public final class VoiceCapture implements AutoCloseable {
         } finally {
             state.setActivationActive(false);
             closeDevice();
+            noiseSuppression.close();
             if (encoder != null) encoder.close();
         }
     }
@@ -177,6 +182,7 @@ public final class VoiceCapture implements AutoCloseable {
             openFailureLogged = false;
         }
         wasDisabled = disabled;
+        if (disabled) state.setInputDeviceFailed(false);
         if (now < nextOpenAttempt || !AL.isCreated() || disabled) return false;
         nextOpenAttempt = now + REOPEN_INTERVAL_MS;
 
@@ -190,10 +196,12 @@ public final class VoiceCapture implements AutoCloseable {
             if (!openFailureLogged) LOGGER.warn("Microphone {} is not available; voice capture is idle",
                     openedDevice.isEmpty() ? "(system default)" : openedDevice);
             openFailureLogged = true;
+            state.setInputDeviceFailed(true);
             return false;
         }
         device = opened;
         openFailureLogged = false;
+        state.setInputDeviceFailed(false);
         state.getMicrophoneTest().setInputOpen(true);
         hasDisconnectExt = ALC10.alcIsExtensionPresent(device, "ALC_EXT_disconnect");
         buffer = BufferUtils.createByteBuffer(frameSize * captureChannels * 2);

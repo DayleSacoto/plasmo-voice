@@ -23,6 +23,9 @@ final class HotKeysTab extends SettingsTab {
         addHotkey(VoiceHotkeys.DISABLE_VOICE, VoiceHotkeys.DISABLE_VOICE);
         addHotkey(VoiceHotkeys.ACTION, VoiceHotkeys.ACTION);
 
+        addCategory("key.plasmovoice.occlusion");
+        addHotkey(VoiceHotkeys.OCCLUSION_TOGGLE, VoiceHotkeys.OCCLUSION_TOGGLE);
+
         ClientConfig config = state.getConnection() == null ? null : state.getConnection().getConfig();
         VoiceActivation proximity = config == null ? null : config.activation(VoiceActivation.PROXIMITY_ID);
         if (proximity == null) return;

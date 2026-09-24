@@ -42,6 +42,30 @@ public class ClientSettingsTest {
     }
 
     @Test
+    public void upstreamDefaultsAndRangesForTheParitySettings() {
+        ClientState state = new ClientState();
+        // Upstream VoiceClientConfig defaults.
+        assertFalse(state.isNoiseSuppression());
+        assertFalse(state.isSoundOcclusion());
+        assertFalse(state.isDirectionalSources());
+        assertFalse(state.isHrtf());
+        assertEquals(145, state.getDirectionalSourcesAngle());
+        assertFalse(state.isAdaptiveJitterBuffer());
+        assertEquals(3, state.getJitterPacketDelay());
+        assertEquals(5, state.getAlPlaybackBuffers());
+        assertTrue(state.isCameraSoundListener());
+        // IntConfigEntry ranges: 100..360, 0..16, 1..32.
+        state.setDirectionalSourcesAngle(10);
+        assertEquals(100, state.getDirectionalSourcesAngle());
+        state.setDirectionalSourcesAngle(999);
+        assertEquals(360, state.getDirectionalSourcesAngle());
+        state.setJitterPacketDelay(40);
+        assertEquals(16, state.getJitterPacketDelay());
+        state.setAlPlaybackBuffers(0);
+        assertEquals(1, state.getAlPlaybackBuffers());
+    }
+
+    @Test
     public void settingsSurviveARestart() {
         File file = new File(folder.getRoot(), "plasmovoice/client.cfg");
         UUID serverId = UUID.randomUUID();
@@ -70,6 +94,15 @@ public class ClientSettingsTest {
         before.setPanning(false);
         before.setExponentialVolumeSlider(false);
         before.setExponentialDistanceGain(false);
+        before.setNoiseSuppression(true);
+        before.setSoundOcclusion(true);
+        before.setDirectionalSources(true);
+        before.setHrtf(true);
+        before.setDirectionalSourcesAngle(200);
+        before.setAdaptiveJitterBuffer(true);
+        before.setJitterPacketDelay(5);
+        before.setAlPlaybackBuffers(8);
+        before.setCameraSoundListener(false);
         ClientSettingsFile.save(file, before);
 
         ClientState after = new ClientState();
@@ -98,6 +131,15 @@ public class ClientSettingsTest {
         assertFalse(after.isPanning());
         assertFalse(after.isExponentialVolumeSlider());
         assertFalse(after.isExponentialDistanceGain());
+        assertTrue(after.isNoiseSuppression());
+        assertTrue(after.isSoundOcclusion());
+        assertTrue(after.isDirectionalSources());
+        assertTrue(after.isHrtf());
+        assertEquals(200, after.getDirectionalSourcesAngle());
+        assertTrue(after.isAdaptiveJitterBuffer());
+        assertEquals(5, after.getJitterPacketDelay());
+        assertEquals(8, after.getAlPlaybackBuffers());
+        assertFalse(after.isCameraSoundListener());
         // Key state is runtime-only.
         assertFalse(after.isPushToTalkPressed());
     }

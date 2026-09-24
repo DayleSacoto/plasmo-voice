@@ -17,6 +17,8 @@ final class IconWidget extends Widget {
     private final Runnable onPress;
     private final BooleanSupplier enabled;
     private final Supplier<String> tooltip;
+    /** Upstream IconButton.setIconColor, RGB. */
+    int iconColor = 0xFFFFFF;
 
     IconWidget(Supplier<ResourceLocation> icon, Runnable onPress, BooleanSupplier enabled, Supplier<String> tooltip) {
         super(20, 20);
@@ -37,7 +39,8 @@ final class IconWidget extends Widget {
         GL11.glColor4f(shadow, shadow, shadow, 1F);
         func_146110_a(x + 2, y + 3, 0F, 0F, 16, 16, 16F, 16F);
         float color = active ? 1F : 0.63F;
-        GL11.glColor4f(color, color, color, 1F);
+        GL11.glColor4f(color * ((iconColor >> 16) & 0xFF) / 255F, color * ((iconColor >> 8) & 0xFF) / 255F,
+                color * (iconColor & 0xFF) / 255F, 1F);
         func_146110_a(x + 2, y + 2, 0F, 0F, 16, 16, 16F, 16F);
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }

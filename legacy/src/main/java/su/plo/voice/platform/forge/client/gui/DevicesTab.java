@@ -12,6 +12,8 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.input.Keyboard;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.audio.Lwjgl3Alc;
@@ -22,6 +24,11 @@ import su.plo.voice.platform.forge.client.audio.MicrophoneTest;
 final class DevicesTab extends SettingsTab {
     private static final String OPEN_AL_SOFT_PREFIX = "OpenAL Soft on ";
     private static final double DEFAULT_THRESHOLD = -30D;
+    private static final Logger LOGGER = LogManager.getLogger("Plasmo Voice");
+    private static final ResourceLocation WARNING_ICON = new ResourceLocation("plasmovoice", "textures/icons/warning.png");
+    /** Upstream Colors.WARNING. */
+    private static final int WARNING_COLOR = 0xFAC653;
+    private static final String MICROPHONE_HELP_URL = "https://plasmovoice.com/docs/client/microphone-not-available";
     private static final ResourceLocation TEST_STOP_ICON = new ResourceLocation("plasmovoice", "textures/icons/speaker_menu.png");
     private static final ResourceLocation TEST_START_ICON =
             new ResourceLocation("plasmovoice", "textures/icons/speaker_menu_disabled.png");
@@ -56,8 +63,11 @@ final class DevicesTab extends SettingsTab {
                 () -> state.getActivationThreshold() == DEFAULT_THRESHOLD,
                 () -> state.setActivationThreshold(DEFAULT_THRESHOLD), testButton);
         addDevice("gui.plasmovoice.devices.microphone", Lwjgl3Alc.inputDevices(), Lwjgl3Alc.defaultInputDevice(),
-                state::getInputDevice, state::setInputDevice, !state.isInputDeviceDisabled());
+                state::getInputDevice, state::setInputDevice, !state.isInputDeviceDisabled(),
+                state.isInputDeviceFailed() ? microphoneWarning() : null);
         addVolume("gui.plasmovoice.devices.microphone_volume", state::getMicrophoneVolume, state::setMicrophoneVolume);
+        addToggle("gui.plasmovoice.devices.noise_suppression", state::isNoiseSuppression, state::setNoiseSuppression)
+                .active = state.isNoiseSuppressionAvailable();
         addToggle("gui.plasmovoice.devices.stereo_capture", state::isStereoCapture, state::setStereoCapture);
         addToggle("gui.plasmovoice.devices.disable_input_device", state::isInputDeviceDisabled, disabled -> {
             state.setInputDeviceDisabled(disabled);
@@ -66,16 +76,20 @@ final class DevicesTab extends SettingsTab {
 
         addCategory("gui.plasmovoice.devices.output");
         addDevice("gui.plasmovoice.devices.output_device", Lwjgl3Alc.outputDevices(), Lwjgl3Alc.defaultOutputDevice(),
-                state::getOutputDevice, state::setOutputDevice, true);
+                state::getOutputDevice, state::setOutputDevice, true, null);
         addVolume("gui.plasmovoice.devices.volume", state::getVolume, state::setVolume);
+        addToggle("gui.plasmovoice.devices.occlusion", state::isSoundOcclusion, state::setSoundOcclusion);
+        addToggle("gui.plasmovoice.devices.directional_sources", state::isDirectionalSources, state::setDirectionalSources);
+        // Upstream shows HRTF on every device; without ALC_SOFT_HRTF the output simply stays as it is.
+        addToggle("gui.plasmovoice.devices.hrtf", state::isHrtf, state::setHrtf);
     }
 
     /** Selecting the system default stores an empty name, like upstream. */
     private void addDevice(String labelKey, List<String> devices, String defaultDevice,
-                           Supplier<String> current, Consumer<String> select, boolean enabled) {
+                           Supplier<String> current, Consumer<String> select, boolean enabled, IconWidget warning) {
         List<String> names = new ArrayList<>();
         for (String device : devices) names.add(format(device));
-        DropDownWidget dropDown = new DropDownWidget(ELEMENT_WIDTH,
+        DropDownWidget dropDown = new DropDownWidget(warning == null ? ELEMENT_WIDTH : ELEMENT_WIDTH - 24,
                 () -> {
                     if (devices.isEmpty()) return I18n.format("gui.plasmovoice.devices.not_available");
                     String selected = current.get();
@@ -87,7 +101,30 @@ final class DevicesTab extends SettingsTab {
                     select.accept(device.equals(defaultDevice) ? "" : device);
                 });
         dropDown.active = enabled && !devices.isEmpty();
-        addOption(I18n.format(labelKey), null, dropDown, () -> current.get().isEmpty(), () -> select.accept(""));
+        if (warning == null) {
+            addOption(I18n.format(labelKey), null, dropDown, () -> current.get().isEmpty(), () -> select.accept(""));
+        } else {
+            addOption(I18n.format(labelKey), null, dropDown, () -> current.get().isEmpty(), () -> select.accept(""), warning);
+        }
+    }
+
+    /** Upstream input device error button: the device that failed, and the wiki page on click. */
+    private IconWidget microphoneWarning() {
+        String device = state.getInputDevice().isEmpty() ? Lwjgl3Alc.defaultInputDevice() : state.getInputDevice();
+        IconWidget warning = new IconWidget(() -> WARNING_ICON, () -> openUri(MICROPHONE_HELP_URL), () -> true,
+                () -> I18n.format("gui.plasmovoice.devices.failed_to_initialize_microphone.tooltip",
+                        format(device == null ? "" : device)));
+        warning.iconColor = WARNING_COLOR;
+        return warning;
+    }
+
+    /** Upstream MinecraftUtil.openUri; vanilla 1.7.10 opens links through java.awt.Desktop too. */
+    private static void openUri(String uri) {
+        try {
+            java.awt.Desktop.getDesktop().browse(new java.net.URI(uri));
+        } catch (Exception | LinkageError e) {
+            LOGGER.warn("Failed to open {}: {}", uri, e.toString());
+        }
     }
 
     /** Upstream VolumeSliderWidget: 0-200 % in 5 % steps; holding left shift disables the snapping. */
@@ -107,9 +144,10 @@ final class DevicesTab extends SettingsTab {
         return Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) ? value : Math.round(value * 200D / 5D) * 5D / 200D;
     }
 
-    private void addToggle(String labelKey, BooleanSupplier current, Consumer<Boolean> set) {
-        addOption(I18n.format(labelKey), labelKey + ".tooltip", new ToggleWidget(ELEMENT_WIDTH, current, set),
-                () -> !current.getAsBoolean(), () -> set.accept(false));
+    private ToggleWidget addToggle(String labelKey, BooleanSupplier current, Consumer<Boolean> set) {
+        ToggleWidget toggle = new ToggleWidget(ELEMENT_WIDTH, current, set);
+        addOption(I18n.format(labelKey), labelKey + ".tooltip", toggle, () -> !current.getAsBoolean(), () -> set.accept(false));
+        return toggle;
     }
 
     /** Upstream GuiUtil.formatDeviceName. */

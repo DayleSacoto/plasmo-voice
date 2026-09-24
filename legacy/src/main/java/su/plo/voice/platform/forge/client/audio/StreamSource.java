@@ -15,11 +15,11 @@ import org.lwjgl.openal.AL10;
  */
 @SideOnly(Side.CLIENT)
 final class StreamSource {
-    /** Upstream advanced.al_playback_buffers default. */
-    static final int NUM_BUFFERS = 5;
     private static final int QUEUE_LIMIT = 100;
 
     final boolean stereo;
+    /** Upstream advanced.al_playback_buffers. */
+    private final int numBuffers;
     private final int pointer;
     private final IntBuffer buffers;
     private final int format;
@@ -31,8 +31,9 @@ final class StreamSource {
     private int availableBuffer = -1;
     private long lastBufferTime;
 
-    StreamSource(boolean stereo, int sampleRate, int frameSize, long now) {
+    StreamSource(boolean stereo, int sampleRate, int frameSize, int numBuffers, long now) {
         this.stereo = stereo;
+        this.numBuffers = numBuffers;
         this.format = stereo ? AL10.AL_FORMAT_STEREO16 : AL10.AL_FORMAT_MONO16;
         this.sampleRate = sampleRate;
         this.emptyBuffer = new short[frameSize * (stereo ? 2 : 1)];
@@ -41,7 +42,7 @@ final class StreamSource {
         AL10.alGetError();
         pointer = AL10.alGenSources();
         if (AL10.alGetError() != AL10.AL_NO_ERROR) throw new IllegalStateException("Failed to allocate an OpenAL source");
-        buffers = BufferUtils.createIntBuffer(NUM_BUFFERS);
+        buffers = BufferUtils.createIntBuffer(numBuffers);
         AL10.alGenBuffers(buffers);
         if (AL10.alGetError() != AL10.AL_NO_ERROR) {
             AL10.alDeleteSources(pointer);
@@ -108,12 +109,12 @@ final class StreamSource {
     }
 
     private void queueWithEmptyBuffers() {
-        for (int i = 0; i < NUM_BUFFERS; i++) queue.add(emptyBuffer);
+        for (int i = 0; i < numBuffers; i++) queue.add(emptyBuffer);
         emptyFilled = true;
     }
 
     private void fillQueue() {
-        for (int i = 0; i < NUM_BUFFERS; i++) fillAndPushBuffer(buffers.get(i));
+        for (int i = 0; i < numBuffers; i++) fillAndPushBuffer(buffers.get(i));
     }
 
     private boolean fillAndPushBuffer(int buffer) {

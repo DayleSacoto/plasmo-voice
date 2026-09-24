@@ -27,11 +27,21 @@ final class VoiceSource {
     static final long RESET_TIMEOUT_MS = 500L;
     /** Upstream StreamAlSource closes an idle OpenAL source after 25 seconds. */
     static final long STREAM_IDLE_CLOSE_MS = 25_000L;
+    /** Upstream traces per audio frame on its source coroutine; world access here stays on the client thread. */
+    static final long OCCLUSION_INTERVAL_MS = 50L;
+    /** Upstream BaseClientAudioSource.OUTER_ANGLE. */
+    private static final double OUTER_ANGLE = 180D;
 
     final JitterBuffer buffer = new JitterBuffer();
     volatile SourceInfo info;
     /** Eye position of the source player, or null while the entity is not loaded; set on the client thread. */
     volatile double[] position;
+    /** Look vector of the source player, for directional sources; set on the client thread. */
+    volatile double[] look;
+    /** Upstream calculateOcclusion result, refreshed by the client thread at most every {@link #OCCLUSION_INTERVAL_MS}. */
+    volatile double occlusion;
+    /** Client thread only. */
+    long occlusionAt;
     /** Upstream BaseClientAudioSource.canHear, read by the overlay. */
     volatile boolean canHear;
     private volatile long endRequestedAt = -1L;
@@ -41,6 +51,8 @@ final class VoiceSource {
     private AudioDecoder decoder;
     private boolean decoderStereo;
     private StreamSource stream;
+    /** Upstream lastOcclusion: the applied occlusion follows the traced one in 0.05 steps per frame. */
+    private double lastOcclusion = -1D;
     private long lastSequenceNumber = -1L;
     private long lastActivation;
     /** Upstream isActivated; written by the playback thread, read by the player icons. */
@@ -62,8 +74,22 @@ final class VoiceSource {
 
     /** Playback thread, with the voice output context current. */
     void pump(ClientConfig config, ClientState state, double[] listener, double volume, long now) {
-        Object next;
-        while ((next = buffer.poll(now)) != null) {
+        buffer.configure(state.isAdaptiveJitterBuffer(), state.getJitterPacketDelay());
+        while (true) {
+            Object next = buffer.poll(now);
+            if (next == null) {
+                // Upstream: when the adaptive schedule is due but the frame has not arrived, conceal it (PLC).
+                if (!buffer.isAdaptive() || !activated || buffer.isEmpty() || now - lastActivation <= 20L
+                        || decoder == null || stream == null || stream.stereo) break;
+                try {
+                    write(decoder.decode(null), lastSequenceNumber + 1, now);
+                } catch (IOException e) {
+                    break;
+                }
+                lastSequenceNumber++;
+                lastActivation = now;
+                continue;
+            }
             if (next instanceof SourceAudioPacket) {
                 process((SourceAudioPacket) next, config, state, listener, volume, now);
             } else if (activated) {
@@ -114,8 +140,8 @@ final class VoiceSource {
             lastSequenceNumber = -1L;
         }
         if (stream != null && stream.stereo != current.isStereo()) closeStream();
-        if (stream == null) stream = new StreamSource(current.isStereo(), sampleRate, frameSize, now);
-        updateStream(current, state, packet.getDistance(), listener, sliderGain(volume, state.isExponentialVolumeSlider()));
+        if (stream == null) stream = new StreamSource(current.isStereo(), sampleRate, frameSize, state.getAlPlaybackBuffers(), now);
+        updateStream(current, state, packet.getDistance(), listener, volume);
 
         try {
             if (lastSequenceNumber >= 0) {
@@ -165,7 +191,22 @@ final class VoiceSource {
         double dy = source[1] - listener[1];
         double dz = source[2] - listener[2];
         double sourceDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        stream.setGain((float) (volume * distanceGain(sourceDistance, distance, state.isExponentialDistanceGain())));
+
+        // Upstream updateSource order: occlusion, slider curve, directional angle gain, distance gain.
+        if (state.isSoundOcclusion()) {
+            double occlusion = smoothOcclusion(lastOcclusion, this.occlusion);
+            if (lastOcclusion >= 0) lastOcclusion = occlusion;
+            volume *= 1D - occlusion;
+            if (lastOcclusion == -1D) lastOcclusion = occlusion;
+        }
+        volume = sliderGain(volume, state.isExponentialVolumeSlider());
+        double[] look = this.look;
+        if ((state.isDirectionalSources() || current.getAngle() > 0) && look != null && sourceDistance > 0) {
+            double innerAngle = current.getAngle() > 0 ? current.getAngle() / 2D : state.getDirectionalSourcesAngle() / 2D;
+            volume *= angleGain(-dx / sourceDistance, -dy / sourceDistance, -dz / sourceDistance, look, innerAngle,
+                    state.isExponentialDistanceGain());
+        }
+        stream.setGain((float) Math.max(0D, volume * distanceGain(sourceDistance, distance, state.isExponentialDistanceGain())));
         if (distance > 0) canHear = sourceDistance <= distance;
         // Upstream advanced.panning off: the source plays at the listener, only its distance gain remains.
         if (state.isPanning()) {
@@ -185,6 +226,25 @@ final class VoiceSource {
     /** Upstream advanced.exponential_volume_slider (default on): quieter settings follow a cubic curve. */
     static double sliderGain(double volume, boolean exponential) {
         return exponential && volume < 1D ? volume * volume * volume : volume;
+    }
+
+    /** Upstream: towards a louder trace the applied occlusion rises by 0.05, towards a quieter one it falls by 0.05. */
+    static double smoothOcclusion(double last, double traced) {
+        if (last < 0) return traced;
+        return traced > last ? Math.max(last + 0.05D, 0D) : Math.max(last - 0.05D, traced);
+    }
+
+    /**
+     * Upstream directional gain: the angle between the speaker's look and the direction to the listener; outside
+     * the inner cone the volume falls off towards 180 degrees (cubic with exponential distance gain).
+     */
+    static double angleGain(double toListenerX, double toListenerY, double toListenerZ, double[] look, double innerAngle,
+                            boolean exponential) {
+        double dot = toListenerX * look[0] + toListenerY * look[1] + toListenerZ * look[2];
+        double angle = Math.toDegrees(Math.acos(Math.max(-1D, Math.min(1D, dot))));
+        if (angle <= innerAngle) return 1D;
+        double gain = 1D - (angle - innerAngle) / (OUTER_ANGLE - innerAngle);
+        return exponential ? gain * gain * gain : gain;
     }
 
     /** Upstream calculateDistanceGain; advanced.exponential_distance_gain (default on) makes it cubic. */

@@ -58,6 +58,8 @@ dependencies {
 
     // Upstream Opus stack: native JNI first, pure-Java Concentus fallback. Shipped inside the mod jar.
     shadowImplementation("com.plasmoverse:opus-jni-rust:1.0.3")
+    // Upstream NoiseSuppressionFilter: RNNoise through the same JNI loader as Opus.
+    shadowImplementation("com.plasmoverse:rnnoise-jni-rust:1.0.2")
     shadowImplementation("com.plasmoverse:concentus:1.0.0") {
         isTransitive = false
     }

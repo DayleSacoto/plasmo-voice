@@ -19,6 +19,10 @@ public final class Lwjgl3Alc {
     private static final int ALC_ALL_DEVICES_SPECIFIER = 0x1013;
     private static final int ALC_CAPTURE_DEVICE_SPECIFIER = 0x310;
     private static final int ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER = 0x311;
+    static final int ALC_HRTF_SOFT = 0x1992;
+    static final int ALC_NUM_HRTF_SPECIFIERS_SOFT = 0x1994;
+    static final int ALC_HRTF_SPECIFIER_SOFT = 0x1995;
+    private static final int ALC_HRTF_ID_SOFT = 0x1996;
 
     private static Lwjgl3Alc instance;
 
@@ -34,6 +38,7 @@ public final class Lwjgl3Alc {
     private final Method createAlcCapabilities;
     private final Method createAlCapabilities;
     private final Method setCurrentThread;
+    private final Method resetDevice;
 
     private Lwjgl3Alc() throws ReflectiveOperationException {
         Class<?> alc10 = Class.forName("org.lwjgl.openal.ALC10");
@@ -54,6 +59,7 @@ public final class Lwjgl3Alc {
         createAlcCapabilities = alc.getMethod("createCapabilities", long.class);
         createAlCapabilities = al.getMethod("createCapabilities", alcCapabilities);
         setCurrentThread = al.getMethod("setCurrentThread", alCapabilities);
+        resetDevice = Class.forName("org.lwjgl.openal.SOFTHRTF").getMethod("alcResetDeviceSOFT", long.class, int[].class);
     }
 
     /** Throws when LWJGL 3 is not present (plain LWJGL 2 without lwjgl3ify). */
@@ -143,6 +149,12 @@ public final class Lwjgl3Alc {
 
     void clearThreadCapabilities() throws ReflectiveOperationException {
         setCurrentThread.invoke(null, (Object) null);
+    }
+
+    /** ALC_SOFT_HRTF alcResetDeviceSOFT with ALC_HRTF_SOFT and the default HRTF (ALC_HRTF_ID_SOFT 0). */
+    boolean resetDeviceHrtf(long device, boolean enabled) throws ReflectiveOperationException {
+        int[] attributes = {ALC_HRTF_SOFT, enabled ? 1 : 0, ALC_HRTF_ID_SOFT, 0, 0};
+        return (Boolean) resetDevice.invoke(null, device, attributes);
     }
 
     static String describe(Throwable e) {

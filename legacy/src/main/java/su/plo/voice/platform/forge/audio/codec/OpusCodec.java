@@ -65,7 +65,7 @@ public final class OpusCodec {
     }
 
     /** Upstream Natives.kt: opt-out property, and macOS older than 11 has no compatible binary. */
-    static boolean isNativesSupported() {
+    public static boolean isNativesSupported() {
         if (nativesFailedToLoad || Boolean.getBoolean("plasmovoice.disable_natives")) return false;
         if (!System.getProperty("os.name", "").toLowerCase().contains("mac")) return true;
         try {

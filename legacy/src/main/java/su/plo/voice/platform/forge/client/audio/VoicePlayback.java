@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -51,6 +52,7 @@ public final class VoicePlayback implements AutoCloseable {
     private long nextOpenAttempt;
     private long nextConnectedCheck;
     private boolean openFailureLogged;
+    private boolean openedHrtf;
     private StreamSource loopback;
 
     public VoicePlayback(ClientConfig config, ClientState state, ClientVoiceSources sources) {
@@ -76,7 +78,8 @@ public final class VoicePlayback implements AutoCloseable {
     /** Client thread, every frame: snapshots camera and source player positions for the playback thread. */
     public void updatePositions(float partialTicks) {
         Minecraft minecraft = Minecraft.getMinecraft();
-        EntityLivingBase camera = minecraft.renderViewEntity;
+        // Upstream getListener: the camera entity (advanced.camera_sound_listener, pv.allow_freecam), else the player.
+        EntityLivingBase camera = state.isCameraSoundListener() ? minecraft.renderViewEntity : minecraft.thePlayer;
         World world = minecraft.theWorld;
         if (camera == null || world == null) {
             listener = null;
@@ -94,12 +97,29 @@ public final class VoicePlayback implements AutoCloseable {
                 -sinYaw * sinPitch, cosPitch, cosYaw * sinPitch
         };
 
+        long now = System.currentTimeMillis();
         for (VoiceSource source : sources.all()) {
             SourceInfo info = source.info;
             if (!(info instanceof PlayerSourceInfo)) continue;
             EntityPlayer player = world.func_152378_a(((PlayerSourceInfo) info).getPlayerInfo().getPlayerId());
             source.position = player == null ? null : eyePosition(player, partialTicks);
+            if (player == null) continue;
+            Vec3 look = player.getLook(partialTicks);
+            source.look = new double[] {look.xCoord, look.yCoord, look.zCoord};
+            updateOcclusion(minecraft, world, source, now);
         }
+    }
+
+    /** Upstream calculateOcclusion: from the source to the local player's eyes, only while the source plays. */
+    private void updateOcclusion(Minecraft minecraft, World world, VoiceSource source, long now) {
+        if (!state.isSoundOcclusion() || !source.activated || minecraft.thePlayer == null) {
+            source.occlusion = 0D;
+            return;
+        }
+        if (now - source.occlusionAt < VoiceSource.OCCLUSION_INTERVAL_MS) return;
+        source.occlusionAt = now;
+        double[] position = source.position;
+        if (position != null) source.occlusion = SoundOcclusion.occludedPercent(world, position, eyePosition(minecraft.thePlayer, 1F));
     }
 
     private static double[] eyePosition(Entity entity, float partialTicks) {
@@ -139,6 +159,13 @@ public final class VoicePlayback implements AutoCloseable {
 
     private boolean ensureDevice(long now) {
         if (device != 0L) {
+            if (state.isHrtf() != openedHrtf) {
+                // Upstream reloads the output device when the HRTF setting changes.
+                LOGGER.info("HRTF setting changed; reopening the voice output");
+                closeDevice();
+                nextOpenAttempt = 0L;
+                return false;
+            }
             if (!state.getOutputDevice().equals(openedDevice)) {
                 LOGGER.info("Voice output device changed; reopening");
                 closeDevice();
@@ -187,6 +214,8 @@ public final class VoicePlayback implements AutoCloseable {
         if (context == 0L) throw new IllegalStateException("failed to create an OpenAL context");
         if (!alc.setThreadContext(context)) throw new IllegalStateException("failed to make the context current");
         alc.createThreadCapabilities(device);
+        openedHrtf = state.isHrtf();
+        if (openedHrtf && alc.isExtensionPresent(device, "ALC_SOFT_HRTF")) enableHrtf();
 
         // Gain is computed per source like upstream; OpenAL only pans.
         AL10.alDistanceModel(AL10.AL_NONE);
@@ -212,7 +241,7 @@ public final class VoicePlayback implements AutoCloseable {
         while ((frame = test.poll()) != null) {
             if (loopback == null) {
                 int sampleRate = config.getPacket().getCaptureInfo().getSampleRate();
-                loopback = new StreamSource(false, sampleRate, sampleRate / 1000 * 20, now);
+                loopback = new StreamSource(false, sampleRate, sampleRate / 1000 * 20, state.getAlPlaybackBuffers(), now);
                 loopback.setPosition(true, 0F, 0F, 0F);
             }
             loopback.setGain((float) VoiceSource.sliderGain(state.getVolume(), state.isExponentialVolumeSlider()));
@@ -226,6 +255,17 @@ public final class VoicePlayback implements AutoCloseable {
     private void closeLoopback() {
         if (loopback != null) loopback.close();
         loopback = null;
+    }
+
+    /** Upstream AlOutputDevice.enableHrtf: only when the device offers an HRTF. */
+    private void enableHrtf() throws ReflectiveOperationException {
+        if (alc.getInteger(device, Lwjgl3Alc.ALC_NUM_HRTF_SPECIFIERS_SOFT) <= 0) return;
+        if (!alc.resetDeviceHrtf(device, true)) LOGGER.warn("Failed to reset the voice output device for HRTF");
+        if (alc.getInteger(device, Lwjgl3Alc.ALC_HRTF_SOFT) > 0) {
+            LOGGER.info("HRTF enabled, using {}", alc.getString(device, Lwjgl3Alc.ALC_HRTF_SPECIFIER_SOFT));
+        } else {
+            LOGGER.warn("Failed to enable HRTF");
+        }
     }
 
     private void closeDevice() {

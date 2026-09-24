@@ -90,7 +90,29 @@ public final class ClientState {
     @Setter
     private volatile int showSourceIcons;
 
-    /** Upstream advanced config; the audio engine options without an addon source type are backported. */
+    /** Upstream voice.noise_suppression (RNNoise), voice.sound_occlusion, voice.directional_sources and voice.hrtf. */
+    @Getter
+    @Setter
+    private volatile boolean noiseSuppression;
+    @Getter
+    @Setter
+    private volatile boolean soundOcclusion;
+    @Getter
+    @Setter
+    private volatile boolean directionalSources;
+    @Getter
+    @Setter
+    private volatile boolean hrtf;
+    /** Runtime: upstream disables the noise suppression entry when RNNoise cannot load on this platform. */
+    @Getter
+    @Setter
+    private volatile boolean noiseSuppressionAvailable = true;
+    /** Runtime: upstream DeviceManager input device error, shown next to the microphone dropdown. */
+    @Getter
+    @Setter
+    private volatile boolean inputDeviceFailed;
+
+    /** Upstream advanced config; the options that only apply to addon source types are left out. */
     @Getter
     @Setter
     private volatile boolean visualizeVoiceDistance = true;
@@ -106,6 +128,20 @@ public final class ClientState {
     @Getter
     @Setter
     private volatile boolean exponentialDistanceGain = true;
+    /** Upstream advanced.directional_sources_angle, 100..360 degrees. */
+    @Getter
+    private volatile int directionalSourcesAngle = 145;
+    @Getter
+    @Setter
+    private volatile boolean adaptiveJitterBuffer;
+    /** Config-file only upstream (Cloth Config menu): jitter_packet_delay 0..16, al_playback_buffers 1..32. */
+    @Getter
+    private volatile int jitterPacketDelay = 3;
+    @Getter
+    private volatile int alPlaybackBuffers = 5;
+    @Getter
+    @Setter
+    private volatile boolean cameraSoundListener = true;
 
     /** Upstream voice.volumes: volume (0..2) and mute by source line name or {@link #playerVolumeKey}; defaults are not stored. */
     private final Map<String, Double> volumes = new ConcurrentHashMap<>();
@@ -143,6 +179,18 @@ public final class ClientState {
         if (this.microphoneMuted == microphoneMuted) return;
         this.microphoneMuted = microphoneMuted;
         syncState();
+    }
+
+    public void setDirectionalSourcesAngle(int angle) {
+        this.directionalSourcesAngle = Math.max(100, Math.min(360, angle));
+    }
+
+    public void setJitterPacketDelay(int delay) {
+        this.jitterPacketDelay = Math.max(0, Math.min(16, delay));
+    }
+
+    public void setAlPlaybackBuffers(int buffers) {
+        this.alPlaybackBuffers = Math.max(1, Math.min(32, buffers));
     }
 
     public void setActivationThreshold(double activationThreshold) {

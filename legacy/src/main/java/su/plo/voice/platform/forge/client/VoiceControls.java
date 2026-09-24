@@ -34,7 +34,7 @@ import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 @SideOnly(Side.CLIENT)
 public final class VoiceControls {
     private static final KeyBinding SETTINGS_KEY =
-            new KeyBinding("key.plasmovoice.settings", Keyboard.KEY_V, "Plasmo Voice");
+            new KeyBinding("key.plasmovoice.settings", Keyboard.KEY_V, "key.category.plasmovoice.name");
 
     private final ClientState state;
     private final PlayerVolumeAction volumeAction;
@@ -101,6 +101,13 @@ public final class VoiceControls {
                 break;
             case VoiceHotkeys.PROXIMITY_TOGGLE:
                 toggleActivation();
+                break;
+            case VoiceHotkeys.OCCLUSION_TOGGLE:
+                // Upstream HotkeyActions: toggles voice.sound_occlusion and reports it in the action bar.
+                state.setSoundOcclusion(!state.isSoundOcclusion());
+                state.save();
+                actionBar(I18n.format("message.plasmovoice.occlusion_changed",
+                        I18n.format(state.isSoundOcclusion() ? "message.plasmovoice.on" : "message.plasmovoice.off")));
                 break;
             case VoiceHotkeys.PROXIMITY_DISTANCE_INCREASE:
                 stepDistance(1);

@@ -48,6 +48,10 @@ public final class ClientSettingsFile {
         state.setInputDeviceDisabled(config.get(VOICE, "disable_input_device", false).getBoolean(false));
         state.setMicrophoneVolume(config.get(VOICE, "microphone_volume", 1D).getDouble(1D));
         state.setVolume(config.get(VOICE, "volume", 1D).getDouble(1D));
+        state.setNoiseSuppression(config.get(VOICE, "noise_suppression", false).getBoolean(false));
+        state.setSoundOcclusion(config.get(VOICE, "sound_occlusion", false).getBoolean(false));
+        state.setDirectionalSources(config.get(VOICE, "directional_sources", false).getBoolean(false));
+        state.setHrtf(config.get(VOICE, "hrtf", false).getBoolean(false));
 
         String proximity = ACTIVATIONS + "." + VoiceActivation.PROXIMITY_ID;
         String type = config.get(proximity, "type", CaptureActivation.Type.PUSH_TO_TALK.name()).getString();
@@ -75,6 +79,11 @@ public final class ClientSettingsFile {
         state.setPanning(config.get(ADVANCED, "panning", true).getBoolean(true));
         state.setExponentialVolumeSlider(config.get(ADVANCED, "exponential_volume_slider", true).getBoolean(true));
         state.setExponentialDistanceGain(config.get(ADVANCED, "exponential_distance_gain", true).getBoolean(true));
+        state.setDirectionalSourcesAngle(config.get(ADVANCED, "directional_sources_angle", 145).getInt(145));
+        state.setAdaptiveJitterBuffer(config.get(ADVANCED, "adaptive_jitter_buffer", false).getBoolean(false));
+        state.setJitterPacketDelay(config.get(ADVANCED, "jitter_packet_delay", 3).getInt(3));
+        state.setAlPlaybackBuffers(config.get(ADVANCED, "al_playback_buffers", 5).getInt(5));
+        state.setCameraSoundListener(config.get(ADVANCED, "camera_sound_listener", true).getBoolean(true));
 
         for (ConfigCategory volume : config.getCategory(VOLUMES).getChildren()) {
             if (volume.containsKey("volume")) state.setSourceVolume(volume.getName(), volume.get("volume").getDouble(1D));
@@ -116,6 +125,10 @@ public final class ClientSettingsFile {
         config.get(VOICE, "disable_input_device", false).set(state.isInputDeviceDisabled());
         config.get(VOICE, "microphone_volume", 1D).set(state.getMicrophoneVolume());
         config.get(VOICE, "volume", 1D).set(state.getVolume());
+        config.get(VOICE, "noise_suppression", false).set(state.isNoiseSuppression());
+        config.get(VOICE, "sound_occlusion", false).set(state.isSoundOcclusion());
+        config.get(VOICE, "directional_sources", false).set(state.isDirectionalSources());
+        config.get(VOICE, "hrtf", false).set(state.isHrtf());
 
         String proximity = ACTIVATIONS + "." + VoiceActivation.PROXIMITY_ID;
         config.get(proximity, "type", CaptureActivation.Type.PUSH_TO_TALK.name()).set(state.getActivationType().name());
@@ -133,6 +146,11 @@ public final class ClientSettingsFile {
         config.get(ADVANCED, "panning", true).set(state.isPanning());
         config.get(ADVANCED, "exponential_volume_slider", true).set(state.isExponentialVolumeSlider());
         config.get(ADVANCED, "exponential_distance_gain", true).set(state.isExponentialDistanceGain());
+        config.get(ADVANCED, "directional_sources_angle", 145).set(state.getDirectionalSourcesAngle());
+        config.get(ADVANCED, "adaptive_jitter_buffer", false).set(state.isAdaptiveJitterBuffer());
+        config.get(ADVANCED, "jitter_packet_delay", 3).set(state.getJitterPacketDelay());
+        config.get(ADVANCED, "al_playback_buffers", 5).set(state.getAlPlaybackBuffers());
+        config.get(ADVANCED, "camera_sound_listener", true).set(state.isCameraSoundListener());
 
         config.removeCategory(config.getCategory(VOLUMES));
         state.volumes().forEach((key, volume) -> config.get(VOLUMES + "." + key, "volume", 1D).set(volume));
