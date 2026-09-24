@@ -1,0 +1,96 @@
+name: Legacy 1.7.10 Build
+
+on:
+  push:
+    branches:
+      - 1.7.10
+  pull_request:
+    branches:
+      - 1.7.10
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  JAR_NAME: plasmovoice-forge-1.7.10-2.1.17.jar
+  ARTIFACT_NAME: PlasmoVoice-Forge-1.7.10-2.1.17
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: legacy
+
+    steps:
+    - uses: actions/checkout@v7.0.1
+
+    - name: Set up JDK 25
+      uses: actions/setup-java@v5.7.0
+      with:
+        distribution: temurin
+        java-version: '25'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6.3.0
+      with:
+        add-job-summary: on-failure
+
+    - name: Build with Gradle
+      run: |
+        $ErrorActionPreference = 'Stop'
+        foreach ($tasks in @(@('--stop'), @('clean'), @('compileKotlin', 'compileJava'), @('test'), @('build'))) {
+          ./gradlew.bat @tasks --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw "gradlew $tasks failed with exit code $LASTEXITCODE" }
+        }
+
+    - name: Stage production JAR and checksum
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $jar = Join-Path 'build/libs' $env:JAR_NAME
+        if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) { throw "Production JAR not found: $jar" }
+        $size = (Get-Item -LiteralPath $jar).Length
+        if ($size -le 0) { throw "Production JAR is empty: $jar" }
+
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $jar))
+        try {
+          if (-not ($zip.Entries | Where-Object FullName -eq 'su/plo/voice/platform/forge/PlasmoVoiceMod.class')) {
+            throw 'Production JAR does not contain the legacy mod class'
+          }
+        } finally {
+          $zip.Dispose()
+        }
+
+        $staging = 'build/release/artifact'
+        if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+        New-Item -ItemType Directory -Path $staging | Out-Null
+        Copy-Item -LiteralPath $jar -Destination $staging
+
+        $staged = Join-Path $staging $env:JAR_NAME
+        $hash = (Get-FileHash -LiteralPath $staged -Algorithm SHA256).Hash.ToLowerInvariant()
+        [System.IO.File]::WriteAllText((Join-Path (Resolve-Path $staging) 'SHA256SUMS.txt'), "$hash  $($env:JAR_NAME)`n")
+
+        @(
+          '# Plasmo Voice Legacy Build'
+          ''
+          '- Minecraft: 1.7.10'
+          '- Plasmo Voice: 2.1.17'
+          '- Java: 25'
+          '- Tests: passed'
+          "- JAR: ``$($env:JAR_NAME)``"
+          "- JAR size: $size bytes"
+          "- SHA-256: ``$hash``"
+          "- Artifact: ``$($env:ARTIFACT_NAME)``"
+        ) -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+    - name: Upload production artifact
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: ${{ env.ARTIFACT_NAME }}
+        path: legacy/build/release/artifact/
+        if-no-files-found: error
+        retention-days: 30
