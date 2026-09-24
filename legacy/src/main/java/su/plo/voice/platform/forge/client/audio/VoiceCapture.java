@@ -1,6 +1,7 @@
 package su.plo.voice.platform.forge.client.audio;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
@@ -174,7 +175,7 @@ public final class VoiceCapture implements AutoCloseable {
         int format = captureChannels == 2 ? AL10.AL_FORMAT_STEREO16 : AL10.AL_FORMAT_MONO16;
         openedDevice = state.getInputDevice();
         ALCdevice opened = ALC11.alcCaptureOpenDevice(openedDevice.isEmpty() ? null : openedDevice, sampleRate, format, frameSize);
-        if (opened == null) {
+        if (opened == null || handle(opened) == 0L) {
             if (!openFailureLogged) LOGGER.warn("Microphone {} is not available; voice capture is idle",
                     openedDevice.isEmpty() ? "(system default)" : openedDevice);
             openFailureLogged = true;
@@ -236,6 +237,20 @@ public final class VoiceCapture implements AutoCloseable {
         device = null;
         started = false;
         LOGGER.info("Microphone closed");
+    }
+
+    /**
+     * Upstream fails on a zero device pointer. LWJGL 2 returns null then, but lwjgl3ify wraps the zero pointer,
+     * so the handle is read from the field both ALCdevice versions declare.
+     */
+    private static long handle(ALCdevice device) {
+        try {
+            Field field = ALCdevice.class.getDeclaredField("device");
+            field.setAccessible(true);
+            return field.getLong(device);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unsupported OpenAL binding", e);
+        }
     }
 
     /** Upstream AlUtil: OpenAL Soft 1.25.0-1.25.1 breaks mono capture, so capture stereo and downmix. */
