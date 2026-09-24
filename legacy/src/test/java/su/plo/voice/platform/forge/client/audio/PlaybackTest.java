@@ -57,17 +57,43 @@ public class PlaybackTest {
 
     @Test
     public void distanceGainIsCubicAndClamped() {
-        assertEquals(1D, VoiceSource.distanceGain(0D, 16D), 1e-9);
-        assertEquals(0.125D, VoiceSource.distanceGain(8D, 16D), 1e-9);
-        assertEquals(0D, VoiceSource.distanceGain(40D, 16D), 1e-9);
-        assertEquals(1D, VoiceSource.distanceGain(5D, 0D), 1e-9);
+        assertEquals(1D, VoiceSource.distanceGain(0D, 16D, true), 1e-9);
+        assertEquals(0.125D, VoiceSource.distanceGain(8D, 16D, true), 1e-9);
+        assertEquals(0D, VoiceSource.distanceGain(40D, 16D, true), 1e-9);
+        assertEquals(1D, VoiceSource.distanceGain(5D, 0D, true), 1e-9);
+        // Upstream advanced.exponential_distance_gain off.
+        assertEquals(0.5D, VoiceSource.distanceGain(8D, 16D, false), 1e-9);
     }
 
     @Test
     public void volumeSliderIsCubicBelowFullVolume() {
-        assertEquals(0.125D, VoiceSource.sliderGain(0.5D), 1e-9);
-        assertEquals(1D, VoiceSource.sliderGain(1D), 1e-9);
-        assertEquals(1.5D, VoiceSource.sliderGain(1.5D), 1e-9);
+        assertEquals(0.125D, VoiceSource.sliderGain(0.5D, true), 1e-9);
+        assertEquals(1D, VoiceSource.sliderGain(1D, true), 1e-9);
+        assertEquals(1.5D, VoiceSource.sliderGain(1.5D, true), 1e-9);
+        // Upstream advanced.exponential_volume_slider off.
+        assertEquals(0.5D, VoiceSource.sliderGain(0.5D, false), 1e-9);
+    }
+
+    @Test
+    public void microphoneTestMeterDecaysAndLoopbackIsBounded() {
+        MicrophoneTest test = new MicrophoneTest();
+        short[] loud = new short[960];
+        java.util.Arrays.fill(loud, (short) 16000);
+        test.onCaptured(loud, 1_000L);
+        double value = test.value(1_000L);
+        assertTrue(value > 0.5D);
+        // Upstream: 0.04 per tick.
+        assertEquals(value - 0.04D, test.value(1_050L), 1e-9);
+        // Only a running test feeds the loopback, and it keeps the newest 200 ms.
+        assertNull(test.poll());
+        test.start();
+        for (int i = 0; i < 20; i++) test.onCaptured(loud, 2_000L);
+        int frames = 0;
+        while (test.poll() != null) frames++;
+        assertEquals(10, frames);
+        test.stop();
+        test.onCaptured(loud, 3_000L);
+        assertNull(test.poll());
     }
 
     @Test

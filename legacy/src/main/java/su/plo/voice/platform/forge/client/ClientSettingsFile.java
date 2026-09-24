@@ -30,6 +30,7 @@ public final class ClientSettingsFile {
     private static final String SERVERS = "servers";
     private static final String KEY_BINDINGS = "key_bindings";
     private static final String OVERLAY = "overlay";
+    private static final String ADVANCED = "advanced";
     private static final String SOURCE_STATES = OVERLAY + ".source_states";
     private static final String VOLUMES = VOICE + ".volumes";
 
@@ -69,6 +70,11 @@ public final class ClientSettingsFile {
             state.setOverlaySourceState(line.getKey(), enumValue(line.getValue(), HudOptions.OverlaySourceState.OFF, file));
         }
         state.setShowSourceIcons(Math.max(0, Math.min(2, config.get(OVERLAY, "show_source_icons", 0).getInt(0))));
+        state.setVisualizeVoiceDistance(config.get(ADVANCED, "visualize_voice_distance", true).getBoolean(true));
+        state.setVisualizeVoiceDistanceOnJoin(config.get(ADVANCED, "visualize_voice_distance_on_join", false).getBoolean(false));
+        state.setPanning(config.get(ADVANCED, "panning", true).getBoolean(true));
+        state.setExponentialVolumeSlider(config.get(ADVANCED, "exponential_volume_slider", true).getBoolean(true));
+        state.setExponentialDistanceGain(config.get(ADVANCED, "exponential_distance_gain", true).getBoolean(true));
 
         for (ConfigCategory volume : config.getCategory(VOLUMES).getChildren()) {
             if (volume.containsKey("volume")) state.setSourceVolume(volume.getName(), volume.get("volume").getDouble(1D));
@@ -122,6 +128,11 @@ public final class ClientSettingsFile {
         config.get(OVERLAY, "overlay_style", "").set(state.getOverlayStyle().name());
         state.overlaySourceStates().forEach((line, sourceState) -> config.get(SOURCE_STATES, line, "").set(sourceState.name()));
         config.get(OVERLAY, "show_source_icons", 0).set(state.getShowSourceIcons());
+        config.get(ADVANCED, "visualize_voice_distance", true).set(state.isVisualizeVoiceDistance());
+        config.get(ADVANCED, "visualize_voice_distance_on_join", false).set(state.isVisualizeVoiceDistanceOnJoin());
+        config.get(ADVANCED, "panning", true).set(state.isPanning());
+        config.get(ADVANCED, "exponential_volume_slider", true).set(state.isExponentialVolumeSlider());
+        config.get(ADVANCED, "exponential_distance_gain", true).set(state.isExponentialDistanceGain());
 
         config.removeCategory(config.getCategory(VOLUMES));
         state.volumes().forEach((key, volume) -> config.get(VOLUMES + "." + key, "volume", 1D).set(volume));

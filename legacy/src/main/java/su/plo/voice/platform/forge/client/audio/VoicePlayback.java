@@ -51,6 +51,7 @@ public final class VoicePlayback implements AutoCloseable {
     private long nextOpenAttempt;
     private long nextConnectedCheck;
     private boolean openFailureLogged;
+    private StreamSource loopback;
 
     public VoicePlayback(ClientConfig config, ClientState state, ClientVoiceSources sources) {
         this.config = config;
@@ -118,7 +119,8 @@ public final class VoicePlayback implements AutoCloseable {
                 if (ensureDevice(now)) {
                     double[] current = listener;
                     updateListener(current);
-                    for (VoiceSource source : sources.all()) source.pump(config, current, state.volume(config, source.info), now);
+                    for (VoiceSource source : sources.all()) source.pump(config, state, current, state.volume(config, source.info), now);
+                    pumpLoopback(now);
                 } else {
                     // Nothing can play; keep the jitter buffers from holding stale frames.
                     for (VoiceSource source : sources.all()) source.buffer.clear();
@@ -203,8 +205,36 @@ public final class VoicePlayback implements AutoCloseable {
         AL10.alListener(AL10.AL_ORIENTATION, orientation);
     }
 
+    /** Upstream LoopbackSource of the microphone test: the processed microphone, centered, at the voice volume. */
+    private void pumpLoopback(long now) {
+        MicrophoneTest test = state.getMicrophoneTest();
+        short[] frame;
+        while ((frame = test.poll()) != null) {
+            if (loopback == null) {
+                int sampleRate = config.getPacket().getCaptureInfo().getSampleRate();
+                loopback = new StreamSource(false, sampleRate, sampleRate / 1000 * 20, now);
+                loopback.setPosition(true, 0F, 0F, 0F);
+            }
+            loopback.setGain((float) VoiceSource.sliderGain(state.getVolume(), state.isExponentialVolumeSlider()));
+            loopback.write(frame, now);
+        }
+        if (loopback == null) return;
+        loopback.update();
+        if (!test.isActive() && now - loopback.lastBufferTime() > VoiceSource.STREAM_IDLE_CLOSE_MS) closeLoopback();
+    }
+
+    private void closeLoopback() {
+        if (loopback != null) loopback.close();
+        loopback = null;
+    }
+
     private void closeDevice() {
         if (device == 0L) return;
+        try {
+            closeLoopback();
+        } catch (RuntimeException e) {
+            LOGGER.debug("Failed to close the microphone test stream", e);
+        }
         for (VoiceSource source : sources.all()) {
             try {
                 source.closeStream();

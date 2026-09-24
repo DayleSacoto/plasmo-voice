@@ -65,6 +65,11 @@ public class ClientSettingsTest {
         before.setOverlayPosition(HudOptions.OverlayPosition.BOTTOM_LEFT);
         before.setOverlayStyle(HudOptions.OverlayStyle.NAME);
         before.setOverlaySourceState("proximity", HudOptions.OverlaySourceState.ON);
+        before.setVisualizeVoiceDistance(false);
+        before.setVisualizeVoiceDistanceOnJoin(true);
+        before.setPanning(false);
+        before.setExponentialVolumeSlider(false);
+        before.setExponentialDistanceGain(false);
         ClientSettingsFile.save(file, before);
 
         ClientState after = new ClientState();
@@ -88,6 +93,11 @@ public class ClientSettingsTest {
         assertEquals(HudOptions.OverlayStyle.NAME, after.getOverlayStyle());
         assertEquals(HudOptions.OverlaySourceState.ON, after.getOverlaySourceState("proximity"));
         assertEquals(HudOptions.OverlaySourceState.OFF, after.getOverlaySourceState("radio"));
+        assertFalse(after.isVisualizeVoiceDistance());
+        assertTrue(after.isVisualizeVoiceDistanceOnJoin());
+        assertFalse(after.isPanning());
+        assertFalse(after.isExponentialVolumeSlider());
+        assertFalse(after.isExponentialDistanceGain());
         // Key state is runtime-only.
         assertFalse(after.isPushToTalkPressed());
     }

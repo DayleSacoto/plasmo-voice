@@ -115,6 +115,17 @@ public final class VoiceCapture implements AutoCloseable {
                     continue;
                 }
                 gain.process(samples, (float) state.getMicrophoneVolume());
+                MicrophoneTest test = state.getMicrophoneTest();
+                test.onCaptured(samples, System.currentTimeMillis());
+                if (test.isActive()) {
+                    // Upstream flushes the activations during the microphone test.
+                    if (activation.isActive()) {
+                        activation.reset();
+                        sendEnd();
+                    }
+                    state.setActivationActive(false);
+                    continue;
+                }
                 CaptureActivation.Result result = activation.process(samples, state.getActivationType(),
                         state.isActivationToggled(), state.isPushToTalkPressed(), state.getActivationThreshold(),
                         System.currentTimeMillis());
@@ -183,6 +194,7 @@ public final class VoiceCapture implements AutoCloseable {
         }
         device = opened;
         openFailureLogged = false;
+        state.getMicrophoneTest().setInputOpen(true);
         hasDisconnectExt = ALC10.alcIsExtensionPresent(device, "ALC_EXT_disconnect");
         buffer = BufferUtils.createByteBuffer(frameSize * captureChannels * 2);
         LOGGER.info("Microphone opened: {} ({} Hz, {} channel capture)",
@@ -235,6 +247,7 @@ public final class VoiceCapture implements AutoCloseable {
         if (started) ALC11.alcCaptureStop(device);
         ALC11.alcCaptureCloseDevice(device);
         device = null;
+        state.getMicrophoneTest().setInputOpen(false);
         started = false;
         LOGGER.info("Microphone closed");
     }

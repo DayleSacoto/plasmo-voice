@@ -11,6 +11,7 @@ import cpw.mods.fml.relauncher.SideOnly;
 import lombok.Getter;
 import lombok.Setter;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
+import su.plo.voice.platform.forge.client.audio.MicrophoneTest;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
@@ -88,9 +89,30 @@ public final class ClientState {
     @Setter
     private volatile int showSourceIcons;
 
+    /** Upstream advanced config; the audio engine options without an addon source type are backported. */
+    @Getter
+    @Setter
+    private volatile boolean visualizeVoiceDistance = true;
+    @Getter
+    @Setter
+    private volatile boolean visualizeVoiceDistanceOnJoin;
+    @Getter
+    @Setter
+    private volatile boolean panning = true;
+    @Getter
+    @Setter
+    private volatile boolean exponentialVolumeSlider = true;
+    @Getter
+    @Setter
+    private volatile boolean exponentialDistanceGain = true;
+
     /** Upstream voice.volumes: volume (0..2) and mute by source line name or {@link #playerVolumeKey}; defaults are not stored. */
     private final Map<String, Double> volumes = new ConcurrentHashMap<>();
     private final Map<String, Boolean> mutes = new ConcurrentHashMap<>();
+
+    /** Upstream MicrophoneTestController; runtime only. */
+    @Getter
+    private final MicrophoneTest microphoneTest = new MicrophoneTest();
 
     /** Upstream key_bindings. */
     @Getter

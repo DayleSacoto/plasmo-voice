@@ -21,12 +21,14 @@ import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
 import su.plo.voice.platform.forge.client.audio.VoiceCapture;
 import su.plo.voice.platform.forge.client.audio.VoicePlayback;
+import su.plo.voice.platform.forge.client.hud.DistanceVisualizer;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConfigPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.DistanceVisualizePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.LanguagePacket;
 import su.plo.voice.proto.packets.tcp.serverbound.LanguageRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
@@ -106,6 +108,9 @@ public final class ClientConnection implements AutoCloseable {
         } else if (packet instanceof SourceInfoPacket) {
             ClientVoiceSources current = sources;
             if (current != null) current.updateSourceInfo(((SourceInfoPacket) packet).getSourceInfo());
+        } else if (packet instanceof DistanceVisualizePacket) {
+            DistanceVisualizePacket visualize = (DistanceVisualizePacket) packet;
+            DistanceVisualizer.show(visualize.getRadius(), visualize.getHexColor(), visualize.getPosition());
         } else if (packet instanceof LanguagePacket) {
             state.setServerLanguage(((LanguagePacket) packet).getLanguage());
         } else if (packet instanceof SourceAudioEndPacket) {
@@ -201,6 +206,8 @@ public final class ClientConnection implements AutoCloseable {
         }
         try {
             ClientConfig accepted = ClientConfig.decode(packet, getKeyPair().getPrivate());
+            // Upstream DistanceVisualizeOnJoinListener: only the config of a new voice connection, not a reload.
+            boolean joined = !state.isConfigured();
             // A server reload sends the config again: the previous capture and playback stop first.
             clearConfig();
             state.acceptConfig(accepted);
@@ -229,6 +236,9 @@ public final class ClientConnection implements AutoCloseable {
             // Settings changed after PlayerInfoPacket but before the server accepted state updates.
             clientState.syncState();
             requestLanguage();
+            if (joined && clientState.isVisualizeVoiceDistanceOnJoin()) {
+                DistanceVisualizer.show(proximityDistance(accepted), DistanceVisualizer.PROXIMITY_COLOR, null);
+            }
         } catch (GeneralSecurityException e) {
             clearConfig();
             udpClient.close();

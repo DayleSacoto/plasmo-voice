@@ -57,6 +57,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
         addTab("gui.plasmovoice.volume", "volume", new VolumeTab(this, state));
         addTab("gui.plasmovoice.activation", "activation", new ActivationTab(this, state));
         addTab("gui.plasmovoice.overlay", "overlay", new OverlayTab(this, state));
+        addTab("gui.plasmovoice.advanced", "advanced", new AdvancedTab(this, state));
         addTab("gui.plasmovoice.hotkeys", "hotkeys", new HotKeysTab(this, state));
         layoutTabs();
         activeTab().init(navigationHeight, height);
@@ -121,6 +122,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
 
     @Override
     public void onGuiClosed() {
+        state.getMicrophoneTest().stop();
         activeTab().removed();
         state.save();
     }

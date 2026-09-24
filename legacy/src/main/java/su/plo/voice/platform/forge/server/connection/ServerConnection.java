@@ -25,6 +25,7 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacke
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
+import su.plo.voice.proto.packets.tcp.clientbound.DistanceVisualizePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import org.apache.logging.log4j.LogManager;
@@ -136,8 +137,12 @@ public final class ServerConnection {
         return changed;
     }
 
-    public void handle(PlayerActivationDistancesPacket packet, ServerConfig config) {
-        activationDistances.putAll(config.knownActivationDistances(packet.getDistanceByActivationId()));
+    /** Upstream ProximityServerActivation: a later distance change is visualized for the player, the first one is not. */
+    public void handle(PlayerActivationDistancesPacket packet, ServerConfig config, VoiceChannel channel) {
+        config.knownActivationDistances(packet.getDistanceByActivationId()).forEach((activationId, distance) -> {
+            Integer oldDistance = activationDistances.put(activationId, distance);
+            if (oldDistance != null) channel.sendToPlayer(player, new DistanceVisualizePacket(distance, 0x00a000, null));
+        });
     }
 
     /** Upstream PlayerChannelHandler.handle(PlayerInfoPacket): nothing changes unless the client is accepted. */

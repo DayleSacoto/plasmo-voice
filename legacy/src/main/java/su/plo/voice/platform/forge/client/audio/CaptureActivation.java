@@ -68,6 +68,15 @@ public final class CaptureActivation {
         return false;
     }
 
+    /** Upstream AudioUtil.calculateHighestAudioLevel over the same 50-sample windows. */
+    static double highestAudioLevel(short[] samples) {
+        double highest = -127D;
+        for (int i = 0; i < samples.length; i += 50) {
+            highest = Math.max(highest, calculateAudioLevel(samples, i, Math.min(i + 50, samples.length)));
+        }
+        return highest;
+    }
+
     /** Upstream quirk kept: the window's squared sum is averaged over the whole frame length. */
     static double calculateAudioLevel(short[] samples, int offset, int end) {
         double rms = 0D;

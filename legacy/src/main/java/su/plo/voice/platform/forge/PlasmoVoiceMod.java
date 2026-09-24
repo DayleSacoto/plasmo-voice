@@ -123,7 +123,7 @@ public final class PlasmoVoiceMod {
             }
             if (packet instanceof PlayerActivationDistancesPacket) {
                 ServerConnection connection = voicePlayers.get(player.getUniqueID());
-                if (connection != null) connection.handle((PlayerActivationDistancesPacket) packet, serverConfig);
+                if (connection != null) connection.handle((PlayerActivationDistancesPacket) packet, serverConfig, voiceChannel);
                 return;
             }
             if (packet instanceof LanguageRequestPacket) {

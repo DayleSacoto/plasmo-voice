@@ -7,6 +7,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import su.plo.voice.platform.forge.audio.codec.AudioDecoder;
 import su.plo.voice.platform.forge.audio.codec.OpusCodec;
+import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.encryption.AesEncryption;
 import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
@@ -60,11 +61,11 @@ final class VoiceSource {
     }
 
     /** Playback thread, with the voice output context current. */
-    void pump(ClientConfig config, double[] listener, double volume, long now) {
+    void pump(ClientConfig config, ClientState state, double[] listener, double volume, long now) {
         Object next;
         while ((next = buffer.poll(now)) != null) {
             if (next instanceof SourceAudioPacket) {
-                process((SourceAudioPacket) next, config, listener, volume, now);
+                process((SourceAudioPacket) next, config, state, listener, volume, now);
             } else if (activated) {
                 lastSequenceNumber = ((SourceAudioEndPacket) next).getSequenceNumber();
             }
@@ -96,7 +97,7 @@ final class VoiceSource {
         decoder = null;
     }
 
-    private void process(SourceAudioPacket packet, ClientConfig config, double[] listener, double volume, long now) {
+    private void process(SourceAudioPacket packet, ClientConfig config, ClientState state, double[] listener, double volume, long now) {
         SourceInfo current = info;
         long sequenceNumber = packet.getSequenceNumber();
         if (stateDiff(current.getState(), packet.getSourceState()) >= 10) return;
@@ -114,7 +115,7 @@ final class VoiceSource {
         }
         if (stream != null && stream.stereo != current.isStereo()) closeStream();
         if (stream == null) stream = new StreamSource(current.isStereo(), sampleRate, frameSize, now);
-        updateStream(current, packet.getDistance(), listener, sliderGain(volume));
+        updateStream(current, state, packet.getDistance(), listener, sliderGain(volume, state.isExponentialVolumeSlider()));
 
         try {
             if (lastSequenceNumber >= 0) {
@@ -147,7 +148,7 @@ final class VoiceSource {
         stream.write(samples, now);
     }
 
-    private void updateStream(SourceInfo current, short distance, double[] listener, double volume) {
+    private void updateStream(SourceInfo current, ClientState state, short distance, double[] listener, double volume) {
         // ponytail: only player sources are positional; other types play centered until the API sources are backported.
         if (!(current instanceof PlayerSourceInfo)) {
             stream.setGain((float) volume);
@@ -164,9 +165,14 @@ final class VoiceSource {
         double dy = source[1] - listener[1];
         double dz = source[2] - listener[2];
         double sourceDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        stream.setGain((float) (volume * distanceGain(sourceDistance, distance)));
+        stream.setGain((float) (volume * distanceGain(sourceDistance, distance, state.isExponentialDistanceGain())));
         if (distance > 0) canHear = sourceDistance <= distance;
-        stream.setPosition(false, (float) source[0], (float) source[1], (float) source[2]);
+        // Upstream advanced.panning off: the source plays at the listener, only its distance gain remains.
+        if (state.isPanning()) {
+            stream.setPosition(false, (float) source[0], (float) source[1], (float) source[2]);
+        } else {
+            stream.setPosition(true, 0F, 0F, 0F);
+        }
     }
 
     private void reset() {
@@ -176,16 +182,16 @@ final class VoiceSource {
         activated = false;
     }
 
-    /** Upstream exponential_volume.volume_slider (default on): quieter settings follow a cubic curve. */
-    static double sliderGain(double volume) {
-        return volume < 1D ? volume * volume * volume : volume;
+    /** Upstream advanced.exponential_volume_slider (default on): quieter settings follow a cubic curve. */
+    static double sliderGain(double volume, boolean exponential) {
+        return exponential && volume < 1D ? volume * volume * volume : volume;
     }
 
-    /** Upstream calculateDistanceGain with exponential_distance_gain (default on). */
-    static double distanceGain(double sourceDistance, double maxDistance) {
+    /** Upstream calculateDistanceGain; advanced.exponential_distance_gain (default on) makes it cubic. */
+    static double distanceGain(double sourceDistance, double maxDistance, boolean exponential) {
         if (maxDistance <= 0) return 1D;
         double gain = 1D - Math.min(sourceDistance, maxDistance) / maxDistance;
-        return gain * gain * gain;
+        return exponential ? gain * gain * gain : gain;
     }
 
     /** Upstream Byte.diff: forward distance between source states, wrapping at the byte range. */

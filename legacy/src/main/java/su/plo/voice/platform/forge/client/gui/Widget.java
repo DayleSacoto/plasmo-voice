@@ -56,8 +56,13 @@ abstract class Widget extends Gui {
 
     /** Vanilla GuiButton background: state 0 disabled, 1 normal, 2 hovered. */
     void drawButtonBackground(Minecraft mc, int x, int y, int width, int state) {
+        drawButtonBackground(mc, x, y, width, state, 0xFFFFFF);
+    }
+
+    /** The vanilla button texture tinted with an RGB color. */
+    void drawButtonBackground(Minecraft mc, int x, int y, int width, int state, int color) {
         mc.getTextureManager().bindTexture(WIDGETS);
-        GL11.glColor4f(1F, 1F, 1F, 1F);
+        GL11.glColor4f(((color >> 16) & 0xFF) / 255F, ((color >> 8) & 0xFF) / 255F, (color & 0xFF) / 255F, 1F);
         GL11.glEnable(GL11.GL_BLEND);
         OpenGlHelper.glBlendFunc(770, 771, 1, 0);
         GL11.glBlendFunc(770, 771);

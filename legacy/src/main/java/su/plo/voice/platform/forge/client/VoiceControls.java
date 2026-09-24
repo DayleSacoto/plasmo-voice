@@ -25,6 +25,7 @@ import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.gui.VoiceNotAvailableScreen;
 import su.plo.voice.platform.forge.client.gui.VoiceSettingsScreen;
+import su.plo.voice.platform.forge.client.hud.DistanceVisualizer;
 import su.plo.voice.platform.forge.client.hud.PlayerIcons;
 import su.plo.voice.platform.forge.client.hud.VoiceHud;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
@@ -55,6 +56,7 @@ public final class VoiceControls {
         MinecraftForge.EVENT_BUS.register(volumeAction);
         MinecraftForge.EVENT_BUS.register(new VoiceHud(state));
         MinecraftForge.EVENT_BUS.register(new PlayerIcons(state, volumeAction));
+        MinecraftForge.EVENT_BUS.register(new DistanceVisualizer(state));
     }
 
     /** Screens receive keys directly, so they close themselves on the settings key like upstream. */
