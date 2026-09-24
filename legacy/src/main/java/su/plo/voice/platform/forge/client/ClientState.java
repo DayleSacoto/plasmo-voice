@@ -52,6 +52,13 @@ public final class ClientState {
     @Getter
     @Setter
     private volatile boolean inputDeviceDisabled;
+    /**
+     * Upstream voice.use_javax_input: capture through Java Sound instead of OpenAL. Config file only (upstream shows it
+     * in the Cloth Config screen); forced on macOS, and it turns stereo capture off.
+     */
+    @Getter
+    @Setter
+    private volatile boolean useJavaxInput;
     /** Upstream voice.microphone_volume and voice.volume, 0..2. */
     @Getter
     private volatile double microphoneVolume = 1D;

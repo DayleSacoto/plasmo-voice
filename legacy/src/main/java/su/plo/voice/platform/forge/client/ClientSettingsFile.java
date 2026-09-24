@@ -3,6 +3,7 @@ package su.plo.voice.platform.forge.client;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -33,6 +34,7 @@ public final class ClientSettingsFile {
     private static final String ADVANCED = "advanced";
     private static final String SOURCE_STATES = OVERLAY + ".source_states";
     private static final String VOLUMES = VOICE + ".volumes";
+    private static final boolean MAC = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
 
     private ClientSettingsFile() {
     }
@@ -45,6 +47,9 @@ public final class ClientSettingsFile {
         state.setInputDevice(config.get(VOICE, "input_device", "").getString());
         state.setOutputDevice(config.get(VOICE, "output_device", "").getString());
         state.setStereoCapture(config.get(VOICE, "stereo_capture", false).getBoolean(false));
+        // Upstream VoiceDeviceManager: Java Sound on macOS by default, and no stereo capture through Java Sound.
+        state.setUseJavaxInput(config.get(VOICE, "use_javax_input", false).getBoolean(false) || MAC);
+        if (state.isUseJavaxInput()) state.setStereoCapture(false);
         state.setInputDeviceDisabled(config.get(VOICE, "disable_input_device", false).getBoolean(false));
         state.setMicrophoneVolume(config.get(VOICE, "microphone_volume", 1D).getDouble(1D));
         state.setVolume(config.get(VOICE, "volume", 1D).getDouble(1D));
@@ -122,6 +127,7 @@ public final class ClientSettingsFile {
         config.get(VOICE, "input_device", "").set(state.getInputDevice());
         config.get(VOICE, "output_device", "").set(state.getOutputDevice());
         config.get(VOICE, "stereo_capture", false).set(state.isStereoCapture());
+        config.get(VOICE, "use_javax_input", false).set(state.isUseJavaxInput());
         config.get(VOICE, "disable_input_device", false).set(state.isInputDeviceDisabled());
         config.get(VOICE, "microphone_volume", 1D).set(state.getMicrophoneVolume());
         config.get(VOICE, "volume", 1D).set(state.getVolume());

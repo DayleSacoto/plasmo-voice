@@ -16,6 +16,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.input.Keyboard;
 import su.plo.voice.platform.forge.client.ClientState;
+import su.plo.voice.platform.forge.client.audio.JavaxInput;
 import su.plo.voice.platform.forge.client.audio.Lwjgl3Alc;
 import su.plo.voice.platform.forge.client.audio.MicrophoneTest;
 
@@ -62,13 +63,20 @@ final class DevicesTab extends SettingsTab {
                 "gui.plasmovoice.devices.activation_threshold.tooltip", threshold,
                 () -> state.getActivationThreshold() == DEFAULT_THRESHOLD,
                 () -> state.setActivationThreshold(DEFAULT_THRESHOLD), testButton);
-        addDevice("gui.plasmovoice.devices.microphone", Lwjgl3Alc.inputDevices(), Lwjgl3Alc.defaultInputDevice(),
+        // Upstream lists the Java Sound mixers with use_javax_input; the first one is the default.
+        List<String> inputDevices = state.isUseJavaxInput() ? JavaxInput.deviceNames() : Lwjgl3Alc.inputDevices();
+        String defaultInput = state.isUseJavaxInput()
+                ? (inputDevices.isEmpty() ? null : inputDevices.get(0))
+                : Lwjgl3Alc.defaultInputDevice();
+        addDevice("gui.plasmovoice.devices.microphone", inputDevices, defaultInput,
                 state::getInputDevice, state::setInputDevice, !state.isInputDeviceDisabled(),
-                state.isInputDeviceFailed() ? microphoneWarning() : null);
+                state.isInputDeviceFailed() ? microphoneWarning(defaultInput) : null);
         addVolume("gui.plasmovoice.devices.microphone_volume", state::getMicrophoneVolume, state::setMicrophoneVolume);
         addToggle("gui.plasmovoice.devices.noise_suppression", state::isNoiseSuppression, state::setNoiseSuppression)
                 .active = state.isNoiseSuppressionAvailable();
-        addToggle("gui.plasmovoice.devices.stereo_capture", state::isStereoCapture, state::setStereoCapture);
+        // Upstream disables stereo capture with use_javax_input.
+        addToggle("gui.plasmovoice.devices.stereo_capture", state::isStereoCapture, state::setStereoCapture)
+                .active = !state.isUseJavaxInput();
         addToggle("gui.plasmovoice.devices.disable_input_device", state::isInputDeviceDisabled, disabled -> {
             state.setInputDeviceDisabled(disabled);
             rebuild();
@@ -109,8 +117,8 @@ final class DevicesTab extends SettingsTab {
     }
 
     /** Upstream input device error button: the device that failed, and the wiki page on click. */
-    private IconWidget microphoneWarning() {
-        String device = state.getInputDevice().isEmpty() ? Lwjgl3Alc.defaultInputDevice() : state.getInputDevice();
+    private IconWidget microphoneWarning(String defaultDevice) {
+        String device = state.getInputDevice().isEmpty() ? defaultDevice : state.getInputDevice();
         IconWidget warning = new IconWidget(() -> WARNING_ICON, () -> openUri(MICROPHONE_HELP_URL), () -> true,
                 () -> I18n.format("gui.plasmovoice.devices.failed_to_initialize_microphone.tooltip",
                         format(device == null ? "" : device)));

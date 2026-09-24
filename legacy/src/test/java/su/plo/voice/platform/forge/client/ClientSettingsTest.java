@@ -145,6 +145,29 @@ public class ClientSettingsTest {
     }
 
     @Test
+    public void useJavaxInputIsStoredAndTurnsStereoCaptureOff() throws Exception {
+        assertFalse(new ClientState().isUseJavaxInput());
+
+        File file = new File(folder.getRoot(), "javax.cfg");
+        ClientState before = new ClientState();
+        before.setUseJavaxInput(true);
+        before.setStereoCapture(true);
+        ClientSettingsFile.save(file, before);
+        ClientState after = new ClientState();
+        ClientSettingsFile.load(file, after);
+        assertTrue(after.isUseJavaxInput());
+        // Upstream: no stereo capture through Java Sound.
+        assertFalse(after.isStereoCapture());
+
+        Files.write(file.toPath(), "voice {\n    B:use_javax_input=maybe\n    B:stereo_capture=true\n}\n"
+                .getBytes(StandardCharsets.UTF_8));
+        ClientState malformed = new ClientState();
+        ClientSettingsFile.load(file, malformed);
+        assertFalse(malformed.isUseJavaxInput());
+        assertTrue(malformed.isStereoCapture());
+    }
+
+    @Test
     public void outOfRangeOrUnknownValuesFallBackToUpstreamDefaults() throws Exception {
         File file = new File(folder.getRoot(), "client.cfg");
         String content = "voice {\n    D:volume=7.0\n    D:activation_threshold=-99.0\n}\n\n"

@@ -6,8 +6,11 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.security.GeneralSecurityException;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
+
+import javax.sound.sampled.LineUnavailableException;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -30,8 +33,9 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerAudioEndPacket;
 import su.plo.voice.proto.packets.udp.serverbound.PlayerAudioPacket;
 
 /**
- * Microphone capture for one accepted server config (upstream VoiceAudioCapture + AlInputDevice).
- * Every OpenAL call happens on the capture thread; the game thread only starts and closes it.
+ * Microphone capture for one accepted server config (upstream VoiceAudioCapture + AlInputDevice, with the
+ * JavaxInputDevice fallback). Every OpenAL and Java Sound call happens on the capture thread; the game thread only
+ * starts and closes it.
  */
 @SideOnly(Side.CLIENT)
 public final class VoiceCapture implements AutoCloseable {
@@ -56,6 +60,7 @@ public final class VoiceCapture implements AutoCloseable {
     private String openedDevice;
     private final IntBuffer intBuffer = BufferUtils.createIntBuffer(1);
     private ALCdevice device;
+    private JavaxInput javaxInput;
     private boolean hasDisconnectExt;
     private boolean started;
     private int captureChannels;
@@ -153,7 +158,7 @@ public final class VoiceCapture implements AutoCloseable {
     }
 
     private boolean ensureDevice() {
-        if (device != null) {
+        if (device != null || javaxInput != null) {
             if (!state.getInputDevice().equals(openedDevice) || state.isInputDeviceDisabled()
                     || (captureChannels == 2) != (state.isStereoCapture() || monoCaptureBroken)) {
                 LOGGER.info("Microphone settings changed; reopening");
@@ -162,12 +167,12 @@ public final class VoiceCapture implements AutoCloseable {
                 openFailureLogged = false;
                 return false;
             }
-            if (hasDisconnectExt && getInteger(ALC_CONNECTED) == 0) {
+            if (javaxInput != null ? !javaxInput.isOpen() : hasDisconnectExt && getInteger(ALC_CONNECTED) == 0) {
                 LOGGER.warn("Microphone disconnected; waiting for a device");
                 closeDevice();
                 return false;
             }
-            if (!started) {
+            if (device != null && !started) {
                 ALC11.alcCaptureStart(device);
                 started = true;
             }
@@ -186,40 +191,92 @@ public final class VoiceCapture implements AutoCloseable {
         if (now < nextOpenAttempt || !AL.isCreated() || disabled) return false;
         nextOpenAttempt = now + REOPEN_INTERVAL_MS;
 
-        // Upstream stereo_capture: capture two channels and downmix; also the OpenAL Soft 1.25.0-1.25.1 workaround.
-        monoCaptureBroken = isMonoCaptureBroken();
-        captureChannels = state.isStereoCapture() || monoCaptureBroken ? 2 : 1;
-        int format = captureChannels == 2 ? AL10.AL_FORMAT_STEREO16 : AL10.AL_FORMAT_MONO16;
         openedDevice = state.getInputDevice();
-        ALCdevice opened = ALC11.alcCaptureOpenDevice(openedDevice.isEmpty() ? null : openedDevice, sampleRate, format, frameSize);
-        if (opened == null || handle(opened) == 0L) {
-            if (!openFailureLogged) LOGGER.warn("Microphone {} is not available; voice capture is idle",
-                    openedDevice.isEmpty() ? "(system default)" : openedDevice);
+        boolean stereo = state.isStereoCapture();
+        Backend backend = openBackend(state.isUseJavaxInput(), () -> openOpenAl(stereo), () -> openJavax(stereo));
+        if (backend == null) {
+            if (!openFailureLogged) {
+                LOGGER.warn("Microphone {} is not available; voice capture is idle", describe(openedDevice));
+                JavaxInput.logSupportedLines(LOGGER);
+            }
             openFailureLogged = true;
             state.setInputDeviceFailed(true);
             return false;
         }
-        device = opened;
         openFailureLogged = false;
         state.setInputDeviceFailed(false);
         state.getMicrophoneTest().setInputOpen(true);
-        hasDisconnectExt = ALC10.alcIsExtensionPresent(device, "ALC_EXT_disconnect");
-        buffer = BufferUtils.createByteBuffer(frameSize * captureChannels * 2);
-        LOGGER.info("Microphone opened: {} ({} Hz, {} channel capture)",
-                ALC10.alcGetString(device, ALC11.ALC_CAPTURE_DEVICE_SPECIFIER), sampleRate, captureChannels);
+        if (backend == Backend.OPENAL) {
+            LOGGER.info("Microphone opened: {} (OpenAL, {} Hz, {} channel capture)",
+                    ALC10.alcGetString(device, ALC11.ALC_CAPTURE_DEVICE_SPECIFIER), sampleRate, captureChannels);
+        } else {
+            LOGGER.info("Microphone opened: {} (Java Sound, {} Hz, {} channel capture)",
+                    javaxInput.getName(), sampleRate, captureChannels);
+        }
         return true;
     }
 
-    private short[] read() {
-        if (getInteger(ALC11.ALC_CAPTURE_SAMPLES) < frameSize) return null;
-        buffer.clear();
-        ALC11.alcCaptureSamples(device, buffer, frameSize);
-        short[] captured = new short[frameSize * captureChannels];
-        buffer.order(ByteOrder.nativeOrder()).asShortBuffer().get(captured);
-        if (captureChannels == 1) return captured;
+    enum Backend { OPENAL, JAVAX }
 
-        short[] mono = new short[frameSize];
-        for (int i = 0; i < frameSize; i++) mono[i] = (short) ((captured[i * 2] + captured[i * 2 + 1]) / 2);
+    /** Upstream VoiceDeviceManager.openInputDevice: use_javax_input skips OpenAL, else Java Sound only after OpenAL fails. */
+    static Backend openBackend(boolean useJavaxInput, BooleanSupplier openAl, BooleanSupplier openJavax) {
+        if (!useJavaxInput && openAl.getAsBoolean()) return Backend.OPENAL;
+        return openJavax.getAsBoolean() ? Backend.JAVAX : null;
+    }
+
+    private boolean openOpenAl(boolean stereo) {
+        // Upstream stereo_capture: capture two channels and downmix; also the OpenAL Soft 1.25.0-1.25.1 workaround.
+        monoCaptureBroken = isMonoCaptureBroken();
+        captureChannels = stereo || monoCaptureBroken ? 2 : 1;
+        int format = captureChannels == 2 ? AL10.AL_FORMAT_STEREO16 : AL10.AL_FORMAT_MONO16;
+        ALCdevice opened = ALC11.alcCaptureOpenDevice(openedDevice.isEmpty() ? null : openedDevice, sampleRate, format, frameSize);
+        if (opened == null || handle(opened) == 0L) {
+            if (!openFailureLogged) LOGGER.warn("OpenAL microphone {} is not available; trying Java Sound", describe(openedDevice));
+            return false;
+        }
+        device = opened;
+        hasDisconnectExt = ALC10.alcIsExtensionPresent(device, "ALC_EXT_disconnect");
+        buffer = BufferUtils.createByteBuffer(frameSize * captureChannels * 2);
+        return true;
+    }
+
+    /** Upstream opens Java Sound in the same format; a stored OpenAL device name falls back to the default mixer. */
+    private boolean openJavax(boolean stereo) {
+        monoCaptureBroken = false;
+        captureChannels = stereo ? 2 : 1;
+        try {
+            javaxInput = JavaxInput.open(openedDevice, sampleRate, captureChannels);
+            return true;
+        } catch (LineUnavailableException | RuntimeException e) {
+            if (!openFailureLogged) LOGGER.warn("Java Sound microphone is not available: {}", e.toString());
+            return false;
+        }
+    }
+
+    private static String describe(String device) {
+        return device.isEmpty() ? "(system default)" : device;
+    }
+
+    private short[] read() {
+        short[] captured;
+        if (javaxInput != null) {
+            // Upstream reads frameSize shorts whatever the channel count; a whole 20 ms frame is read here.
+            captured = javaxInput.read(frameSize * captureChannels);
+            if (captured == null) return null;
+        } else {
+            if (getInteger(ALC11.ALC_CAPTURE_SAMPLES) < frameSize) return null;
+            buffer.clear();
+            ALC11.alcCaptureSamples(device, buffer, frameSize);
+            captured = new short[frameSize * captureChannels];
+            buffer.order(ByteOrder.nativeOrder()).asShortBuffer().get(captured);
+        }
+        return captureChannels == 1 ? captured : toMono(captured);
+    }
+
+    /** Upstream StereoToMonoFilter (AudioUtil.convertToMonoShorts). */
+    static short[] toMono(short[] stereo) {
+        short[] mono = new short[stereo.length / 2];
+        for (int i = 0; i < mono.length; i++) mono[i] = (short) ((stereo[i * 2] + stereo[i * 2 + 1]) / 2);
         return mono;
     }
 
@@ -251,12 +308,18 @@ public final class VoiceCapture implements AutoCloseable {
     }
 
     private void closeDevice() {
-        if (device == null) return;
-        if (started) ALC11.alcCaptureStop(device);
-        ALC11.alcCaptureCloseDevice(device);
-        device = null;
+        if (javaxInput != null) {
+            javaxInput.close();
+            javaxInput = null;
+        } else if (device != null) {
+            if (started) ALC11.alcCaptureStop(device);
+            ALC11.alcCaptureCloseDevice(device);
+            device = null;
+            started = false;
+        } else {
+            return;
+        }
         state.getMicrophoneTest().setInputOpen(false);
-        started = false;
         LOGGER.info("Microphone closed");
     }
 
