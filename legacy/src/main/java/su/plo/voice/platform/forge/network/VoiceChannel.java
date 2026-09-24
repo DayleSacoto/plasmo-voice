@@ -36,13 +36,13 @@ public final class VoiceChannel {
         serverHandler = new ServerChannelHandler(this);
         channel.register(serverHandler);
         FMLCommonHandler.instance().bus().register(serverHandler);
-        logger.info("Voice channel registered: {}; server handler registered; codec: {}",
+        logger.debug("Voice channel registered: {}; server handler registered; codec: {}",
                 NAME, PacketTcpCodec.class.getName());
         if (FMLCommonHandler.instance().getSide().isClient()) {
             ClientChannelHandler clientHandler = new ClientChannelHandler(this);
             channel.register(clientHandler);
             FMLCommonHandler.instance().bus().register(clientHandler);
-            logger.info("Voice client handler registered: {}", NAME);
+            logger.debug("Voice client handler registered: {}", NAME);
         }
     }
 

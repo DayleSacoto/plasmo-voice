@@ -37,7 +37,7 @@ public final class ClientChannelHandler {
                                 clientConnection.generateKeyPair();
                                 this.connection = clientConnection;
 
-                                channel.logger().info("Voice client connection initialized");
+                                channel.logger().debug("Voice client connection initialized");
                             }
 
                             channel.deliverToClient(connection, packet);

@@ -6,6 +6,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -45,8 +46,8 @@ public final class UdpClient implements AutoCloseable {
         this.secret = secret;
         this.host = host;
         this.port = port;
-        this.state = java.util.Objects.requireNonNull(state);
-        this.audioListener = java.util.Objects.requireNonNull(audioListener);
+        this.state = Objects.requireNonNull(state);
+        this.audioListener = Objects.requireNonNull(audioListener);
         worker = new Thread(this::run, "plasmo-voice-udp-client");
         worker.setDaemon(true);
     }
@@ -74,7 +75,7 @@ public final class UdpClient implements AutoCloseable {
             endpoint.connect(remote);
             state.opened(remote);
             endpoint.setSoTimeout(100);
-            logger.info("UDP client endpoint opened for {} (bootstrap only)", remote);
+            logger.debug("UDP client endpoint opened for {}", remote);
             long keepAlive = System.currentTimeMillis();
             long lastAttempt = 0L;
             byte[] buffer = new byte[65507];
@@ -82,7 +83,7 @@ public final class UdpClient implements AutoCloseable {
                 long now = System.currentTimeMillis();
                 state.setTimedOut(state.isConfirmed() && now - keepAlive > SOFT_TIMEOUT_MS);
                 if (now - keepAlive > 30_000L) {
-                    logger.info("UDP bootstrap timed out");
+                    logger.warn("UDP timed out");
                     break;
                 }
                 if (!state.isConfirmed() && now - lastAttempt >= 1000L) {
@@ -108,7 +109,7 @@ public final class UdpClient implements AutoCloseable {
                     if (packet.getPacketClass() != PingPacket.class) continue;
                     packet.getPacketUntyped();
                     keepAlive = System.currentTimeMillis();
-                    if (!state.isConfirmed()) logger.info("UDP ping received; bidirectional bootstrap confirmed");
+                    if (!state.isConfirmed()) logger.debug("UDP ping received; bidirectional bootstrap confirmed");
                     state.confirm();
                 } catch (IOException | IllegalArgumentException | IllegalStateException ignored) {
                     continue;
@@ -120,7 +121,7 @@ public final class UdpClient implements AutoCloseable {
         } finally {
             state.close();
             closed = true;
-            logger.info("UDP client endpoint closed");
+            logger.debug("UDP client endpoint closed");
         }
     }
 

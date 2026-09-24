@@ -4,7 +4,6 @@ import java.util.List;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
-import net.minecraft.client.resources.I18n;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.VoiceHotkeys;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;

@@ -6,7 +6,6 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -83,7 +82,7 @@ public final class UdpServer implements AutoCloseable {
         return byPlayer.computeIfAbsent(playerId, id -> {
             Session session = new Session(id, UUID.randomUUID());
             bySecret.put(session.secret, session);
-            logger.info("UDP session created for player {}; awaiting initial ping", id);
+            logger.debug("UDP session created for player {}; awaiting initial ping", id);
             return session;
         });
     }
@@ -119,7 +118,7 @@ public final class UdpServer implements AutoCloseable {
             endpoint.bind(new InetSocketAddress(bindHost, bindPort));
             endpoint.setSoTimeout(100);
             boundAddress = (InetSocketAddress) endpoint.getLocalSocketAddress();
-            logger.info("UDP endpoint bound: {}; advertised: {}:{} (bootstrap only)", boundAddress,
+            logger.info("UDP server is started on {}; advertised: {}:{}", boundAddress,
                     advertisedHost, advertisedPort == 0 ? boundAddress.getPort() : advertisedPort);
             byte[] buffer = new byte[65507];
             long lastKeepAlive = 0L;
@@ -174,10 +173,10 @@ public final class UdpServer implements AutoCloseable {
                                 ping.getServerIp(), ping.getServerPort());
                     }
                     session.authenticated = true;
-                    logger.info("Initial UDP ping authenticated for player {}; voice configuration pending", session.playerId);
+                    logger.debug("Initial UDP ping authenticated for player {}", session.playerId);
                 } else if (!session.replyConfirmed && session.sentKeepAlive != 0L) {
                     session.replyConfirmed = true;
-                    logger.info("UDP ping reply received for player {}; bootstrap exchange complete", session.playerId);
+                    logger.debug("UDP ping reply received for player {}", session.playerId);
                 }
             }
         } catch (IOException | IllegalArgumentException | IllegalStateException ignored) {
@@ -187,10 +186,6 @@ public final class UdpServer implements AutoCloseable {
 
     public void setProximityActivation(VoiceActivation activation) {
         this.proximityActivation = activation;
-    }
-
-    Collection<Session> sessions() {
-        return bySecret.values();
     }
 
     /**

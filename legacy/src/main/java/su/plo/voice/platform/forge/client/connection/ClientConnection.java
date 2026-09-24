@@ -1,9 +1,11 @@
 package su.plo.voice.platform.forge.client.connection;
 
+import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -69,7 +71,7 @@ public final class ClientConnection implements AutoCloseable {
         this.clientState = Objects.requireNonNull(clientState);
         this.state = clientState.openConnection(channel::sendToServer);
         state.setPacketSender(channel::sendToServer);
-        LOGGER.info("Voice client state opened: voiceDisabled={}, microphoneMuted={}, configured={}",
+        LOGGER.debug("Voice client state opened: voiceDisabled={}, microphoneMuted={}, configured={}",
                 clientState.isVoiceDisabled(), clientState.isMicrophoneMuted(), state.isConfigured());
     }
 
@@ -119,7 +121,7 @@ public final class ClientConnection implements AutoCloseable {
         }
     }
 
-    /** UDP worker thread. SelfAudioInfoPacket feeds the talking indicator, which arrives with the HUD. */
+    /** UDP worker thread. SelfAudioInfoPacket only feeds upstream's addon API (self source infos), so it is ignored. */
     private void onUdpAudio(Packet<?> packet) {
         ClientVoiceSources current = sources;
         if (current != null && packet instanceof SourceAudioPacket) current.onAudio((SourceAudioPacket) packet);
@@ -147,7 +149,7 @@ public final class ClientConnection implements AutoCloseable {
 
     /** 1.7.10 codes are like en_US; upstream language files are lower case. */
     private static String clientLanguage() {
-        return Minecraft.getMinecraft().gameSettings.language.toLowerCase(java.util.Locale.ROOT);
+        return Minecraft.getMinecraft().gameSettings.language.toLowerCase(Locale.ROOT);
     }
 
     /** TCP writes stay on the client thread; a request for a replaced config is dropped. */
@@ -176,12 +178,11 @@ public final class ClientConnection implements AutoCloseable {
         connectionInfo = packet;
         String host = packet.getIp();
         if ("0.0.0.0".equals(host)) {
-            host = connection.getSocketAddress() instanceof java.net.InetSocketAddress
-                    ? ((java.net.InetSocketAddress) connection.getSocketAddress()).getHostString() : "127.0.0.1";
+            host = connection.getSocketAddress() instanceof InetSocketAddress
+                    ? ((InetSocketAddress) connection.getSocketAddress()).getHostString() : "127.0.0.1";
         }
         udpClient = new UdpClient(LOGGER, packet.getSecret(), host, packet.getPort(), state.replaceUdp(), this::onUdpAudio);
-        LOGGER.info("ConnectionPacket received: host={}, port={}, session present; voice configuration pending",
-                packet.getIp(), packet.getPort());
+        LOGGER.info("Connecting to voice chat {}:{}", host, packet.getPort());
         udpClient.start();
     }
 
@@ -193,13 +194,13 @@ public final class ClientConnection implements AutoCloseable {
         udpClient = null;
         connectionInfo = null;
         keyPair = null;
-        LOGGER.info("Voice client state closed: connected={}, udpEndpoint={}, udpConfirmed={}, configured={}; voiceDisabled={}, microphoneMuted={}",
+        LOGGER.debug("Voice client state closed: connected={}, udpEndpoint={}, udpConfirmed={}, configured={}; voiceDisabled={}, microphoneMuted={}",
                 state.isConnected(), state.hasUdpEndpoint(), state.isUdpConfirmed(), state.isConfigured(),
                 clientState.isVoiceDisabled(), clientState.isMicrophoneMuted());
     }
 
     private void handle(ConfigPacket packet) {
-        LOGGER.info("ConfigPacket received");
+        LOGGER.debug("ConfigPacket received");
         if (udpClient == null || udpClient.getRemoteAddress() == null) {
             LOGGER.warn("Config packet is received before UDP is connected");
             return;
@@ -224,7 +225,7 @@ public final class ClientConnection implements AutoCloseable {
                     end -> sendFromClientThread(end));
             capture = startedCapture;
             startedCapture.start();
-            if (accepted.getAesKey() != null) LOGGER.info("RSA encryption data decrypted; algorithm={}",
+            if (accepted.getAesKey() != null) LOGGER.debug("RSA encryption data decrypted; algorithm={}",
                     packet.getEncryption().getAlgorithm());
             LOGGER.info("Voice configuration accepted: serverId={}, sampleRate={}, mtu={}, codec={}",
                     packet.getServerId(), packet.getCaptureInfo().getSampleRate(),
@@ -255,7 +256,7 @@ public final class ClientConnection implements AutoCloseable {
     }
 
     private void clearConfig() {
-        if (state.isConfigured()) LOGGER.info("Voice client config/encryption state cleared");
+        if (state.isConfigured()) LOGGER.debug("Voice client config/encryption state cleared");
         state.clearConfig();
         sources = null;
         requestedLanguage = null;

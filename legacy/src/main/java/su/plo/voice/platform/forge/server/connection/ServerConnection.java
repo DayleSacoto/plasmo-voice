@@ -29,12 +29,14 @@ import su.plo.voice.proto.packets.tcp.clientbound.DistanceVisualizePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 @Getter
 @RequiredArgsConstructor
 public final class ServerConnection {
     public static final String DEFAULT_CLIENT_MOD_MIN_VERSION = "2.0.0";
     private static final String MODRINTH_LINK = "https://modrinth.com/plugin/plasmo-voice";
+    private static final Logger LOGGER = LogManager.getLogger("Plasmo Voice");
     private static final Pattern MINECRAFT_VERSION_PATTERN = Pattern.compile("[a-zA-Z0-9._-]{1,32}");
 
     @NonNull
@@ -90,12 +92,12 @@ public final class ServerConnection {
                     channel.sendToPlayer(player, config.createPacket(publicKey));
                     configSent = true;
                     voiceConnected = true;
-                    LogManager.getLogger("Plasmo Voice").info("ConfigPacket sent to {} after UDP authentication",
+                    LOGGER.info("{} connected to voice chat",
                             player.getCommandSenderName());
                     return TickResult.VOICE_CONNECTED;
-                } catch (java.security.GeneralSecurityException e) {
+                } catch (GeneralSecurityException e) {
                     server.removeSession(player.getUniqueID());
-                    LogManager.getLogger("Plasmo Voice").warn("Failed to encrypt voice configuration", e);
+                    LOGGER.warn("Failed to encrypt voice configuration", e);
                 }
             }
             return TickResult.NONE;
@@ -104,7 +106,7 @@ public final class ServerConnection {
         if (packet == null) return TickResult.NONE;
         channel.sendToPlayer(player, packet);
         connectionInfoSent = true;
-        LogManager.getLogger("Plasmo Voice").info("ConnectionPacket sent to {}: host={}, port={}, session present",
+        LOGGER.debug("ConnectionPacket sent to {}: host={}, port={}",
                 player.getCommandSenderName(), packet.getIp(), packet.getPort());
         return TickResult.NONE;
     }

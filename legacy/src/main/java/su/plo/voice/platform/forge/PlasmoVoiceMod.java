@@ -34,7 +34,6 @@ import org.apache.logging.log4j.Logger;
 import su.plo.voice.platform.forge.server.ServerLanguages;
 import su.plo.voice.platform.forge.server.VoiceCommands;
 import su.plo.voice.platform.forge.server.VoiceMutes;
-import su.plo.voice.proto.packets.PacketRegistry;
 import su.plo.voice.platform.forge.client.VoiceControls;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
@@ -82,7 +81,6 @@ public final class PlasmoVoiceMod {
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         LOGGER.info("Initializing {} {} for Forge 1.7.10", MOD_NAME, VERSION);
-        LOGGER.info("Protocol loaded: {}", PacketRegistry.class.getName());
     }
 
     @Mod.EventHandler
@@ -92,7 +90,7 @@ public final class PlasmoVoiceMod {
 
         voiceChannel.setClientListener((connection, packet) -> {
             if (packet instanceof PlayerInfoRequestPacket) {
-                LOGGER.info("Received PlayerInfoRequestPacket from server");
+                LOGGER.debug("Received PlayerInfoRequestPacket from server");
             }
         });
 
@@ -105,7 +103,7 @@ public final class PlasmoVoiceMod {
                 PlayerStatePacket state = (PlayerStatePacket) packet;
                 ServerConnection connection = voicePlayers.get(player.getUniqueID());
                 if (connection != null && connection.handle(state)) {
-                    LOGGER.info("Voice state updated for {}: voiceDisabled={}, microphoneMuted={}",
+                    LOGGER.debug("Voice state updated for {}: voiceDisabled={}, microphoneMuted={}",
                             player.getCommandSenderName(), state.isVoiceDisabled(), state.isMicrophoneMuted());
                     voicePlayers.stateChanged(connection, System.currentTimeMillis());
                 }
@@ -155,7 +153,7 @@ public final class PlasmoVoiceMod {
 
             connection.setServerMuted(mutes.isMuted(player.getUniqueID()));
             voicePlayers.put(connection);
-            LOGGER.info(
+            LOGGER.debug(
                     "Voice server connection initialized for {}: minecraft={}, version={}, key={}, voiceDisabled={}, microphoneMuted={}",
                     player.getCommandSenderName(),
                     connection.getMinecraftVersion(),
@@ -229,7 +227,7 @@ public final class PlasmoVoiceMod {
 
         EntityPlayerMP player = (EntityPlayerMP) event.player;
 
-        LOGGER.info("Sending PlayerInfoRequestPacket to {}", player.getCommandSenderName());
+        LOGGER.debug("Sending PlayerInfoRequestPacket to {}", player.getCommandSenderName());
         voiceChannel.sendToPlayer(player, new PlayerInfoRequestPacket());
         if (serverConfig != null) pendingPlayers.put(player.getUniqueID(), new PendingPlayer(player, System.currentTimeMillis()));
     }

@@ -46,8 +46,7 @@ public final class MicrophoneTest {
     /** Capture thread: the processed microphone frame. */
     void onCaptured(short[] samples, long now) {
         double level = CaptureActivation.highestAudioLevel(samples);
-        // Upstream AudioUtil.audioLevelToDoubleRange.
-        double value = 1D - Math.max(-60D, level) / -60D;
+        double value = levelToRange(level);
         if (level > -60D && value > value(now)) {
             peak = value;
             peakTime = now;
@@ -55,6 +54,16 @@ public final class MicrophoneTest {
         if (active) {
             while (!loopback.offer(samples)) loopback.poll();
         }
+    }
+
+    /** Upstream AudioUtil.audioLevelToDoubleRange: -60..0 dB to 0..1. */
+    public static double levelToRange(double level) {
+        return 1D - Math.max(-60D, level) / -60D;
+    }
+
+    /** Upstream AudioUtil.doubleRangeToAudioLevel, whole decibels. */
+    public static double rangeToLevel(double value) {
+        return Math.round((1D - value) * -60D);
     }
 
     /** The meter value 0..1. */

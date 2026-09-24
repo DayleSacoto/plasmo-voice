@@ -33,12 +33,11 @@ final class DevicesTab extends SettingsTab {
     @Override
     void build() {
         addCategory("gui.plasmovoice.devices.microphone");
-        // Upstream ActivationThresholdWidget: AudioUtil.audioLevelToDoubleRange / doubleRangeToAudioLevel, 1 dB steps,
-        // the microphone level behind the knob and the microphone test button.
+        // Upstream ActivationThresholdWidget: 1 dB steps, the microphone level behind the knob and the test button.
         MicrophoneTest test = state.getMicrophoneTest();
         SliderWidget threshold = new SliderWidget(ELEMENT_WIDTH - 24,
-                () -> 1D - Math.max(-60D, state.getActivationThreshold()) / -60D,
-                value -> state.setActivationThreshold(Math.round((1D - value) * -60D)),
+                () -> MicrophoneTest.levelToRange(state.getActivationThreshold()),
+                value -> state.setActivationThreshold(MicrophoneTest.rangeToLevel(value)),
                 value -> Math.round(value * 60D) / 60D,
                 () -> String.format("%.0f dB", state.getActivationThreshold()));
         threshold.level = () -> test.value(System.currentTimeMillis());

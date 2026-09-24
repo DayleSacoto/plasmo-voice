@@ -1,5 +1,6 @@
 package su.plo.voice.platform.forge.server.connection;
 
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -10,6 +11,8 @@ import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import su.plo.voice.platform.forge.server.ServerLanguages;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
@@ -30,6 +33,7 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerAudioEndPacket;
 /** Server-thread registry of voice connections and the upstream player list broadcasts. */
 @RequiredArgsConstructor
 public final class ServerVoicePlayers {
+    private static final Logger LOGGER = LogManager.getLogger("Plasmo Voice");
     private static final long LANGUAGE_RESPONSE_INTERVAL_MS = 1_000L;
 
     private final VoiceChannel channel;
@@ -96,8 +100,8 @@ public final class ServerVoicePlayers {
             if (!connection.isVoiceConnected()) continue;
             try {
                 channel.sendToPlayer(connection.getPlayer(), config.createPacket(connection.getPublicKey()));
-            } catch (java.security.GeneralSecurityException e) {
-                org.apache.logging.log4j.LogManager.getLogger("Plasmo Voice").warn("Failed to encrypt voice configuration", e);
+            } catch (GeneralSecurityException e) {
+                LOGGER.warn("Failed to encrypt voice configuration", e);
             }
         }
     }

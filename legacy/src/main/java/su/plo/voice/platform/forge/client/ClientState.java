@@ -10,6 +10,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import lombok.Getter;
 import lombok.Setter;
+import net.minecraft.client.resources.I18n;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.audio.MicrophoneTest;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
@@ -298,7 +299,7 @@ public final class ClientState {
 
     /** A server translation key, e.g. an activation name; the client's resources without a connection. */
     public String translate(String key) {
-        return connection != null ? connection.translate(key) : net.minecraft.client.resources.I18n.format(key);
+        return connection != null ? connection.translate(key) : I18n.format(key);
     }
 
     /** Sends a live PlayerStatePacket if the current connection is ready and the server state is stale. */
