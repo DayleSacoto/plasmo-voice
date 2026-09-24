@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.security.GeneralSecurityException;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -179,7 +180,6 @@ public final class VoiceCapture implements AutoCloseable {
             return true;
         }
         long now = System.currentTimeMillis();
-        // OpenAL natives are loaded by the game's sound system.
         boolean disabled = state.isInputDeviceDisabled();
         // A new choice in the settings is tried right away instead of after the reopen interval.
         if ((wasDisabled && !disabled) || !state.getInputDevice().equals(openedDevice)) {
@@ -188,7 +188,7 @@ public final class VoiceCapture implements AutoCloseable {
         }
         wasDisabled = disabled;
         if (disabled) state.setInputDeviceFailed(false);
-        if (now < nextOpenAttempt || !AL.isCreated() || disabled) return false;
+        if (now < nextOpenAttempt || !canOpen(state.isUseJavaxInput(), AL.isCreated()) || disabled) return false;
         nextOpenAttempt = now + REOPEN_INTERVAL_MS;
 
         openedDevice = state.getInputDevice();
@@ -224,14 +224,31 @@ public final class VoiceCapture implements AutoCloseable {
         return openJavax.getAsBoolean() ? Backend.JAVAX : null;
     }
 
+    /** OpenAL natives are loaded by the game's sound system; Java Sound only capture does not need them. */
+    static boolean canOpen(boolean useJavaxInput, boolean alCreated) {
+        return useJavaxInput || alCreated;
+    }
+
+    /**
+     * Upstream VoiceDeviceManager.getDeviceName: a stored name OpenAL no longer lists means the default capture
+     * device. Unlike upstream the stored name is kept, so the device is picked again once it is back.
+     */
+    static String openAlDevice(String configured, List<String> available) {
+        return configured.isEmpty() || available.contains(configured) ? configured : "";
+    }
+
     private boolean openOpenAl(boolean stereo) {
         // Upstream stereo_capture: capture two channels and downmix; also the OpenAL Soft 1.25.0-1.25.1 workaround.
         monoCaptureBroken = isMonoCaptureBroken();
         captureChannels = stereo || monoCaptureBroken ? 2 : 1;
         int format = captureChannels == 2 ? AL10.AL_FORMAT_STEREO16 : AL10.AL_FORMAT_MONO16;
-        ALCdevice opened = ALC11.alcCaptureOpenDevice(openedDevice.isEmpty() ? null : openedDevice, sampleRate, format, frameSize);
+        String name = openAlDevice(openedDevice, Lwjgl3Alc.inputDevices());
+        if (!name.equals(openedDevice) && !openFailureLogged) {
+            LOGGER.warn("OpenAL microphone {} is not available; using the default capture device", openedDevice);
+        }
+        ALCdevice opened = ALC11.alcCaptureOpenDevice(name.isEmpty() ? null : name, sampleRate, format, frameSize);
         if (opened == null || handle(opened) == 0L) {
-            if (!openFailureLogged) LOGGER.warn("OpenAL microphone {} is not available; trying Java Sound", describe(openedDevice));
+            if (!openFailureLogged) LOGGER.warn("OpenAL microphone {} is not available; trying Java Sound", describe(name));
             return false;
         }
         device = opened;

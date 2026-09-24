@@ -1,6 +1,7 @@
 package su.plo.voice.platform.forge.client.audio;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
@@ -36,6 +37,42 @@ public class JavaxInputTest {
         tried.clear();
         assertNull(VoiceCapture.openBackend(true, opener(tried, "al", true), opener(tried, "javax", false)));
         assertEquals("[javax]", tried.toString());
+    }
+
+    @Test
+    public void missingOpenAlDeviceTriesTheOpenAlDefaultBeforeJavaSound() {
+        List<String> listed = Arrays.asList("OpenAL Soft on Mic A", "OpenAL Soft on Mic B");
+        // Listed device: opened by name, nothing else is tried.
+        assertEquals(Arrays.asList("OpenAL Soft on Mic A"), attempts("OpenAL Soft on Mic A", listed, true, true, true));
+        // Gone: the OpenAL default is opened and Java Sound is not tried.
+        assertEquals(Arrays.asList("OpenAL default"), attempts("OpenAL Soft on Unplugged", listed, true, true, true));
+        // Gone and the default fails too: Java Sound.
+        assertEquals(Arrays.asList("OpenAL default", "javax"), attempts("OpenAL Soft on Unplugged", listed, true, false, true));
+        // Everything fails: unavailable.
+        assertEquals(Arrays.asList("OpenAL default", "javax", "unavailable"),
+                attempts("OpenAL Soft on Unplugged", listed, true, false, false));
+        // The system default stays the system default.
+        assertEquals("", VoiceCapture.openAlDevice("", listed));
+    }
+
+    @Test
+    public void javaSoundOnlyCaptureDoesNotWaitForOpenAl() {
+        assertTrue(VoiceCapture.canOpen(true, false));
+        assertTrue(VoiceCapture.canOpen(false, true));
+        assertFalse(VoiceCapture.canOpen(false, false));
+    }
+
+    /** Which devices a capture open tries, with the configured OpenAL name, the OpenAL default and Java Sound. */
+    private static List<String> attempts(String configured, List<String> listed, boolean namedOpens, boolean defaultOpens,
+                                         boolean javaxOpens) {
+        List<String> tried = new ArrayList<>();
+        VoiceCapture.Backend backend = VoiceCapture.openBackend(false, () -> {
+            String name = VoiceCapture.openAlDevice(configured, listed);
+            tried.add(name.isEmpty() ? "OpenAL default" : name);
+            return name.isEmpty() ? defaultOpens : namedOpens;
+        }, opener(tried, "javax", javaxOpens));
+        if (backend == null) tried.add("unavailable");
+        return tried;
     }
 
     @Test
