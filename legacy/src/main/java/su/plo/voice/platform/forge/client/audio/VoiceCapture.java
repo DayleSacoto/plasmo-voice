@@ -28,6 +28,9 @@ import su.plo.voice.platform.forge.audio.codec.OpusCodec;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.UdpClient;
+import su.plo.voice.platform.forge.debug.DebugInterval;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.platform.forge.encryption.AesEncryption;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerAudioEndPacket;
@@ -43,6 +46,7 @@ public final class VoiceCapture implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger("Plasmo Voice");
     private static final int ALC_CONNECTED = 0x313; // ALC_EXT_disconnect
     private static final long REOPEN_INTERVAL_MS = 5_000L;
+    private static final VoiceDebug DEBUG = VoiceDebug.CLIENT;
 
     private final ClientConfig config;
     private final ClientState state;
@@ -72,6 +76,15 @@ public final class VoiceCapture implements AutoCloseable {
     private long sequenceNumber;
     private long nextOpenAttempt;
     private boolean openFailureLogged;
+    // Capture thread diagnostics, counted only while debug logging is enabled; never the audio itself.
+    private final DebugInterval summaries = new DebugInterval(5_000L);
+    private Backend openedBackend;
+    private long framesRead;
+    private long framesActive;
+    private long framesEncoded;
+    private long packetsSubmitted;
+    private long frameFailures;
+    private long activationFrames;
 
     public VoiceCapture(ClientConfig config, ClientState state, UdpClient udpClient, IntSupplier distance,
                         Consumer<PlayerAudioEndPacket> endSender) {
@@ -99,8 +112,10 @@ public final class VoiceCapture implements AutoCloseable {
     }
 
     private void run() {
+        DEBUG.log(Category.THREAD, "capture thread started: thread={}", VoiceDebug.thread());
         try {
             while (!closed) {
+                if (DEBUG.enabled() && summaries.due(System.currentTimeMillis())) summary();
                 if (!ensureDevice()) {
                     // The device went away mid-stream: listeners must not wait for the timeout.
                     if (activation.isActive()) {
@@ -115,6 +130,7 @@ public final class VoiceCapture implements AutoCloseable {
                     Thread.sleep(5L);
                     continue;
                 }
+                if (DEBUG.enabled()) framesRead++;
                 if (state.isMicrophoneMuted() || state.isVoiceDisabled()) {
                     if (activation.isActive()) {
                         activation.reset();
@@ -136,10 +152,12 @@ public final class VoiceCapture implements AutoCloseable {
                     state.setActivationActive(false);
                     continue;
                 }
+                boolean wasActive = activation.isActive();
                 CaptureActivation.Result result = activation.process(samples, state.getActivationType(),
                         state.isActivationToggled(), state.isPushToTalkPressed(), state.getActivationThreshold(),
                         System.currentTimeMillis());
                 state.setActivationActive(activation.isActive());
+                if (DEBUG.enabled()) activationDiagnostics(wasActive, result);
                 if (result == CaptureActivation.Result.ACTIVATED) {
                     sendFrame(samples);
                 } else if (result == CaptureActivation.Result.END) {
@@ -150,12 +168,47 @@ public final class VoiceCapture implements AutoCloseable {
             // closed
         } catch (RuntimeException e) {
             LOGGER.error("Voice capture stopped unexpectedly", e);
+        } catch (Error e) {
+            DEBUG.error(Category.THREAD, "capture thread failed", e);
+            throw e;
         } finally {
             state.setActivationActive(false);
             closeDevice();
             noiseSuppression.close();
             if (encoder != null) encoder.close();
+            DEBUG.log(Category.THREAD, "capture thread stopped: closed={}, framesRead={}, framesEncoded={}, packetsSubmitted={}",
+                    closed, framesRead, framesEncoded, packetsSubmitted);
         }
+    }
+
+    /** Capture thread: activation start/end transitions, logged once each. */
+    private void activationDiagnostics(boolean wasActive, CaptureActivation.Result result) {
+        if (result == CaptureActivation.Result.ACTIVATED) {
+            framesActive++;
+            activationFrames++;
+        }
+        boolean active = activation.isActive();
+        if (!wasActive && active) {
+            activationFrames = result == CaptureActivation.Result.ACTIVATED ? 1 : 0;
+            DEBUG.log(Category.AUDIO, "activation started: type={}, toggled={}, pushToTalk={}, threshold={}dB, distance={}, sequence={}",
+                    state.getActivationType(), state.isActivationToggled(), state.isPushToTalkPressed(),
+                    state.getActivationThreshold(), distance.getAsInt(), sequenceNumber + 1);
+        } else if (wasActive && !active) {
+            DEBUG.log(Category.AUDIO, "activation ended: result={}, frames={}, sequence={}", result, activationFrames, sequenceNumber);
+        }
+    }
+
+    /** Capture thread, every 5 seconds while debug logging is enabled. */
+    private void summary() {
+        DEBUG.log(Category.AUDIO, "capture summary: device={}, backend={}, channels={}, stereoRequested={}, framesRead={}, "
+                        + "framesActive={}, framesEncoded={}, packetsSubmitted={}, frameFailures={}, activation={}, active={}, "
+                        + "threshold={}dB, distance={}, microphoneVolume={}, noiseSuppression={}, muted={}, voiceDisabled={}, "
+                        + "inputDisabled={}, microphoneTest={}",
+                device != null || javaxInput != null ? describe(openedDevice) : "none", openedBackend, captureChannels,
+                state.isStereoCapture(), framesRead, framesActive, framesEncoded, packetsSubmitted, frameFailures,
+                state.getActivationType(), activation.isActive(), state.getActivationThreshold(), distance.getAsInt(),
+                state.getMicrophoneVolume(), state.isNoiseSuppression(), state.isMicrophoneMuted(), state.isVoiceDisabled(),
+                state.isInputDeviceDisabled(), state.getMicrophoneTest().isActive());
     }
 
     private boolean ensureDevice() {
@@ -204,8 +257,13 @@ public final class VoiceCapture implements AutoCloseable {
             return false;
         }
         openFailureLogged = false;
+        openedBackend = backend;
         state.setInputDeviceFailed(false);
         state.getMicrophoneTest().setInputOpen(true);
+        DEBUG.log(Category.DEVICE, "microphone ready: requested={}, backend={}, useJavaxInput={}, stereoRequested={}, channels={}, "
+                        + "monoCaptureWorkaround={}, sampleRate={}, frameSize={}",
+                describe(openedDevice), backend, state.isUseJavaxInput(), stereo, captureChannels, monoCaptureBroken,
+                sampleRate, frameSize);
         if (backend == Backend.OPENAL) {
             LOGGER.info("Microphone opened: {} (OpenAL, {} Hz, {} channel capture)",
                     ALC10.alcGetString(device, ALC11.ALC_CAPTURE_DEVICE_SPECIFIER), sampleRate, captureChannels);
@@ -265,7 +323,11 @@ public final class VoiceCapture implements AutoCloseable {
             javaxInput = JavaxInput.open(openedDevice, sampleRate, captureChannels);
             return true;
         } catch (LineUnavailableException | RuntimeException e) {
-            if (!openFailureLogged) LOGGER.warn("Java Sound microphone is not available: {}", e.toString());
+            if (!openFailureLogged) {
+                LOGGER.warn("Java Sound microphone is not available: {}", e.toString());
+                DEBUG.error(Category.DEVICE, "Java Sound open failed: requested={}, channels={}", e,
+                        describe(openedDevice), captureChannels);
+            }
             return false;
         }
     }
@@ -304,12 +366,15 @@ public final class VoiceCapture implements AutoCloseable {
                         false, config.getPacket().getCaptureInfo().getMtuSize());
             }
             byte[] data = encoder.encode(samples);
+            if (DEBUG.enabled()) framesEncoded++;
             AesEncryption encryption = config.getEncryption();
             if (encryption != null) data = encryption.encrypt(data);
             udpClient.send(new PlayerAudioPacket(++sequenceNumber, data, VoiceActivation.PROXIMITY_ID,
                     (short) distance.getAsInt(), false));
+            if (DEBUG.enabled()) packetsSubmitted++;
         } catch (IOException | GeneralSecurityException e) {
             LOGGER.debug("Dropped a microphone frame", e);
+            if (DEBUG.enabled() && ++frameFailures == 1) DEBUG.error(Category.CODEC, "microphone frame dropped (first failure)", e);
         }
     }
 

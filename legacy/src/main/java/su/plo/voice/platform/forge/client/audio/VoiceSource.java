@@ -9,6 +9,8 @@ import su.plo.voice.platform.forge.audio.codec.AudioDecoder;
 import su.plo.voice.platform.forge.audio.codec.OpusCodec;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.platform.forge.encryption.AesEncryption;
 import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
 import su.plo.voice.proto.data.audio.source.SourceInfo;
@@ -58,11 +60,25 @@ final class VoiceSource {
     /** Upstream isActivated; written by the playback thread, read by the player icons. */
     volatile boolean activated;
 
+    // Diagnostics, counted only while debug logging is enabled. received is written by the UDP worker, the rest by
+    // the playback thread, which also prints the summaries. They live and die with the source.
+    private static final VoiceDebug DEBUG = VoiceDebug.CLIENT;
+    private volatile long received;
+    private long decoded;
+    private long played;
+    private long concealed;
+    private long late;
+    private long stateMismatch;
+    private long failures;
+    private long summaryReceived;
+    private long activationFrames;
+
     VoiceSource(SourceInfo info) {
         this.info = info;
     }
 
     void offer(SourceAudioPacket packet, long now) {
+        if (DEBUG.enabled()) received++; // single writer: the UDP worker
         buffer.offer(packet, now);
     }
 
@@ -83,7 +99,9 @@ final class VoiceSource {
                         || decoder == null || stream == null || stream.stereo) break;
                 try {
                     write(decoder.decode(null), lastSequenceNumber + 1, now);
+                    if (DEBUG.enabled()) concealed++;
                 } catch (IOException e) {
+                    if (DEBUG.enabled()) failed("PLC decode", e);
                     break;
                 }
                 lastSequenceNumber++;
@@ -111,7 +129,10 @@ final class VoiceSource {
 
     /** Playback thread: the output context is about to go away. */
     void closeStream() {
-        if (stream != null) stream.close();
+        if (stream != null) {
+            stream.close();
+            if (DEBUG.enabled()) DEBUG.log(Category.SOURCE, "OpenAL stream closed: {}", describe());
+        }
         stream = null;
     }
 
@@ -126,9 +147,17 @@ final class VoiceSource {
     private void process(SourceAudioPacket packet, ClientConfig config, ClientState state, double[] listener, double volume, long now) {
         SourceInfo current = info;
         long sequenceNumber = packet.getSequenceNumber();
-        if (stateDiff(current.getState(), packet.getSourceState()) >= 10) return;
+        if (stateDiff(current.getState(), packet.getSourceState()) >= 10) {
+            if (DEBUG.enabled() && stateMismatch++ == 0) {
+                DEBUG.log(Category.SOURCE, "frame dropped, source state mismatch: {}, packetState={}", describe(), packet.getSourceState());
+            }
+            return;
+        }
         if (lastSequenceNumber >= 0 && sequenceNumber <= lastSequenceNumber
-                && lastSequenceNumber - sequenceNumber < 10L) return;
+                && lastSequenceNumber - sequenceNumber < 10L) {
+            if (DEBUG.enabled()) late++;
+            return;
+        }
         endRequestedAt = -1L;
 
         int sampleRate = config.getPacket().getCaptureInfo().getSampleRate();
@@ -136,11 +165,15 @@ final class VoiceSource {
         if (decoder == null || decoderStereo != current.isStereo()) {
             if (decoder != null) decoder.close();
             decoder = OpusCodec.createDecoder(sampleRate, current.isStereo(), frameSize);
+            if (DEBUG.enabled()) DEBUG.log(Category.CODEC, "decoder created: {}, sampleRate={}, frameSize={}", describe(), sampleRate, frameSize);
             decoderStereo = current.isStereo();
             lastSequenceNumber = -1L;
         }
         if (stream != null && stream.stereo != current.isStereo()) closeStream();
-        if (stream == null) stream = new StreamSource(current.isStereo(), sampleRate, frameSize, state.getAlPlaybackBuffers(), now);
+        if (stream == null) {
+            stream = new StreamSource(current.isStereo(), sampleRate, frameSize, state.getAlPlaybackBuffers(), now);
+            if (DEBUG.enabled()) DEBUG.log(Category.SOURCE, "OpenAL stream created: {}, buffers={}", describe(), state.getAlPlaybackBuffers());
+        }
         updateStream(current, state, packet.getDistance(), listener, volume);
 
         try {
@@ -155,12 +188,18 @@ final class VoiceSource {
             AesEncryption encryption = config.getEncryption();
             if (encryption != null) data = encryption.decrypt(data);
             write(decoder.decode(data), sequenceNumber, now);
-        } catch (GeneralSecurityException | IOException ignored) {
+            if (DEBUG.enabled()) decoded++;
+        } catch (GeneralSecurityException | IOException e) {
             // A corrupted or foreign frame is dropped; the next one is independent.
+            if (DEBUG.enabled()) failed(e instanceof GeneralSecurityException ? "decrypt" : "Opus decode", e);
         }
 
         lastSequenceNumber = sequenceNumber;
         lastActivation = now;
+        if (!activated && DEBUG.enabled()) {
+            activationFrames = 0;
+            DEBUG.log(Category.SOURCE, "source activated: {}, sequence={}, distance={}", describe(), sequenceNumber, packet.getDistance());
+        }
         activated = true;
     }
 
@@ -172,6 +211,10 @@ final class VoiceSource {
             samples = fadeOut(samples, channels);
         }
         stream.write(samples, now);
+        if (DEBUG.enabled()) {
+            played++;
+            activationFrames++;
+        }
     }
 
     private void updateStream(SourceInfo current, ClientState state, short distance, double[] listener, double volume) {
@@ -221,6 +264,34 @@ final class VoiceSource {
         if (!activated) return;
         if (decoder != null) decoder.reset();
         activated = false;
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.SOURCE, "source reset: {}, frames={}, lastSequence={}, endReceived={}", describe(), activationFrames,
+                    lastSequenceNumber, endSequenceNumber >= 0);
+        }
+    }
+
+    /** Playback thread, every 5 seconds while debug logging is enabled: only sources with traffic. */
+    void summary(long now) {
+        long receivedNow = received;
+        if (receivedNow == summaryReceived && !activated) return;
+        summaryReceived = receivedNow;
+        DEBUG.log(Category.SOURCE, "source summary: {}, activated={}, received={}, decoded={}, played={}, concealed={}, "
+                        + "late={}, stateMismatch={}, jitterDropped={}, failures={}, lastSequence={}, lastPacketAge={}ms, stream={}",
+                describe(), activated, receivedNow, decoded, played, concealed, late, stateMismatch, buffer.dropped(), failures,
+                lastSequenceNumber, VoiceDebug.age(now, lastActivation), stream != null);
+    }
+
+    private void failed(String stage, Exception e) {
+        long count = ++failures;
+        if (count == 1 || count % 250 == 0) {
+            DEBUG.error(Category.CODEC, "{} failed: {}, failures={}", e, stage, describe(), count);
+        }
+    }
+
+    private String describe() {
+        SourceInfo current = info;
+        String player = current instanceof PlayerSourceInfo ? ((PlayerSourceInfo) current).getPlayerInfo().getPlayerNick() : "-";
+        return "source=" + current.getId() + ", player=" + player + ", state=" + current.getState() + ", stereo=" + current.isStereo();
     }
 
     /** Upstream advanced.exponential_volume_slider (default on): quieter settings follow a cubic curve. */

@@ -32,6 +32,8 @@ final class JitterBuffer {
     private long lastArrival = -1L;
     private double jitterEstimate;
     private long adaptiveDelay = PACKET_DELAY * FRAME_MS;
+    /** Frames dropped because the buffer was full or the frame was stale; read by the playback diagnostics. */
+    private long dropped;
 
     /** Upstream picks the buffer when a source is created; a changed setting starts over with an empty buffer. */
     synchronized void configure(boolean adaptive, int packetDelay) {
@@ -71,8 +73,13 @@ final class JitterBuffer {
             Entry entry = queue.poll();
             if (entry == null) return null;
             if (now - entry.arrivalTime < STALE_THRESHOLD_MS) return entry.packet;
+            dropped++;
         }
         return null;
+    }
+
+    synchronized long dropped() {
+        return dropped;
     }
 
     synchronized boolean isEmpty() {
@@ -92,6 +99,7 @@ final class JitterBuffer {
     private void add(long sequenceNumber, Object packet, long now) {
         long scheduledTime = adaptive ? schedule(sequenceNumber, now) : now;
         if (queue.size() < CAPACITY) queue.add(new Entry(sequenceNumber, packet, now, scheduledTime));
+        else dropped++;
     }
 
     /** Upstream scheduledPlaybackTime: assumes the sender keeps a steady 20 ms frame rate. */

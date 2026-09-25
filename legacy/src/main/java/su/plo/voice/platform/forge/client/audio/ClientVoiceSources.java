@@ -12,6 +12,8 @@ import java.util.function.Predicate;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
 import su.plo.voice.proto.data.audio.source.SourceInfo;
 import su.plo.voice.proto.packets.tcp.clientbound.SourceAudioEndPacket;
@@ -40,6 +42,12 @@ public final class ClientVoiceSources {
 
     public void updateSourceInfo(SourceInfo info) {
         if (closed) return;
+        if (VoiceDebug.CLIENT.enabled()) {
+            VoiceDebug.CLIENT.log(Category.SOURCE, "source info {}: source={}, player={}, state={}, line={}, stereo={}",
+                    sources.containsKey(info.getId()) ? "updated" : "created", info.getId(),
+                    info instanceof PlayerSourceInfo ? ((PlayerSourceInfo) info).getPlayerInfo().getPlayerNick() : "-",
+                    info.getState(), info.getLineId(), info.isStereo());
+        }
         sources.computeIfAbsent(info.getId(), id -> new VoiceSource(info)).info = info;
     }
 
@@ -96,6 +104,9 @@ public final class ClientVoiceSources {
         Long last = lastRequestById.get(sourceId);
         if (last != null && now - last <= SOURCE_INFO_REQUEST_INTERVAL_MS) return;
         lastRequestById.put(sourceId, now);
+        if (VoiceDebug.CLIENT.enabled()) {
+            VoiceDebug.CLIENT.log(Category.SOURCE, "source info requested: source={}, known={}", sourceId, sources.containsKey(sourceId));
+        }
         sourceInfoRequester.accept(sourceId);
     }
 }

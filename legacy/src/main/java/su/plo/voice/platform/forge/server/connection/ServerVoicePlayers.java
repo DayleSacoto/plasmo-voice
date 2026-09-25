@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.platform.forge.server.ServerLanguages;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
@@ -178,6 +180,10 @@ public final class ServerVoicePlayers {
                 || !activation.getId().equals(packet.getActivationId())) return;
         short distance = (short) activation.calculateAllowedDistance(packet.getDistance());
         if (!activation.checkDistance(distance) || !session.endActivation(packet.getSequenceNumber())) return;
+        if (VoiceDebug.SERVER.enabled()) {
+            VoiceDebug.SERVER.log(Category.AUDIO, "audio stream ended: player={}, generation={}, sequence={}, distance={}",
+                    speaker.getPlayer().getCommandSenderName(), session.getGeneration(), packet.getSequenceNumber(), distance);
+        }
         sendToListeners(session, distance, new SourceAudioEndPacket(session.getSourceId(), packet.getSequenceNumber()));
     }
 

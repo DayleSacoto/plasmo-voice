@@ -27,6 +27,8 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.DistanceVisualizePacket;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -37,6 +39,7 @@ public final class ServerConnection {
     public static final String DEFAULT_CLIENT_MOD_MIN_VERSION = "2.0.0";
     private static final String MODRINTH_LINK = "https://modrinth.com/plugin/plasmo-voice";
     private static final Logger LOGGER = LogManager.getLogger("Plasmo Voice");
+    private static final VoiceDebug DEBUG = VoiceDebug.SERVER;
     private static final Pattern MINECRAFT_VERSION_PATTERN = Pattern.compile("[a-zA-Z0-9._-]{1,32}");
 
     @NonNull
@@ -68,6 +71,7 @@ public final class ServerConnection {
 
     public void prepareUdp(UdpServer server) {
         udpSession = server.createSession(player.getUniqueID());
+        udpSession.setPlayerName(player.getCommandSenderName());
         connectionInfoSent = false;
         configSent = false;
     }
@@ -76,6 +80,10 @@ public final class ServerConnection {
     TickResult tick(UdpServer server, VoiceChannel channel, ServerConfig config) {
         if (udpSession == null) return TickResult.NONE;
         if (!udpSession.isActive()) {
+            if (DEBUG.enabled()) {
+                DEBUG.log(Category.STATE, "UDP session lost: player={}, generation={}, hadVoiceChat={}",
+                        player.getCommandSenderName(), udpSession.getGeneration(), voiceConnected);
+            }
             udpSession = null;
             boolean hadVoiceChat = voiceConnected;
             voiceConnected = false;
@@ -94,6 +102,10 @@ public final class ServerConnection {
                     voiceConnected = true;
                     LOGGER.info("{} connected to voice chat",
                             player.getCommandSenderName());
+                    if (DEBUG.enabled()) {
+                        DEBUG.log(Category.TCP, "ConfigPacket sent; voice connected: player={}, generation={}, remote={}",
+                                player.getCommandSenderName(), udpSession.getGeneration(), udpSession.getRemoteAddress());
+                    }
                     return TickResult.VOICE_CONNECTED;
                 } catch (GeneralSecurityException e) {
                     server.removeSession(player.getUniqueID());
@@ -108,11 +120,16 @@ public final class ServerConnection {
         connectionInfoSent = true;
         LOGGER.debug("ConnectionPacket sent to {}: host={}, port={}",
                 player.getCommandSenderName(), packet.getIp(), packet.getPort());
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.TCP, "ConnectionPacket sent: player={}, host={}, port={}, generation={}",
+                    player.getCommandSenderName(), packet.getIp(), packet.getPort(), udpSession.getGeneration());
+        }
         return TickResult.NONE;
     }
 
     void requestPlayerInfo(VoiceChannel channel) {
         channel.sendToPlayer(player, new PlayerInfoRequestPacket());
+        if (DEBUG.enabled()) DEBUG.log(Category.STATE, "PlayerInfoRequestPacket sent to reconnect: player={}", player.getCommandSenderName());
     }
 
     /** Snapshot for the UDP worker; EntityPlayerMP must only be read on the server thread. */

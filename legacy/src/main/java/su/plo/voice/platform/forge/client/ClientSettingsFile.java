@@ -32,6 +32,9 @@ public final class ClientSettingsFile {
     private static final String KEY_BINDINGS = "key_bindings";
     private static final String OVERLAY = "overlay";
     private static final String ADVANCED = "advanced";
+    private static final String DEBUG = "debug";
+    private static final String DEBUG_COMMENT =
+            "Plasmo Voice diagnostics in the game log (voice connection, UDP keep-alive, audio). Default: false";
     private static final String SOURCE_STATES = OVERLAY + ".source_states";
     private static final String VOLUMES = VOICE + ".volumes";
     private static final boolean MAC = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
@@ -89,6 +92,7 @@ public final class ClientSettingsFile {
         state.setJitterPacketDelay(config.get(ADVANCED, "jitter_packet_delay", 3).getInt(3));
         state.setAlPlaybackBuffers(config.get(ADVANCED, "al_playback_buffers", 5).getInt(5));
         state.setCameraSoundListener(config.get(ADVANCED, "camera_sound_listener", true).getBoolean(true));
+        state.setDebug(config.get(DEBUG, "enabled", false, DEBUG_COMMENT).getBoolean(false));
 
         for (ConfigCategory volume : config.getCategory(VOLUMES).getChildren()) {
             if (volume.containsKey("volume")) state.setSourceVolume(volume.getName(), volume.get("volume").getDouble(1D));
@@ -157,6 +161,7 @@ public final class ClientSettingsFile {
         config.get(ADVANCED, "jitter_packet_delay", 3).set(state.getJitterPacketDelay());
         config.get(ADVANCED, "al_playback_buffers", 5).set(state.getAlPlaybackBuffers());
         config.get(ADVANCED, "camera_sound_listener", true).set(state.isCameraSoundListener());
+        config.get(DEBUG, "enabled", false, DEBUG_COMMENT).set(state.isDebug());
 
         config.removeCategory(config.getCategory(VOLUMES));
         state.volumes().forEach((key, volume) -> config.get(VOLUMES + "." + key, "volume", 1D).set(volume));

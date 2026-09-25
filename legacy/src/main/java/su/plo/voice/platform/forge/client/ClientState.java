@@ -59,6 +59,13 @@ public final class ClientState {
     @Getter
     @Setter
     private volatile boolean useJavaxInput;
+    /**
+     * debug.enabled: Plasmo Voice client diagnostics in the game log. Config file only, like upstream's debug; the
+     * global switch is applied once at startup.
+     */
+    @Getter
+    @Setter
+    private volatile boolean debug;
     /** Upstream voice.microphone_volume and voice.volume, 0..2. */
     @Getter
     private volatile double microphoneVolume = 1D;

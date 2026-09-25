@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.io.ByteStreams;
 import lombok.Getter;
@@ -18,6 +19,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.Value;
 import org.apache.logging.log4j.Logger;
+import su.plo.voice.platform.forge.debug.DebugInterval;
+import su.plo.voice.platform.forge.debug.SilenceMonitor;
+import su.plo.voice.platform.forge.debug.UdpStats;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
+import su.plo.voice.platform.forge.debug.WorkerWatch;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.PacketDirection;
@@ -31,6 +38,13 @@ import su.plo.voice.proto.packets.udp.serverbound.PlayerAudioPacket;
 
 public final class UdpServer implements AutoCloseable {
     private static final long KEEP_ALIVE_TICK_MS = 100L;
+    private static final VoiceDebug DEBUG = VoiceDebug.SERVER;
+    private static final AtomicLong GENERATIONS = new AtomicLong();
+    // Diagnostics of the UDP worker, used only while debug logging is enabled.
+    private final DebugInterval snapshots = new DebugInterval(5_000L);
+    private final WorkerWatch watch = new WorkerWatch("UDP server", 2_000L);
+    private long unknownSecret;
+    private long malformed;
     private final Logger logger;
     private final String bindHost;
     private final int bindPort;
@@ -81,8 +95,13 @@ public final class UdpServer implements AutoCloseable {
         if (closed) throw new IllegalStateException("UDP server is closed");
         return byPlayer.computeIfAbsent(playerId, id -> {
             Session session = new Session(id, UUID.randomUUID());
+            session.generation = GENERATIONS.incrementAndGet();
             bySecret.put(session.secret, session);
             logger.debug("UDP session created for player {}; awaiting initial ping", id);
+            if (DEBUG.enabled()) {
+                DEBUG.log(Category.UDP, "session created: uuid={}, generation={}, awaiting bootstrap ping, thread={}",
+                        id, session.generation, VoiceDebug.thread());
+            }
             return session;
         });
     }
@@ -105,6 +124,9 @@ public final class UdpServer implements AutoCloseable {
 
     private void removeSession(Session session) {
         synchronized (session) {
+            if (DEBUG.enabled() && session.active) {
+                DEBUG.log(Category.UDP, "session removed: {}, thread={}", session.describe(), VoiceDebug.thread());
+            }
             session.active = false;
             bySecret.remove(session.secret, session);
             byPlayer.remove(session.playerId, session);
@@ -112,6 +134,8 @@ public final class UdpServer implements AutoCloseable {
     }
 
     private void run() {
+        if (DEBUG.enabled()) DEBUG.log(Category.THREAD, "UDP server worker started: thread={}", VoiceDebug.thread());
+        Throwable failure = null;
         try (DatagramSocket endpoint = new DatagramSocket(null)) {
             socket = endpoint;
             if (closed) return;
@@ -120,6 +144,11 @@ public final class UdpServer implements AutoCloseable {
             boundAddress = (InetSocketAddress) endpoint.getLocalSocketAddress();
             logger.info("UDP server is started on {}; advertised: {}:{}", boundAddress,
                     advertisedHost, advertisedPort == 0 ? boundAddress.getPort() : advertisedPort);
+            if (DEBUG.enabled()) {
+                DEBUG.log(Category.UDP, "UDP server bound: configured={}:{}, bound={}, advertised={}:{}, keepAliveTimeout={}ms",
+                        bindHost, bindPort, boundAddress, advertisedHost,
+                        advertisedPort == 0 ? boundAddress.getPort() : advertisedPort, keepAliveTimeoutMs);
+            }
             byte[] buffer = new byte[65507];
             long lastKeepAlive = 0L;
             while (!closed) {
@@ -131,16 +160,32 @@ public final class UdpServer implements AutoCloseable {
                 }
                 // Upstream NettyUdpKeepAlive ticks every 100 ms instead of after every datagram.
                 long now = System.currentTimeMillis();
+                if (DEBUG.enabled()) watch.beat(now);
                 if (now - lastKeepAlive >= KEEP_ALIVE_TICK_MS) {
                     lastKeepAlive = now;
                     keepAlive(endpoint, now);
+                    if (DEBUG.enabled()) diagnostics(now);
                 }
             }
         } catch (Exception e) {
+            failure = e;
             if (!closed) logger.warn("UDP server stopped unexpectedly", e);
+        } catch (Error e) {
+            failure = e;
+            throw e;
         } finally {
+            boolean closedByServer = closed;
             invalidateSessions();
             logger.info("UDP server endpoint closed");
+            if (DEBUG.enabled()) {
+                if (failure != null && !closedByServer) {
+                    DEBUG.error(Category.THREAD, "UDP server worker stopped unexpectedly: unknownSecret={}, malformed={}",
+                            failure, unknownSecret, malformed);
+                } else {
+                    DEBUG.log(Category.THREAD, "UDP server worker stopped: closed by server, unknownSecret={}, malformed={}",
+                            unknownSecret, malformed);
+                }
+            }
         }
     }
 
@@ -150,21 +195,35 @@ public final class UdpServer implements AutoCloseable {
                     ByteStreams.newDataInput(Arrays.copyOf(datagram.getData(), datagram.getLength())),
                     PacketDirection.SERVER);
             Session session = bySecret.get(packet.getSecret());
-            if (session == null) return;
+            if (session == null) {
+                if (DEBUG.enabled()) unknownSecret++;
+                return;
+            }
             if (packet.getPacketClass() == PlayerAudioPacket.class) {
                 PlayerAudioPacket audio = (PlayerAudioPacket) packet.getPacketUntyped();
                 synchronized (session) {
-                    if (!session.active || !session.authenticated) return;
+                    if (!session.active || !session.authenticated) {
+                        if (DEBUG.enabled()) session.stats.ignored.incrementAndGet();
+                        return;
+                    }
+                    if (DEBUG.enabled()) session.received(UdpStats.Kind.AUDIO, datagram);
                     session.remoteAddress = (InetSocketAddress) datagram.getSocketAddress();
                     session.lastReceived = System.currentTimeMillis();
                 }
                 routeAudio(endpoint, session, audio);
                 return;
             }
-            if (packet.getPacketClass() != PingPacket.class) return;
+            if (packet.getPacketClass() != PingPacket.class) {
+                if (DEBUG.enabled()) session.stats.ignored.incrementAndGet();
+                return;
+            }
             PingPacket ping = (PingPacket) packet.getPacketUntyped();
             synchronized (session) {
-                if (!session.active) return;
+                if (!session.active) {
+                    if (DEBUG.enabled()) session.stats.ignored.incrementAndGet();
+                    return;
+                }
+                if (DEBUG.enabled()) session.received(UdpStats.Kind.PING, datagram);
                 session.remoteAddress = (InetSocketAddress) datagram.getSocketAddress();
                 session.lastReceived = System.currentTimeMillis();
                 if (!session.authenticated) {
@@ -174,14 +233,29 @@ public final class UdpServer implements AutoCloseable {
                     }
                     session.authenticated = true;
                     logger.debug("Initial UDP ping authenticated for player {}", session.playerId);
+                    if (DEBUG.enabled()) {
+                        session.silence.reset(session.lastReceived);
+                        DEBUG.log(Category.UDP, "UDP authentication success: {}, connectionAddress={}",
+                                session.describe(), session.connectionAddress);
+                    }
                 } else if (!session.replyConfirmed && session.sentKeepAlive != 0L) {
                     session.replyConfirmed = true;
                     logger.debug("UDP ping reply received for player {}", session.playerId);
                 }
+                if (DEBUG.enabled()) {
+                    DEBUG.log(Category.KEEPALIVE, "ping received: player={}, generation={}, remote={}, pingRx={}",
+                            session.name(), session.generation, session.remoteAddress, session.stats.pingRx.get());
+                }
             }
         } catch (IOException | IllegalArgumentException | IllegalStateException ignored) {
             // Untrusted datagrams are dropped without a per-packet stack trace.
+            if (DEBUG.enabled()) malformed++;
         }
+    }
+
+    /** Server thread, while debug logging is enabled: reports a blocked UDP worker, which cannot log itself. */
+    public void checkWorker(long now) {
+        watch.check(DEBUG, worker, closed, now);
     }
 
     public void setProximityActivation(VoiceActivation activation) {
@@ -196,22 +270,40 @@ public final class UdpServer implements AutoCloseable {
         Presence presence = speaker.presence;
         VoiceActivation activation = proximityActivation;
         if (presence == null || !presence.isVoiceConnected() || presence.isServerMuted() || presence.isMicrophoneMuted()
-                || activation == null || !activation.getId().equals(audio.getActivationId())) return;
+                || activation == null || !activation.getId().equals(audio.getActivationId())) {
+            if (DEBUG.enabled()) speaker.rejected(presence, activation, audio);
+            return;
+        }
 
         short distance = (short) activation.calculateAllowedDistance(audio.getDistance());
         speaker.lastDistance = distance;
         // A late frame right after the activation ended does not start it again.
         long sequenceNumber = audio.getSequenceNumber();
         long lastEnd = speaker.lastActivationEnd;
+        boolean wasActive = speaker.activationActive;
         if (sequenceNumber > lastEnd || Math.abs(sequenceNumber - lastEnd) > 10) speaker.activationActive = true;
         int extra = maxExtraBroadcastDistance;
         // Audio stays encrypted: every client shares the lifecycle AES key, the server only relays it.
         SourceAudioPacket packet = new SourceAudioPacket(audio.getSequenceNumber(), speaker.sourceState,
                 audio.getData(), speaker.sourceId, distance);
+        int recipients = 0;
         for (Session listener : bySecret.values()) {
-            if (isListener(speaker, listener, distance, extra)) send(endpoint, packet, listener);
+            if (isListener(speaker, listener, distance, extra)) {
+                send(endpoint, packet, listener);
+                recipients++;
+            }
         }
         send(endpoint, new SelfAudioInfoPacket(speaker.sourceId, audio.getSequenceNumber(), null, distance), speaker);
+        if (DEBUG.enabled()) {
+            speaker.audioAccepted++;
+            speaker.recipientSends += recipients;
+            if (recipients == 0) speaker.noRecipient++;
+            else speaker.audioForwarded++;
+            if (!wasActive && speaker.activationActive) {
+                DEBUG.log(Category.AUDIO, "audio stream started: player={}, generation={}, sequence={}, distance={}, recipients={}",
+                        speaker.name(), speaker.generation, sequenceNumber, distance, recipients);
+            }
+        }
     }
 
     /** Upstream VoiceServerProximitySource listeners: not the speaker, voice enabled, same world, in range. */
@@ -234,8 +326,11 @@ public final class UdpServer implements AutoCloseable {
         try {
             byte[] data = PacketUdpCodec.encodeThrowing(packet, to.secret);
             endpoint.send(new DatagramPacket(data, data.length, address));
-        } catch (IOException ignored) {
+            if (DEBUG.enabled()) to.stats.sent(packet instanceof SourceAudioPacket ? UdpStats.Kind.AUDIO : UdpStats.Kind.OTHER,
+                    System.currentTimeMillis());
+        } catch (IOException e) {
             // An unreachable peer loses the datagram, like any UDP packet.
+            if (DEBUG.enabled()) to.sendFailed(packet, e);
         }
     }
 
@@ -244,13 +339,61 @@ public final class UdpServer implements AutoCloseable {
             synchronized (session) {
                 if (!session.active || !session.authenticated) continue;
                 if (now - session.lastReceived > keepAliveTimeoutMs) {
+                    if (DEBUG.enabled()) {
+                        DEBUG.warn(Category.KEEPALIVE, "UDP TIMEOUT: {}, lastReceivedAge={}ms, timeout={}ms, "
+                                        + "nextPingIn={}ms, replyConfirmed={}, {}",
+                                session.describe(), now - session.lastReceived, keepAliveTimeoutMs,
+                                session.sentKeepAlive + 1_000L - now, session.replyConfirmed, session.stats.snapshot(now));
+                    }
                     removeSession(session);
                     logger.info("UDP session timed out for player {}", session.playerId);
                 } else if (now - session.sentKeepAlive >= 1_000L) {
                     byte[] data = PacketUdpCodec.encodeThrowing(new PingPacket(), session.secret);
-                    endpoint.send(new DatagramPacket(data, data.length, session.remoteAddress));
+                    try {
+                        endpoint.send(new DatagramPacket(data, data.length, session.remoteAddress));
+                    } catch (IOException e) {
+                        if (DEBUG.enabled()) session.sendFailed(new PingPacket(), e);
+                        throw e;
+                    }
                     session.sentKeepAlive = now + ThreadLocalRandom.current().nextInt(1500, 3000);
+                    if (DEBUG.enabled()) {
+                        session.stats.sent(UdpStats.Kind.PING, now);
+                        DEBUG.log(Category.KEEPALIVE, "ping sent: player={}, generation={}, remote={}, pingTx={}, lastReceivedAge={}ms",
+                                session.name(), session.generation, session.remoteAddress, session.stats.pingTx.get(),
+                                now - session.lastReceived);
+                    }
                 }
+            }
+        }
+    }
+
+    /** UDP worker, every keep-alive tick while debug logging is enabled; never changes a session. */
+    private void diagnostics(long now) {
+        boolean snapshot = snapshots.due(now);
+        if (snapshot) {
+            DEBUG.log(Category.UDP, "server snapshot: sessions={}, bound={}, unknownSecret={}, malformed={}",
+                    bySecret.size(), boundAddress, unknownSecret, malformed);
+        }
+        for (Session session : bySecret.values()) {
+            if (!session.active || !session.authenticated) continue;
+            switch (session.silence.check(now)) {
+                case SILENT:
+                case STILL_SILENT:
+                    DEBUG.warn(Category.KEEPALIVE, "inbound UDP silence: {}, age={}ms, lastReceivedAge={}ms, timeout={}ms, {}",
+                            session.describe(), session.silence.age(now), now - session.lastReceived, keepAliveTimeoutMs,
+                            session.stats.snapshot(now));
+                    break;
+                case RECOVERED:
+                    DEBUG.log(Category.KEEPALIVE, "inbound UDP recovered after {}ms: {}", session.silence.age(now), session.describe());
+                    break;
+                default:
+                    break;
+            }
+            if (snapshot) {
+                DEBUG.log(Category.UDP, "session snapshot: {}, lastReceivedAge={}ms, {}, audioAccepted={}, audioRejected={}, "
+                                + "audioForwarded={}, recipientSends={}, noRecipient={}",
+                        session.describe(), now - session.lastReceived, session.stats.snapshot(now), session.audioAccepted,
+                        session.audioRejected, session.audioForwarded, session.recipientSends, session.noRecipient);
             }
         }
     }
@@ -302,6 +445,64 @@ public final class UdpServer implements AutoCloseable {
         private volatile boolean activationActive;
         /** Upstream lastActivationSequenceNumber. */
         private volatile long lastActivationEnd;
+
+        // Diagnostics only, updated while debug logging is enabled; the routing counters belong to the UDP worker.
+        /** Local session number for correlating logs; never sent. */
+        private volatile long generation;
+        /** Player name for log lines, set by the server thread. */
+        @Setter
+        private volatile String playerName;
+        private final UdpStats stats = new UdpStats();
+        private final SilenceMonitor silence = new SilenceMonitor(5_000L, 5_000L);
+        private long audioAccepted;
+        private long audioRejected;
+        private long audioForwarded;
+        private long recipientSends;
+        private long noRecipient;
+
+        String name() {
+            String name = playerName;
+            return name != null ? name : playerId.toString();
+        }
+
+        /** Identity and endpoint for log lines; no secrets. */
+        String describe() {
+            return "player=" + name() + ", uuid=" + playerId + ", generation=" + generation + ", remote=" + remoteAddress
+                    + ", authenticated=" + authenticated;
+        }
+
+        /** UDP worker, under the session lock, before the remote address is updated. */
+        private void received(UdpStats.Kind kind, DatagramPacket datagram) {
+            long now = System.currentTimeMillis();
+            stats.received(kind, now);
+            silence.traffic(now);
+            InetSocketAddress from = (InetSocketAddress) datagram.getSocketAddress();
+            if (remoteAddress != null && !remoteAddress.equals(from)) {
+                DEBUG.log(Category.UDP, "remote endpoint changed: player={}, generation={}, from={}, to={}",
+                        name(), generation, remoteAddress, from);
+            }
+        }
+
+        private void rejected(Presence presence, VoiceActivation activation, PlayerAudioPacket audio) {
+            long rejected = ++audioRejected;
+            if (rejected == 1 || rejected % 250 == 0) {
+                String reason = presence == null || !presence.isVoiceConnected() ? "voice not connected"
+                        : presence.isServerMuted() ? "server muted"
+                        : presence.isMicrophoneMuted() ? "microphone muted"
+                        : activation == null ? "no proximity activation" : "unknown activation " + audio.getActivationId();
+                DEBUG.log(Category.AUDIO, "audio rejected: player={}, generation={}, reason={}, rejected={}",
+                        name(), generation, reason, rejected);
+            }
+        }
+
+        /** The first failure with its stack trace, then every 250th. */
+        private void sendFailed(Packet<?> packet, IOException e) {
+            long failures = stats.failedTx.incrementAndGet();
+            if (failures == 1 || failures % 250 == 0) {
+                DEBUG.error(Category.UDP, "UDP send failed: player={}, generation={}, packet={}, remote={}, failedTx={}", e,
+                        name(), generation, packet.getClass().getSimpleName(), remoteAddress, failures);
+            }
+        }
 
         /** Server thread: ends the activation once; false when it was not active. */
         boolean endActivation(long sequenceNumber) {

@@ -52,11 +52,13 @@ public final class ServerSettings {
     /** Upstream voice.player_icon. */
     private final Set<PlayerIconVisibility> playerIconVisibility;
     private final double playerIconYOffset;
+    /** debug.enabled: Plasmo Voice server diagnostics in the server log; independent of the client setting. */
+    private final boolean debug;
 
     public static ServerSettings defaults() {
         return new ServerSettings(UUID.randomUUID(), "0.0.0.0", 0, null, 0, 48_000, 1024, 15_000,
                 ServerConnection.DEFAULT_CLIENT_MOD_MIN_VERSION, Arrays.asList(8, 16, 32), 16, "VOIP", -1000,
-                "en_us", null, true, true, 16, false, 3_000L, Collections.emptySet(), 0D);
+                "en_us", null, true, true, 16, false, 3_000L, Collections.emptySet(), 0D, false);
     }
 
     public static ServerSettings load(File file, Logger logger) {
@@ -167,13 +169,16 @@ public final class ServerSettings {
         }
         double playerIconYOffset = config.get("voice.player_icon", "y_offset", 0D,
                 "Controls the y offset of the icon above player heads").getDouble(0D);
+        boolean debug = config.get("debug", "enabled", false,
+                "Plasmo Voice diagnostics in the server log (voice connections, UDP keep-alive, audio routing). "
+                        + "Default: false").getBoolean(false);
 
         if (config.hasChanged()) config.save();
         return new ServerSettings(serverId, hostIp, hostPort, publicIp.isEmpty() ? null : publicIp, publicPort,
                 sampleRate, mtuSize, keepAliveTimeoutMs, clientModMinVersion, Collections.unmodifiableList(distances),
                 defaultDistance, opusMode, opusBitrate, defaultLanguage, forcedLanguage.isEmpty() ? null : forcedLanguage,
                 notifyMuted, notifyUnmuted, maxExtraDistance, clientModRequired, clientModRequiredCheckTimeoutMs,
-                Collections.unmodifiableSet(visibility), playerIconYOffset);
+                Collections.unmodifiableSet(visibility), playerIconYOffset, debug);
     }
 
     /** Upstream reload restarts the UDP server only when the host settings changed. */

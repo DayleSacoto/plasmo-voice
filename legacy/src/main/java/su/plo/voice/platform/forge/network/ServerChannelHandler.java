@@ -8,6 +8,8 @@ import cpw.mods.fml.common.network.FMLNetworkEvent;
 import net.minecraft.network.NetHandlerPlayServer;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.INetHandlerPlayServer;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.proto.packets.PacketDirection;
 
 public final class ServerChannelHandler {
@@ -24,16 +26,29 @@ public final class ServerChannelHandler {
         INetHandlerPlayServer handler = event.handler;
         try {
             VoiceChannel.readPayload(event.packet, PacketDirection.SERVER).ifPresent(packet -> {
+                if (VoiceDebug.SERVER.enabled()) {
+                    VoiceDebug.SERVER.log(Category.TCP, "RX {} from {}", packet.getClass().getSimpleName(), sender(handler));
+                }
                 if (!pending.offer(() -> {
                     if (connection.isChannelOpen() && connection.getNetHandler() == handler
                             && handler instanceof NetHandlerPlayServer) {
                         channel.deliverToServer(((NetHandlerPlayServer) handler).playerEntity, packet);
                     }
-                })) channel.logger().debug("Voice server packet queue is full");
+                })) {
+                    channel.logger().debug("Voice server packet queue is full");
+                    VoiceDebug.SERVER.warn(Category.TCP, "packet queue full; dropped {} from {}",
+                            packet.getClass().getSimpleName(), sender(handler));
+                }
             });
         } catch (Exception e) {
             channel.logger().debug("Failed to decode serverbound voice packet", e);
+            VoiceDebug.SERVER.error(Category.TCP, "failed to decode a serverbound voice packet from {}", e, sender(handler));
         }
+    }
+
+    private static String sender(INetHandlerPlayServer handler) {
+        return handler instanceof NetHandlerPlayServer && ((NetHandlerPlayServer) handler).playerEntity != null
+                ? ((NetHandlerPlayServer) handler).playerEntity.getCommandSenderName() : "unknown";
     }
 
     @SubscribeEvent

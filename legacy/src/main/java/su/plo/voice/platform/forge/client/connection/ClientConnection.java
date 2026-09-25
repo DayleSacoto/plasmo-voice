@@ -24,6 +24,8 @@ import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
 import su.plo.voice.platform.forge.client.audio.VoiceCapture;
 import su.plo.voice.platform.forge.client.audio.VoicePlayback;
 import su.plo.voice.platform.forge.client.hud.DistanceVisualizer;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.Packet;
@@ -46,6 +48,7 @@ import su.plo.voice.proto.packets.udp.clientbound.SourceAudioPacket;
 public final class ClientConnection implements AutoCloseable {
 
     private static final Logger LOGGER = LogManager.getLogger("Plasmo Voice");
+    private static final VoiceDebug DEBUG = VoiceDebug.CLIENT;
 
     private final VoiceChannel channel;
     @Getter
@@ -73,6 +76,8 @@ public final class ClientConnection implements AutoCloseable {
         state.setPacketSender(channel::sendToServer);
         LOGGER.debug("Voice client state opened: voiceDisabled={}, microphoneMuted={}, configured={}",
                 clientState.isVoiceDisabled(), clientState.isMicrophoneMuted(), state.isConfigured());
+        DEBUG.log(Category.STATE, "voice client state opened: server={}, voiceDisabled={}, microphoneMuted={}, thread={}",
+                connection.getSocketAddress(), clientState.isVoiceDisabled(), clientState.isMicrophoneMuted(), VoiceDebug.thread());
     }
 
     public ClientConfig getConfig() {
@@ -137,6 +142,7 @@ public final class ClientConnection implements AutoCloseable {
     /** Client thread, every frame. */
     public void updatePlayback(float partialTicks) {
         if (playback != null) playback.updatePositions(partialTicks);
+        if (DEBUG.enabled() && udpClient != null) udpClient.checkWorker(System.currentTimeMillis());
         // Upstream LanguageChangedEvent: the server sends the translations of the new language.
         if (requestedLanguage != null && !requestedLanguage.equals(clientLanguage())) requestLanguage();
     }
@@ -163,6 +169,10 @@ public final class ClientConnection implements AutoCloseable {
         EntityPlayer self = Minecraft.getMinecraft().thePlayer;
         if (self != null && state.localPlayerId(self.getCommandSenderName(), self.getUniqueID()).equals(packet.getPlayerId())) {
             // Upstream: the server dropped our UDP session; its PlayerInfoRequest restarts the handshake.
+            if (DEBUG.enabled()) {
+                DEBUG.log(Category.STATE, "PlayerDisconnectPacket for the local player: UDP generation={} closed by server; "
+                        + "waiting for a new handshake", udpClient == null ? "none" : udpClient.getGeneration());
+            }
             clearConfig();
             if (udpClient != null) udpClient.close();
             udpClient = null;
@@ -181,8 +191,14 @@ public final class ClientConnection implements AutoCloseable {
             host = connection.getSocketAddress() instanceof InetSocketAddress
                     ? ((InetSocketAddress) connection.getSocketAddress()).getHostString() : "127.0.0.1";
         }
+        UdpClient previous = udpClient;
         udpClient = new UdpClient(LOGGER, packet.getSecret(), host, packet.getPort(), state.replaceUdp(), this::onUdpAudio);
         LOGGER.info("Connecting to voice chat {}:{}", host, packet.getPort());
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.TCP, "ConnectionPacket: advertised={}:{}, resolvedHost={}, generation={}, replacing={}",
+                    packet.getIp(), packet.getPort(), host, udpClient.getGeneration(),
+                    previous == null ? "none" : "generation " + previous.getGeneration());
+        }
         udpClient.start();
     }
 
@@ -197,10 +213,20 @@ public final class ClientConnection implements AutoCloseable {
         LOGGER.debug("Voice client state closed: connected={}, udpEndpoint={}, udpConfirmed={}, configured={}; voiceDisabled={}, microphoneMuted={}",
                 state.isConnected(), state.hasUdpEndpoint(), state.isUdpConfirmed(), state.isConfigured(),
                 clientState.isVoiceDisabled(), clientState.isMicrophoneMuted());
+        DEBUG.log(Category.STATE, "voice client state closed: thread={}", VoiceDebug.thread());
     }
 
     private void handle(ConfigPacket packet) {
         LOGGER.debug("ConfigPacket received");
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.TCP, "ConfigPacket: serverId={}, sampleRate={}, mtu={}, codec={}, encryption={}, activations={}, "
+                            + "sourceLines={}, udpGeneration={}, udpConfirmed={}, reload={}",
+                    packet.getServerId(), packet.getCaptureInfo().getSampleRate(), packet.getCaptureInfo().getMtuSize(),
+                    packet.getCaptureInfo().getEncoderInfo() == null ? "none" : packet.getCaptureInfo().getEncoderInfo().getName(),
+                    packet.getEncryption() == null ? "none" : packet.getEncryption().getAlgorithm(),
+                    packet.getActivations().size(), packet.getSourceLines().size(),
+                    udpClient == null ? "none" : udpClient.getGeneration(), state.isUdpConfirmed(), state.isConfigured());
+        }
         if (udpClient == null || udpClient.getRemoteAddress() == null) {
             LOGGER.warn("Config packet is received before UDP is connected");
             return;
@@ -227,6 +253,8 @@ public final class ClientConnection implements AutoCloseable {
             startedCapture.start();
             if (accepted.getAesKey() != null) LOGGER.debug("RSA encryption data decrypted; algorithm={}",
                     packet.getEncryption().getAlgorithm());
+            DEBUG.log(Category.STATE, "voice configured: encryption={}, capture and playback started",
+                    accepted.getAesKey() != null ? "decrypted" : "none");
             LOGGER.info("Voice configuration accepted: serverId={}, sampleRate={}, mtu={}, codec={}",
                     packet.getServerId(), packet.getCaptureInfo().getSampleRate(),
                     packet.getCaptureInfo().getMtuSize(),
@@ -245,6 +273,7 @@ public final class ClientConnection implements AutoCloseable {
             udpClient.close();
             udpClient = null;
             LOGGER.warn("Failed to decrypt voice configuration", e);
+            DEBUG.log(Category.STATE, "RSA decryption of the voice configuration failed: {}", e.getClass().getSimpleName());
         }
     }
 
@@ -267,6 +296,11 @@ public final class ClientConnection implements AutoCloseable {
     }
 
     private void handle(PlayerInfoRequestPacket packet) {
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.STATE, "PlayerInfoRequestPacket: replying with voiceDisabled={}, microphoneMuted={}, "
+                            + "udpGeneration={}, configured={}", clientState.isVoiceDisabled(), clientState.isMicrophoneMuted(),
+                    udpClient == null ? "none" : udpClient.getGeneration(), state.isConfigured());
+        }
         channel.sendToServer(clientState.createPlayerInfo(
                 "1.7.10",
                 PlasmoVoiceMod.VERSION,

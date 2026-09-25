@@ -35,6 +35,8 @@ import su.plo.voice.platform.forge.server.ServerLanguages;
 import su.plo.voice.platform.forge.server.VoiceCommands;
 import su.plo.voice.platform.forge.server.VoiceMutes;
 import su.plo.voice.platform.forge.client.VoiceControls;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.LanguageRequestPacket;
@@ -64,6 +66,7 @@ public final class PlasmoVoiceMod {
     /** Upstream PlayerInfoRequestScheduler: resend delays until the client answers. */
     private static final long[] INFO_REQUEST_RETRY_MS = {1_000L, 3_000L, 5_000L, 10_000L, 15_000L};
     private static final long MUTE_EXPIRY_CHECK_MS = 5_000L;
+    private static final VoiceDebug DEBUG = VoiceDebug.SERVER;
 
     private VoiceChannel voiceChannel;
     private UdpServer udpServer;
@@ -139,6 +142,14 @@ public final class PlasmoVoiceMod {
             PlayerInfoPacket info = (PlayerInfoPacket) packet;
             ServerConnection existing = voicePlayers.get(player.getUniqueID());
             ServerConnection connection = existing != null ? existing : new ServerConnection(player);
+            if (DEBUG.enabled()) {
+                DEBUG.log(Category.STATE, "PlayerInfoPacket received: player={}, uuid={}, version={}, minecraft={}, "
+                                + "voiceDisabled={}, microphoneMuted={}, existingConnection={}, udpSession={}",
+                        player.getCommandSenderName(), player.getUniqueID(), info.getVersion(), info.getMinecraftVersion(),
+                        info.isVoiceDisabled(), info.isMicrophoneMuted(), existing != null,
+                        existing != null && existing.getUdpSession() != null
+                                ? "generation " + existing.getUdpSession().getGeneration() : "none");
+            }
 
             ServerConnection.PlayerInfoResult result = connection.handle(info, VERSION,
                     serverConfig.getSettings().getClientModMinVersion());
@@ -163,6 +174,11 @@ public final class PlasmoVoiceMod {
                     connection.isMicrophoneMuted()
             );
             if (udpServer != null) connection.prepareUdp(udpServer);
+            if (DEBUG.enabled()) {
+                DEBUG.log(Category.STATE, "voice connection {}: player={}, udpSession={}",
+                        existing != null ? "replaced" : "created", player.getCommandSenderName(),
+                        connection.getUdpSession() != null ? "generation " + connection.getUdpSession().getGeneration() : "none");
+            }
         });
 
         FMLCommonHandler.instance().bus().register(this);
@@ -174,6 +190,10 @@ public final class PlasmoVoiceMod {
     @SubscribeEvent
     public void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.player.worldObj.isRemote) return;
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.STATE, "player left: player={}, uuid={}", event.player.getCommandSenderName(),
+                    event.player.getUniqueID());
+        }
         pendingPlayers.remove(event.player.getUniqueID());
         voicePlayers.remove(event.player.getUniqueID());
         if (udpServer != null) udpServer.removeSession(event.player.getUniqueID());
@@ -202,6 +222,7 @@ public final class PlasmoVoiceMod {
     public void serverTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || udpServer == null) return;
         long now = System.currentTimeMillis();
+        if (DEBUG.enabled()) udpServer.checkWorker(now);
         voicePlayers.tick(udpServer, serverConfig, now);
         tickPendingPlayers(now);
         if (now - lastMuteExpiryCheck >= MUTE_EXPIRY_CHECK_MS) {
@@ -228,6 +249,10 @@ public final class PlasmoVoiceMod {
         EntityPlayerMP player = (EntityPlayerMP) event.player;
 
         LOGGER.debug("Sending PlayerInfoRequestPacket to {}", player.getCommandSenderName());
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.STATE, "player joined: player={}, uuid={}; PlayerInfoRequestPacket sent",
+                    player.getCommandSenderName(), player.getUniqueID());
+        }
         voiceChannel.sendToPlayer(player, new PlayerInfoRequestPacket());
         if (serverConfig != null) pendingPlayers.put(player.getUniqueID(), new PendingPlayer(player, System.currentTimeMillis()));
     }
@@ -272,6 +297,7 @@ public final class PlasmoVoiceMod {
     /** Upstream VoiceReconnectCommand: drop the UDP session and ask for the player info again. */
     public void reconnect(EntityPlayerMP player) {
         ServerConnection connection = voicePlayers.get(player.getUniqueID());
+        if (DEBUG.enabled()) DEBUG.log(Category.STATE, "reconnect requested: player={}", player.getCommandSenderName());
         if (connection != null && connection.getUdpSession() != null && udpServer != null) {
             // The next tick reports the lost session, tells the voice players and requests the player info.
             udpServer.removeSession(player.getUniqueID());
@@ -358,6 +384,10 @@ public final class PlasmoVoiceMod {
                 pending.attempt++;
                 pending.lastRequest = now;
                 voiceChannel.sendToPlayer(pending.player, new PlayerInfoRequestPacket());
+                if (DEBUG.enabled()) {
+                    DEBUG.log(Category.STATE, "PlayerInfoRequestPacket resent: player={}, attempt={}",
+                            pending.player.getCommandSenderName(), pending.attempt);
+                }
             }
             if (settings.isClientModRequired() && now - pending.joinedAt >= settings.getClientModRequiredCheckTimeoutMs()) {
                 iterator.remove();
@@ -377,6 +407,7 @@ public final class PlasmoVoiceMod {
     }
 
     private void applySettings(ServerSettings settings) {
+        DEBUG.setEnabled(settings.isDebug());
         languages = ServerLanguages.load(new File(configFolder(), "languages"),
                 settings.getDefaultLanguage(), settings.getForcedLanguage(), LOGGER);
         voicePlayers.setLanguages(languages);
@@ -384,6 +415,13 @@ public final class PlasmoVoiceMod {
     }
 
     private void startUdpServer(ServerSettings settings) {
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.STATE, "voice server starting: host={}:{}, minecraftPort={}, public={}:{}, keepAliveTimeout={}ms, "
+                            + "sampleRate={}, mtu={}, codec=opus/{} bitrate={}, proximity={} default={}",
+                    settings.getHostIp(), settings.getHostPort(), minecraftPort, settings.getPublicIp(), settings.getPublicPort(),
+                    settings.getKeepAliveTimeoutMs(), settings.getSampleRate(), settings.getMtuSize(), settings.getOpusMode(),
+                    settings.getOpusBitrate(), settings.getProximityDistances(), settings.getProximityDefaultDistance());
+        }
         udpServer = UdpServer.create(LOGGER, settings, minecraftPort);
         udpServer.setProximityActivation(serverConfig.getProximityActivation());
         udpServer.start();

@@ -17,6 +17,8 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.NetworkManager;
 import org.apache.logging.log4j.Logger;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.PacketDirection;
 import su.plo.voice.proto.packets.tcp.PacketTcpCodec;
@@ -57,12 +59,21 @@ public final class VoiceChannel {
     /** Call on the client game thread while connected. */
     @SideOnly(Side.CLIENT)
     public void sendToServer(Packet<?> packet) {
-        channel.sendToServer(createPayload(packet, PacketDirection.SERVER));
+        FMLProxyPacket payload = createPayload(packet, PacketDirection.SERVER);
+        int size = payload.payload().readableBytes();
+        channel.sendToServer(payload);
+        if (VoiceDebug.CLIENT.enabled()) VoiceDebug.CLIENT.log(Category.TCP, "TX {} ({} bytes)", packet.getClass().getSimpleName(), size);
     }
 
     /** Call on the server game thread for a connected player. */
     public void sendToPlayer(EntityPlayerMP player, Packet<?> packet) {
-        channel.sendTo(createPayload(packet, PacketDirection.CLIENT), Objects.requireNonNull(player));
+        FMLProxyPacket payload = createPayload(packet, PacketDirection.CLIENT);
+        int size = payload.payload().readableBytes();
+        channel.sendTo(payload, Objects.requireNonNull(player));
+        if (VoiceDebug.SERVER.enabled()) {
+            VoiceDebug.SERVER.log(Category.TCP, "TX {} to {} ({} bytes)", packet.getClass().getSimpleName(),
+                    player.getCommandSenderName(), size);
+        }
     }
 
     public void clearServer() {

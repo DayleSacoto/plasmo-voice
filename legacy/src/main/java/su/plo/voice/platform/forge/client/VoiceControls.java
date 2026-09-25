@@ -24,6 +24,7 @@ import org.lwjgl.opengl.Display;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.gui.VoiceNotAvailableScreen;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.platform.forge.client.gui.VoiceSettingsScreen;
 import su.plo.voice.platform.forge.client.hud.DistanceVisualizer;
 import su.plo.voice.platform.forge.client.hud.PlayerIcons;
@@ -49,6 +50,7 @@ public final class VoiceControls {
         File settings = new File(Loader.instance().getConfigDir(), "plasmovoice/client.cfg");
         state.setSettingsFile(settings);
         ClientSettingsFile.load(settings, state);
+        VoiceDebug.CLIENT.setEnabled(state.isDebug());
 
         ClientRegistry.registerKeyBinding(SETTINGS_KEY);
         PlayerVolumeAction volumeAction = new PlayerVolumeAction(state);

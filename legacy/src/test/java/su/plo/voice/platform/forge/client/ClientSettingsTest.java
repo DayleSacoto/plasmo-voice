@@ -145,6 +145,29 @@ public class ClientSettingsTest {
     }
 
     @Test
+    public void debugIsOffByDefaultAndSurvivesSettingsSaves() throws Exception {
+        assertFalse(new ClientState().isDebug());
+        File file = new File(folder.getRoot(), "debug.cfg");
+        ClientState fresh = new ClientState();
+        ClientSettingsFile.load(file, fresh);
+        assertFalse(fresh.isDebug());
+
+        Files.write(file.toPath(), "debug {\n    B:enabled=true\n}\n".getBytes(StandardCharsets.UTF_8));
+        ClientState loaded = new ClientState();
+        ClientSettingsFile.load(file, loaded);
+        assertTrue(loaded.isDebug());
+        // A settings screen save writes every setting; the config-file-only debug flag is kept.
+        loaded.setVolume(0.5D);
+        ClientSettingsFile.save(file, loaded);
+        ClientState reloaded = new ClientState();
+        ClientSettingsFile.load(file, reloaded);
+        assertTrue(reloaded.isDebug());
+        assertEquals(0.5D, reloaded.getVolume(), 0D);
+        String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        assertTrue(content, content.contains("B:enabled=true"));
+    }
+
+    @Test
     public void useJavaxInputIsStoredAndTurnsStereoCaptureOff() throws Exception {
         assertFalse(new ClientState().isUseJavaxInput());
 

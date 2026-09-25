@@ -8,6 +8,8 @@ import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.INetHandlerPlayClient;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.proto.packets.PacketDirection;
 import su.plo.voice.platform.forge.client.connection.ClientConnection;
 import su.plo.voice.platform.forge.client.ClientState;
@@ -25,13 +27,18 @@ public final class ClientChannelHandler {
         NetworkManager connection = event.manager;
         INetHandlerPlayClient handler = event.handler;
         try {
-            VoiceChannel.readPayload(event.packet, PacketDirection.CLIENT).ifPresent(packet ->
+            VoiceChannel.readPayload(event.packet, PacketDirection.CLIENT).ifPresent(packet -> {
+                if (VoiceDebug.CLIENT.enabled()) VoiceDebug.CLIENT.log(Category.TCP, "RX {}", packet.getClass().getSimpleName());
                     Minecraft.getMinecraft().func_152344_a(() -> {
                         if (!connection.isChannelOpen() || Minecraft.getMinecraft().getNetHandler() != handler) {
                             return;
                         }
                         try {
                             if (this.connection == null || this.connection.getConnection() != connection) {
+                                if (VoiceDebug.CLIENT.enabled()) {
+                                    VoiceDebug.CLIENT.log(Category.STATE, "voice client connection {} for {}",
+                                            this.connection == null ? "created" : "replaced", connection.getSocketAddress());
+                                }
                                 if (this.connection != null) this.connection.close();
                                 ClientConnection clientConnection = new ClientConnection(channel, connection, ClientState.getInstance());
                                 clientConnection.generateKeyPair();
@@ -45,9 +52,11 @@ public final class ClientChannelHandler {
                         } catch (Exception e) {
                             channel.logger().warn("Failed to handle clientbound voice packet", e);
                         }
-                    }));
+                    });
+            });
         } catch (Exception e) {
             channel.logger().debug("Failed to decode clientbound voice packet", e);
+            VoiceDebug.CLIENT.error(Category.TCP, "failed to decode a clientbound voice packet", e);
         }
     }
 
@@ -55,6 +64,7 @@ public final class ClientChannelHandler {
     public void tick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END && connection != null
                 && !connection.getConnection().isChannelOpen()) {
+            if (VoiceDebug.CLIENT.enabled()) VoiceDebug.CLIENT.log(Category.STATE, "Minecraft connection closed; voice client state closed");
             connection.close();
             connection = null;
         }

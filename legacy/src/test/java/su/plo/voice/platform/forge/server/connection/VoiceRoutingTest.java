@@ -19,6 +19,7 @@ import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.connection.UdpClient;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.audio.codec.opus.OpusDecoderInfo;
 import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
@@ -101,6 +102,44 @@ public class VoiceRoutingTest {
             assertFalse(speaker.session.isActivationActive());
             speaker.send(60, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}));
             await(speaker.session::isActivationActive);
+        }
+    }
+
+    /** With debug enabled on both sides, relayed packets keep their sequence numbers and bytes. */
+    @Test
+    public void diagnosticsDoNotChangeRelayedAudio() throws Exception {
+        ServerConfig config = new ServerConfig();
+        VoiceDebug.CLIENT.setEnabled(true);
+        VoiceDebug.SERVER.setEnabled(true);
+        try (UdpServer server = new UdpServer(LOGGER, "127.0.0.1", 0, "127.0.0.1", 0, 15_000)) {
+            server.start();
+            server.setProximityActivation(config.getProximityActivation());
+            Peer speaker = new Peer(server, config, presence(false, false, 0, 0));
+            Peer listener = new Peer(server, config, presence(false, false, 0, 4));
+            List<byte[]> sent = new ArrayList<>();
+            for (int frame = 0; frame < 20; frame++) {
+                byte[] data = speaker.config.getEncryption().encrypt(new byte[] {(byte) frame, 1, 2, 3});
+                sent.add(data);
+                speaker.send(frame, data);
+                Thread.sleep(5L);
+            }
+            await(() -> listener.audio.stream().filter(packet -> packet instanceof SourceAudioPacket).count() >= 20);
+            List<SourceAudioPacket> relayed = new ArrayList<>();
+            listener.audio.stream().filter(packet -> packet instanceof SourceAudioPacket)
+                    .forEach(packet -> relayed.add((SourceAudioPacket) packet));
+            relayed.sort(Comparator.comparingLong(SourceAudioPacket::getSequenceNumber));
+            assertEquals(20, relayed.size());
+            for (int frame = 0; frame < 20; frame++) {
+                assertEquals(frame, relayed.get(frame).getSequenceNumber());
+                assertArrayEquals(sent.get(frame), relayed.get(frame).getData());
+                assertEquals(speaker.session.getSourceId(), relayed.get(frame).getSourceId());
+                assertEquals(16, relayed.get(frame).getDistance());
+            }
+            assertEquals(20, speaker.session.getStats().audioRx.get());
+            assertTrue(listener.session.getStats().audioTx.get() >= 20);
+        } finally {
+            VoiceDebug.CLIENT.setEnabled(false);
+            VoiceDebug.SERVER.setEnabled(false);
         }
     }
 

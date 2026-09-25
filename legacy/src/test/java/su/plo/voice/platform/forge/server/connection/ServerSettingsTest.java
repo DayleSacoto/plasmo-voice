@@ -50,6 +50,19 @@ public class ServerSettingsTest {
     }
 
     @Test
+    public void debugIsOffByDefaultAndConfigurable() {
+        assertFalse(ServerSettings.defaults().isDebug());
+        File file = new File(folder.getRoot(), "debug/server.cfg");
+        assertFalse(ServerSettings.load(file, LOGGER).isDebug());
+        Configuration config = new Configuration(file);
+        config.get("debug", "enabled", false).set(true);
+        config.save();
+        ServerSettings settings = ServerSettings.load(file, LOGGER);
+        assertTrue(settings.isDebug());
+        assertEquals(15_000, settings.getKeepAliveTimeoutMs());
+    }
+
+    @Test
     public void invalidValuesFallBackToDefaults() {
         File file = new File(folder.getRoot(), "server.cfg");
         Configuration config = new Configuration(file);

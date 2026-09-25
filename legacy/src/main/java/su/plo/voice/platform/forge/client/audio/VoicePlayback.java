@@ -17,6 +17,9 @@ import org.lwjgl.openal.AL;
 import org.lwjgl.openal.AL10;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
+import su.plo.voice.platform.forge.debug.DebugInterval;
+import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
 import su.plo.voice.proto.data.audio.source.SourceInfo;
 
@@ -33,6 +36,7 @@ public final class VoicePlayback implements AutoCloseable {
     private static final long REOPEN_INTERVAL_MS = 5_000L;
     private static final long CONNECTED_CHECK_INTERVAL_MS = 1_000L;
     private static final long LOOP_INTERVAL_MS = 5L;
+    private static final VoiceDebug DEBUG = VoiceDebug.CLIENT;
 
     private final ClientConfig config;
     private final ClientState state;
@@ -54,6 +58,7 @@ public final class VoicePlayback implements AutoCloseable {
     private boolean openFailureLogged;
     private boolean openedHrtf;
     private StreamSource loopback;
+    private final DebugInterval summaries = new DebugInterval(5_000L);
 
     public VoicePlayback(ClientConfig config, ClientState state, ClientVoiceSources sources) {
         this.config = config;
@@ -133,9 +138,16 @@ public final class VoicePlayback implements AutoCloseable {
     }
 
     private void run() {
+        DEBUG.log(Category.THREAD, "playback thread started: thread={}", VoiceDebug.thread());
         try {
             while (!closed) {
                 long now = System.currentTimeMillis();
+                if (DEBUG.enabled() && summaries.due(now)) {
+                    DEBUG.log(Category.SOURCE, "playback summary: output={}, sources={}, hrtf={}",
+                            device == 0L ? "none" : openedDevice.isEmpty() ? "(system default)" : openedDevice,
+                            sources.all().size(), openedHrtf);
+                    for (VoiceSource source : sources.all()) source.summary(now);
+                }
                 if (ensureDevice(now)) {
                     double[] current = listener;
                     updateListener(current);
@@ -151,9 +163,13 @@ public final class VoicePlayback implements AutoCloseable {
             // closed
         } catch (RuntimeException e) {
             LOGGER.error("Voice playback stopped unexpectedly", e);
+        } catch (Error e) {
+            DEBUG.error(Category.THREAD, "playback thread failed", e);
+            throw e;
         } finally {
             closeDevice();
             for (VoiceSource source : sources.all()) source.release();
+            DEBUG.log(Category.THREAD, "playback thread stopped: closed={}", closed);
         }
     }
 
@@ -195,7 +211,11 @@ public final class VoicePlayback implements AutoCloseable {
             openFailureLogged = false;
             return true;
         } catch (ReflectiveOperationException | RuntimeException e) {
-            if (!openFailureLogged) LOGGER.warn("Voice output unavailable; playback is idle: {}", Lwjgl3Alc.describe(e));
+            if (!openFailureLogged) {
+                LOGGER.warn("Voice output unavailable; playback is idle: {}", Lwjgl3Alc.describe(e));
+                DEBUG.error(Category.DEVICE, "voice output open failed: requested={}", e,
+                        openedDevice == null || openedDevice.isEmpty() ? "(system default)" : openedDevice);
+            }
             openFailureLogged = true;
             closeDevice();
             return false;
@@ -223,6 +243,11 @@ public final class VoicePlayback implements AutoCloseable {
         hasDisconnectExt = alc.isExtensionPresent(device, "ALC_EXT_disconnect");
         nextConnectedCheck = 0L;
         LOGGER.info("Voice output opened: {}", alc.getString(device, ALC_ALL_DEVICES_SPECIFIER));
+        if (DEBUG.enabled()) {
+            DEBUG.log(Category.DEVICE, "voice output ready: requested={}, hrtfRequested={}, hrtfEnabled={}, disconnectExt={}",
+                    openedDevice.isEmpty() ? "(system default)" : openedDevice, openedHrtf,
+                    openedHrtf && alc.getInteger(device, Lwjgl3Alc.ALC_HRTF_SOFT) > 0, hasDisconnectExt);
+        }
     }
 
     private void updateListener(double[] current) {
@@ -259,7 +284,9 @@ public final class VoicePlayback implements AutoCloseable {
 
     /** Upstream AlOutputDevice.enableHrtf: only when the device offers an HRTF. */
     private void enableHrtf() throws ReflectiveOperationException {
-        if (alc.getInteger(device, Lwjgl3Alc.ALC_NUM_HRTF_SPECIFIERS_SOFT) <= 0) return;
+        int specifiers = alc.getInteger(device, Lwjgl3Alc.ALC_NUM_HRTF_SPECIFIERS_SOFT);
+        DEBUG.log(Category.DEVICE, "HRTF requested: available specifiers={}", specifiers);
+        if (specifiers <= 0) return;
         if (!alc.resetDeviceHrtf(device, true)) LOGGER.warn("Failed to reset the voice output device for HRTF");
         if (alc.getInteger(device, Lwjgl3Alc.ALC_HRTF_SOFT) > 0) {
             LOGGER.info("HRTF enabled, using {}", alc.getString(device, Lwjgl3Alc.ALC_HRTF_SPECIFIER_SOFT));
