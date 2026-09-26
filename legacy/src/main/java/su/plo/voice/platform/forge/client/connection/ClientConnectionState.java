@@ -147,6 +147,11 @@ public final class ClientConnectionState implements AutoCloseable {
         players.remove(playerId);
     }
 
+    /** Upstream ModServerConnection.close(): the player list goes with the UDP connection. */
+    public void clearPlayers() {
+        players.clear();
+    }
+
     @Override
     public void close() {
         connected = false;

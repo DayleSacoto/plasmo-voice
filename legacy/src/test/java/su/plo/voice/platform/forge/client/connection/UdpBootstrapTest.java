@@ -28,7 +28,7 @@ public class UdpBootstrapTest {
 
             ClientConnectionState state = new ClientConnectionState(sent -> {});
             ClientConnectionState.UdpState udp = state.replaceUdp();
-            UdpClient client = new UdpClient(LOGGER, packet.getSecret(), packet.getIp(), packet.getPort(), udp, received -> {});
+            UdpClient client = new UdpClient(LOGGER, packet.getSecret(), packet.getIp(), packet.getPort(), udp, received -> {}, stopped -> {});
             client.start();
 
             await(session::isAuthenticated); // client ping reached the server
@@ -48,8 +48,8 @@ public class UdpBootstrapTest {
     @Test
     public void endpointGenerationsIncrease() {
         ClientConnectionState state = new ClientConnectionState(sent -> {});
-        UdpClient first = new UdpClient(LOGGER, UUID.randomUUID(), "127.0.0.1", 1, state.replaceUdp(), packet -> {});
-        UdpClient second = new UdpClient(LOGGER, UUID.randomUUID(), "127.0.0.1", 1, state.replaceUdp(), packet -> {});
+        UdpClient first = new UdpClient(LOGGER, UUID.randomUUID(), "127.0.0.1", 1, state.replaceUdp(), packet -> {}, stopped -> {});
+        UdpClient second = new UdpClient(LOGGER, UUID.randomUUID(), "127.0.0.1", 1, state.replaceUdp(), packet -> {}, stopped -> {});
         assertTrue(second.getGeneration() > first.getGeneration());
     }
 
@@ -80,7 +80,7 @@ public class UdpBootstrapTest {
             await(() -> server.connectionPacket(session) != null);
             ConnectionPacket packet = server.connectionPacket(session);
             ClientConnectionState.UdpState udp = new ClientConnectionState(sent -> {}).replaceUdp();
-            UdpClient client = new UdpClient(LOGGER, packet.getSecret(), packet.getIp(), packet.getPort(), udp, received -> {});
+            UdpClient client = new UdpClient(LOGGER, packet.getSecret(), packet.getIp(), packet.getPort(), udp, received -> {}, stopped -> {});
             client.start();
             await(session::isAuthenticated);
             await(udp::isConfirmed);

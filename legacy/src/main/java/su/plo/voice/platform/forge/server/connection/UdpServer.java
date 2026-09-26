@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
 import java.util.Map;
@@ -38,6 +39,8 @@ import su.plo.voice.proto.packets.udp.serverbound.PlayerAudioPacket;
 
 public final class UdpServer implements AutoCloseable {
     private static final long KEEP_ALIVE_TICK_MS = 100L;
+    /** Pause after a failed receive so a persistent socket error cannot spin the worker. */
+    private static final long RECEIVE_ERROR_BACKOFF_MS = 10L;
     private static final VoiceDebug DEBUG = VoiceDebug.SERVER;
     private static final AtomicLong GENERATIONS = new AtomicLong();
     // Diagnostics of the UDP worker, used only while debug logging is enabled.
@@ -45,6 +48,7 @@ public final class UdpServer implements AutoCloseable {
     private final WorkerWatch watch = new WorkerWatch("UDP server", 2_000L);
     private long unknownSecret;
     private long malformed;
+    private long receiveFailures;
     private final Logger logger;
     private final String bindHost;
     private final int bindPort;
@@ -157,6 +161,11 @@ public final class UdpServer implements AutoCloseable {
                     endpoint.receive(datagram);
                     receive(endpoint, datagram);
                 } catch (SocketTimeoutException ignored) {
+                } catch (SocketException e) {
+                    // Upstream NioDatagramChannel keeps reading after a SocketException; only close ends the worker.
+                    if (closed || endpoint.isClosed()) throw e;
+                    receiveFailed(e);
+                    Thread.sleep(RECEIVE_ERROR_BACKOFF_MS);
                 }
                 // Upstream NettyUdpKeepAlive ticks every 100 ms instead of after every datagram.
                 long now = System.currentTimeMillis();
@@ -179,8 +188,8 @@ public final class UdpServer implements AutoCloseable {
             logger.info("UDP server endpoint closed");
             if (DEBUG.enabled()) {
                 if (failure != null && !closedByServer) {
-                    DEBUG.error(Category.THREAD, "UDP server worker stopped unexpectedly: unknownSecret={}, malformed={}",
-                            failure, unknownSecret, malformed);
+                    DEBUG.error(Category.THREAD, "UDP server worker stopped unexpectedly: unknownSecret={}, malformed={}, "
+                            + "receiveFailures={}", failure, unknownSecret, malformed, receiveFailures);
                 } else {
                     DEBUG.log(Category.THREAD, "UDP server worker stopped: closed by server, unknownSecret={}, malformed={}",
                             unknownSecret, malformed);
@@ -247,9 +256,18 @@ public final class UdpServer implements AutoCloseable {
                             session.name(), session.generation, session.remoteAddress, session.stats.pingRx.get());
                 }
             }
-        } catch (IOException | IllegalArgumentException | IllegalStateException ignored) {
-            // Untrusted datagrams are dropped without a per-packet stack trace.
+        } catch (IOException | RuntimeException ignored) {
+            // Untrusted datagrams are dropped without a per-packet stack trace, like upstream's decoder does.
             if (DEBUG.enabled()) malformed++;
+        }
+    }
+
+    /** The first failure with its stack trace, then every 250th. */
+    private void receiveFailed(SocketException e) {
+        long failures = ++receiveFailures;
+        logger.debug("Voice UDP receive failed", e);
+        if (DEBUG.enabled() && (failures == 1 || failures % 250 == 0)) {
+            DEBUG.error(Category.UDP, "UDP receive failed: receiveFailures={}", e, failures);
         }
     }
 
@@ -334,7 +352,11 @@ public final class UdpServer implements AutoCloseable {
         }
     }
 
-    private void keepAlive(DatagramSocket endpoint, long now) throws IOException {
+    /**
+     * Upstream NettyUdpKeepAlive.tick. Its pings are asynchronous writes: a peer that cannot be reached loses the
+     * datagram and times out on its own, the other sessions are not affected.
+     */
+    private void keepAlive(DatagramSocket endpoint, long now) {
         for (Session session : bySecret.values()) {
             synchronized (session) {
                 if (!session.active || !session.authenticated) continue;
@@ -348,14 +370,15 @@ public final class UdpServer implements AutoCloseable {
                     removeSession(session);
                     logger.info("UDP session timed out for player {}", session.playerId);
                 } else if (now - session.sentKeepAlive >= 1_000L) {
-                    byte[] data = PacketUdpCodec.encodeThrowing(new PingPacket(), session.secret);
+                    session.sentKeepAlive = now + ThreadLocalRandom.current().nextInt(1500, 3000);
                     try {
+                        byte[] data = PacketUdpCodec.encodeThrowing(new PingPacket(), session.secret);
                         endpoint.send(new DatagramPacket(data, data.length, session.remoteAddress));
                     } catch (IOException e) {
+                        logger.debug("Failed to send a voice UDP ping to {}", session.playerId, e);
                         if (DEBUG.enabled()) session.sendFailed(new PingPacket(), e);
-                        throw e;
+                        continue;
                     }
-                    session.sentKeepAlive = now + ThreadLocalRandom.current().nextInt(1500, 3000);
                     if (DEBUG.enabled()) {
                         session.stats.sent(UdpStats.Kind.PING, now);
                         DEBUG.log(Category.KEEPALIVE, "ping sent: player={}, generation={}, remote={}, pingTx={}, lastReceivedAge={}ms",
@@ -371,8 +394,8 @@ public final class UdpServer implements AutoCloseable {
     private void diagnostics(long now) {
         boolean snapshot = snapshots.due(now);
         if (snapshot) {
-            DEBUG.log(Category.UDP, "server snapshot: sessions={}, bound={}, unknownSecret={}, malformed={}",
-                    bySecret.size(), boundAddress, unknownSecret, malformed);
+            DEBUG.log(Category.UDP, "server snapshot: sessions={}, bound={}, unknownSecret={}, malformed={}, receiveFailures={}",
+                    bySecret.size(), boundAddress, unknownSecret, malformed, receiveFailures);
         }
         for (Session session : bySecret.values()) {
             if (!session.active || !session.authenticated) continue;

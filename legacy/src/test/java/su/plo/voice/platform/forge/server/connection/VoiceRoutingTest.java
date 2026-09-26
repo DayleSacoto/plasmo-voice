@@ -172,7 +172,7 @@ public class VoiceRoutingTest {
                 audio.add(packet);
                 ClientVoiceSources current = sources;
                 if (current != null && packet instanceof SourceAudioPacket) current.onAudio((SourceAudioPacket) packet);
-            });
+            }, stopped -> {});
             client.start();
             await(session::isAuthenticated);
             await(udp::isConfirmed);

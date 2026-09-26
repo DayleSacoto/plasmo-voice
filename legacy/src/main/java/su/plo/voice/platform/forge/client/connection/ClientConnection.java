@@ -135,6 +135,23 @@ public final class ClientConnection implements AutoCloseable {
         if (current != null && packet instanceof SourceAudioPacket) current.onAudio((SourceAudioPacket) packet);
     }
 
+    /**
+     * UDP worker: the client stopped by itself (30 second keep-alive timeout, unusable socket). Upstream fires
+     * UdpClientClosedEvent and ModServerConnection.close() drops the server info, capture, sources and players; the
+     * server's next PlayerInfoRequest starts over.
+     */
+    private void onUdpStopped(UdpClient stopped) {
+        Minecraft.getMinecraft().func_152344_a(() -> {
+            if (udpClient != stopped) return;
+            clearConfig();
+            state.clearPlayers();
+            udpClient = null;
+            LOGGER.info("Voice UDP connection lost; waiting for the server to reconnect");
+            DEBUG.log(Category.STATE, "UDP client stopped by itself: generation={}; capture, playback and config cleared",
+                    stopped.getGeneration());
+        });
+    }
+
     /** The capture thread cannot write TCP; the packet is dropped if the connection closed meanwhile. */
     private void sendFromClientThread(Packet<?> packet) {
         Minecraft.getMinecraft().func_152344_a(() -> {
@@ -200,7 +217,8 @@ public final class ClientConnection implements AutoCloseable {
                     ? ((InetSocketAddress) connection.getSocketAddress()).getHostString() : "127.0.0.1";
         }
         UdpClient previous = udpClient;
-        udpClient = new UdpClient(LOGGER, packet.getSecret(), host, packet.getPort(), state.replaceUdp(), this::onUdpAudio);
+        udpClient = new UdpClient(LOGGER, packet.getSecret(), host, packet.getPort(), state.replaceUdp(), this::onUdpAudio,
+                this::onUdpStopped);
         LOGGER.info("Connecting to voice chat {}:{}", host, packet.getPort());
         if (DEBUG.enabled()) {
             DEBUG.log(Category.TCP, "ConnectionPacket: advertised={}:{}, resolvedHost={}, generation={}, replacing={}",
@@ -235,7 +253,9 @@ public final class ClientConnection implements AutoCloseable {
                     packet.getActivations().size(), packet.getSourceLines().size(),
                     udpClient == null ? "none" : udpClient.getGeneration(), state.isUdpConfirmed(), state.isConfigured());
         }
-        if (udpClient == null || udpClient.getRemoteAddress() == null) {
+        // Upstream connects synchronously, so its client always has a remote address here; the legacy worker opens
+        // its endpoint asynchronously and a ConfigPacket right after the ConnectionPacket must not be dropped.
+        if (udpClient == null) {
             LOGGER.warn("Config packet is received before UDP is connected");
             return;
         }
