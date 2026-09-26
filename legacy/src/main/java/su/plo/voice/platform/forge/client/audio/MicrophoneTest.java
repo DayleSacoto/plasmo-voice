@@ -34,6 +34,17 @@ public final class MicrophoneTest {
         return active;
     }
 
+    /** Upstream registers the controller only while the settings screen is open; only then are frames processed for it. */
+    private volatile boolean listening;
+
+    public void setListening(boolean listening) {
+        this.listening = listening;
+    }
+
+    boolean isListening() {
+        return listening;
+    }
+
     public boolean isInputOpen() {
         return inputOpen;
     }

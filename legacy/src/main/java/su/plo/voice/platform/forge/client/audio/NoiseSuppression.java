@@ -10,8 +10,9 @@ import su.plo.voice.platform.forge.audio.codec.OpusCodec;
 import su.plo.voice.platform.forge.client.ClientState;
 
 /**
- * Upstream NoiseSuppressionFilter: RNNoise on the processed mono microphone frame. Upstream also runs a limiter
- * first but discards its output, so only the denoiser changes the audio. Capture thread only.
+ * Upstream NoiseSuppressionFilter: RNNoise on the processed microphone frame, one denoiser per channel of a stereo
+ * frame (the left one also serves mono). Upstream also runs a limiter first but discards its output, so only the
+ * denoiser changes the audio. Capture thread only.
  */
 @SideOnly(Side.CLIENT)
 final class NoiseSuppression implements AutoCloseable {
@@ -19,6 +20,7 @@ final class NoiseSuppression implements AutoCloseable {
 
     private final ClientState state;
     private Denoise denoise;
+    private Denoise rightDenoise;
 
     NoiseSuppression(ClientState state) {
         this.state = state;
@@ -27,6 +29,10 @@ final class NoiseSuppression implements AutoCloseable {
     }
 
     short[] process(short[] samples) {
+        return process(samples, 1);
+    }
+
+    short[] process(short[] samples, int channels) {
         if (!state.isNoiseSuppression() || !state.isNoiseSuppressionAvailable()) {
             close();
             return samples;
@@ -34,6 +40,7 @@ final class NoiseSuppression implements AutoCloseable {
         if (denoise == null) {
             try {
                 denoise = Denoise.create();
+                rightDenoise = Denoise.create();
             } catch (Exception | LinkageError e) {
                 LOGGER.error("RNNoise is not available on this platform", e);
                 unavailable();
@@ -41,7 +48,9 @@ final class NoiseSuppression implements AutoCloseable {
             }
         }
         try {
-            return toShorts(denoise.process(toFloats(samples)));
+            if (channels == 1) return toShorts(denoise.process(toFloats(samples)));
+            return interleave(toShorts(denoise.process(toFloats(channel(samples, 0)))),
+                    toShorts(rightDenoise.process(toFloats(channel(samples, 1)))));
         } catch (DenoiseException e) {
             throw new IllegalStateException("Failed to denoise audio samples", e);
         }
@@ -50,7 +59,25 @@ final class NoiseSuppression implements AutoCloseable {
     @Override
     public void close() {
         if (denoise != null) denoise.close();
+        if (rightDenoise != null) rightDenoise.close();
         denoise = null;
+        rightDenoise = null;
+    }
+
+    /** One channel of an interleaved stereo frame. */
+    static short[] channel(short[] samples, int offset) {
+        short[] channel = new short[samples.length / 2];
+        for (int i = 0; i < channel.length; i++) channel[i] = samples[i * 2 + offset];
+        return channel;
+    }
+
+    static short[] interleave(short[] left, short[] right) {
+        short[] samples = new short[left.length + right.length];
+        for (int i = 0; i < left.length && i < right.length; i++) {
+            samples[i * 2] = left[i];
+            samples[i * 2 + 1] = right[i];
+        }
+        return samples;
     }
 
     private void unavailable() {

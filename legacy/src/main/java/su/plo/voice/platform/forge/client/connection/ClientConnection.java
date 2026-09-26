@@ -27,6 +27,7 @@ import su.plo.voice.platform.forge.client.hud.DistanceVisualizer;
 import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
+import su.plo.voice.proto.data.player.VoicePlayerInfo;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
@@ -65,6 +66,8 @@ public final class ClientConnection implements AutoCloseable {
     private volatile ClientVoiceSources sources;
     private VoiceCapture capture;
     private VoicePlayback playback;
+    /** Client thread writes, capture thread reads. */
+    private volatile boolean serverMuted;
     /** Client language of the last LanguageRequestPacket; null until the config is accepted. */
     private String requestedLanguage;
 
@@ -142,6 +145,11 @@ public final class ClientConnection implements AutoCloseable {
     /** Client thread, every frame. */
     public void updatePlayback(float partialTicks) {
         if (playback != null) playback.updatePositions(partialTicks);
+        // Upstream VoiceAudioCapture.isServerMuted: read by the capture thread.
+        EntityPlayer self = Minecraft.getMinecraft().thePlayer;
+        VoicePlayerInfo local = self == null ? null
+                : state.getPlayer(state.localPlayerId(self.getCommandSenderName(), self.getUniqueID()));
+        serverMuted = local != null && local.isMuted();
         if (DEBUG.enabled() && udpClient != null) udpClient.checkWorker(System.currentTimeMillis());
         // Upstream LanguageChangedEvent: the server sends the translations of the new language.
         if (requestedLanguage != null && !requestedLanguage.equals(clientLanguage())) requestLanguage();
@@ -248,7 +256,7 @@ public final class ClientConnection implements AutoCloseable {
             startedPlayback.start();
             VoiceCapture startedCapture = new VoiceCapture(accepted, clientState, udpClient,
                     () -> proximityDistance(accepted),
-                    end -> sendFromClientThread(end));
+                    end -> sendFromClientThread(end), () -> serverMuted);
             capture = startedCapture;
             startedCapture.start();
             if (accepted.getAesKey() != null) LOGGER.debug("RSA encryption data decrypted; algorithm={}",

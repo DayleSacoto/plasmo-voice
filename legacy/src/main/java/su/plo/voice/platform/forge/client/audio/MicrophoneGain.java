@@ -16,7 +16,8 @@ final class MicrophoneGain {
 
     short[] process(short[] samples, float volume) {
         int highest = 0;
-        for (short sample : samples) highest = Math.max(highest, Math.abs((int) sample));
+        // Upstream AudioUtil.getHighestAbsoluteSample counts Short.MIN_VALUE as -32767.
+        for (short sample : samples) highest = Math.max(highest, Math.abs(Math.max(sample, -Short.MAX_VALUE)));
         if (highest > 0) volume = Math.min(volume, (float) (Short.MAX_VALUE - 1) / (float) highest);
 
         recent[next] = volume;

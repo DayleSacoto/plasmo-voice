@@ -43,6 +43,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
 
     @Override
     public void initGui() {
+        state.getMicrophoneTest().setListening(true);
         buttonList.clear();
         microphoneButton = new IconButton(0, width - 52, 8,
                 () -> state.isMicrophoneMuted() ? MICROPHONE_DISABLED_ICON : MICROPHONE_ICON);
@@ -123,6 +124,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
     @Override
     public void onGuiClosed() {
         state.getMicrophoneTest().stop();
+        state.getMicrophoneTest().setListening(false);
         activeTab().removed();
         state.save();
     }

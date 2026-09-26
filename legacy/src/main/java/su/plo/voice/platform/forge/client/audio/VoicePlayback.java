@@ -270,9 +270,13 @@ public final class VoicePlayback implements AutoCloseable {
         MicrophoneTest test = state.getMicrophoneTest();
         short[] frame;
         while ((frame = test.poll()) != null) {
+            int sampleRate = config.getPacket().getCaptureInfo().getSampleRate();
+            int frameSize = sampleRate / 1000 * 20;
+            // Upstream LoopbackSource plays the stereo processed frame with stereo capture.
+            boolean stereo = frame.length == frameSize * 2;
+            if (loopback != null && loopback.stereo != stereo) closeLoopback();
             if (loopback == null) {
-                int sampleRate = config.getPacket().getCaptureInfo().getSampleRate();
-                loopback = new StreamSource(false, sampleRate, sampleRate / 1000 * 20, state.getAlPlaybackBuffers(), now);
+                loopback = new StreamSource(stereo, sampleRate, frameSize, state.getAlPlaybackBuffers(), now);
                 loopback.setPosition(true, 0F, 0F, 0F);
             }
             loopback.setGain((float) VoiceSource.sliderGain(state.getVolume(), state.isExponentialVolumeSlider()));

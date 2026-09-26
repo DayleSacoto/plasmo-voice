@@ -53,15 +53,16 @@ public final class VoiceCapture implements AutoCloseable {
     private final UdpClient udpClient;
     private final IntSupplier distance;
     private final Consumer<PlayerAudioEndPacket> endSender;
+    /** Upstream isServerMuted: the local player's VoicePlayerInfo says the server muted it. */
+    private final BooleanSupplier serverMuted;
     private final int sampleRate;
     private final int frameSize;
     private final Thread thread;
     private volatile boolean closed;
 
     // Capture thread only.
-    private final CaptureActivation activation = new CaptureActivation();
-    private final MicrophoneGain gain = new MicrophoneGain();
-    private final NoiseSuppression noiseSuppression;
+    private final CapturePipeline pipeline;
+    private final CaptureActivation activation;
     private String openedDevice;
     private final IntBuffer intBuffer = BufferUtils.createIntBuffer(1);
     private ALCdevice device;
@@ -85,17 +86,21 @@ public final class VoiceCapture implements AutoCloseable {
     private long packetsSubmitted;
     private long frameFailures;
     private long activationFrames;
+    /** Loudest raw and processed frame levels since the last summary; computed only while debug logging is enabled. */
+    private double rawLevel = -127D;
 
     public VoiceCapture(ClientConfig config, ClientState state, UdpClient udpClient, IntSupplier distance,
-                        Consumer<PlayerAudioEndPacket> endSender) {
+                        Consumer<PlayerAudioEndPacket> endSender, BooleanSupplier serverMuted) {
         this.config = config;
         this.state = state;
         this.udpClient = udpClient;
         this.distance = distance;
         this.endSender = endSender;
+        this.serverMuted = serverMuted;
         this.sampleRate = config.getPacket().getCaptureInfo().getSampleRate();
         this.frameSize = sampleRate / 1000 * 20;
-        this.noiseSuppression = new NoiseSuppression(state);
+        this.pipeline = new CapturePipeline(state, new NoiseSuppression(state), this::sendFrame, this::sendEnd);
+        this.activation = pipeline.activation;
         this.thread = new Thread(this::run, "plasmo-voice-capture");
         thread.setDaemon(true);
     }
@@ -116,12 +121,8 @@ public final class VoiceCapture implements AutoCloseable {
         try {
             while (!closed) {
                 if (DEBUG.enabled() && summaries.due(System.currentTimeMillis())) summary();
+                // Upstream waits without touching the activation; listeners time the stream out.
                 if (!ensureDevice()) {
-                    // The device went away mid-stream: listeners must not wait for the timeout.
-                    if (activation.isActive()) {
-                        activation.reset();
-                        sendEnd();
-                    }
                     Thread.sleep(1_000L);
                     continue;
                 }
@@ -130,39 +131,14 @@ public final class VoiceCapture implements AutoCloseable {
                     Thread.sleep(5L);
                     continue;
                 }
-                if (DEBUG.enabled()) framesRead++;
-                if (state.isMicrophoneMuted() || state.isVoiceDisabled()) {
-                    if (activation.isActive()) {
-                        activation.reset();
-                        sendEnd();
-                    }
-                    continue;
-                }
-                gain.process(samples, (float) state.getMicrophoneVolume());
-                // Upstream input filters: stereo to mono (in read()), gain, then noise suppression.
-                samples = noiseSuppression.process(samples);
-                MicrophoneTest test = state.getMicrophoneTest();
-                test.onCaptured(samples, System.currentTimeMillis());
-                if (test.isActive()) {
-                    // Upstream flushes the activations during the microphone test.
-                    if (activation.isActive()) {
-                        activation.reset();
-                        sendEnd();
-                    }
-                    state.setActivationActive(false);
-                    continue;
+                if (DEBUG.enabled()) {
+                    framesRead++;
+                    rawLevel = Math.max(rawLevel, CaptureActivation.highestAudioLevel(samples));
                 }
                 boolean wasActive = activation.isActive();
-                CaptureActivation.Result result = activation.process(samples, state.getActivationType(),
-                        state.isActivationToggled(), state.isPushToTalkPressed(), state.getActivationThreshold(),
+                CaptureActivation.Result result = pipeline.process(samples, rawChannels(), serverMuted.getAsBoolean(),
                         System.currentTimeMillis());
-                state.setActivationActive(activation.isActive());
                 if (DEBUG.enabled()) activationDiagnostics(wasActive, result);
-                if (result == CaptureActivation.Result.ACTIVATED) {
-                    sendFrame(samples);
-                } else if (result == CaptureActivation.Result.END) {
-                    sendEnd();
-                }
             }
         } catch (InterruptedException ignored) {
             // closed
@@ -174,7 +150,7 @@ public final class VoiceCapture implements AutoCloseable {
         } finally {
             state.setActivationActive(false);
             closeDevice();
-            noiseSuppression.close();
+            pipeline.close();
             if (encoder != null) encoder.close();
             DEBUG.log(Category.THREAD, "capture thread stopped: closed={}, framesRead={}, framesEncoded={}, packetsSubmitted={}",
                     closed, framesRead, framesEncoded, packetsSubmitted);
@@ -192,7 +168,7 @@ public final class VoiceCapture implements AutoCloseable {
             activationFrames = result == CaptureActivation.Result.ACTIVATED ? 1 : 0;
             DEBUG.log(Category.AUDIO, "activation started: type={}, toggled={}, pushToTalk={}, threshold={}dB, distance={}, sequence={}",
                     state.getActivationType(), state.isActivationToggled(), state.isPushToTalkPressed(),
-                    state.getActivationThreshold(), distance.getAsInt(), sequenceNumber + 1);
+                    state.getActivationThreshold(), distance.getAsInt(), sequenceNumber);
         } else if (wasActive && !active) {
             DEBUG.log(Category.AUDIO, "activation ended: result={}, frames={}, sequence={}", result, activationFrames, sequenceNumber);
         }
@@ -202,13 +178,16 @@ public final class VoiceCapture implements AutoCloseable {
     private void summary() {
         DEBUG.log(Category.AUDIO, "capture summary: device={}, backend={}, channels={}, stereoRequested={}, framesRead={}, "
                         + "framesActive={}, framesEncoded={}, packetsSubmitted={}, frameFailures={}, activation={}, active={}, "
-                        + "threshold={}dB, distance={}, microphoneVolume={}, noiseSuppression={}, muted={}, voiceDisabled={}, "
-                        + "inputDisabled={}, microphoneTest={}",
+                        + "threshold={}dB, peakRawLevel={}dB, peakProcessedLevel={}dB, distance={}, microphoneVolume={}, "
+                        + "noiseSuppression={}, muted={}, serverMuted={}, voiceDisabled={}, inputDisabled={}, microphoneTest={}",
                 device != null || javaxInput != null ? describe(openedDevice) : "none", openedBackend, captureChannels,
                 state.isStereoCapture(), framesRead, framesActive, framesEncoded, packetsSubmitted, frameFailures,
-                state.getActivationType(), activation.isActive(), state.getActivationThreshold(), distance.getAsInt(),
-                state.getMicrophoneVolume(), state.isNoiseSuppression(), state.isMicrophoneMuted(), state.isVoiceDisabled(),
-                state.isInputDeviceDisabled(), state.getMicrophoneTest().isActive());
+                state.getActivationType(), activation.isActive(), state.getActivationThreshold(),
+                String.format("%.1f", rawLevel), String.format("%.1f", pipeline.processedLevel), distance.getAsInt(),
+                state.getMicrophoneVolume(), state.isNoiseSuppression(), state.isMicrophoneMuted(), serverMuted.getAsBoolean(),
+                state.isVoiceDisabled(), state.isInputDeviceDisabled(), state.getMicrophoneTest().isActive());
+        rawLevel = -127D;
+        pipeline.processedLevel = -127D;
     }
 
     private boolean ensureDevice() {
@@ -349,7 +328,13 @@ public final class VoiceCapture implements AutoCloseable {
             captured = new short[frameSize * captureChannels];
             buffer.order(ByteOrder.nativeOrder()).asShortBuffer().get(captured);
         }
-        return captureChannels == 1 ? captured : toMono(captured);
+        // Upstream AlInputDevice.read: the mono capture workaround is downmixed by the device itself.
+        return monoCaptureBroken ? toMono(captured) : captured;
+    }
+
+    /** Channels of the frames read(): the stereo_capture channel count; the workaround is already mono. */
+    private int rawChannels() {
+        return monoCaptureBroken ? 1 : captureChannels;
     }
 
     /** Upstream StereoToMonoFilter (AudioUtil.convertToMonoShorts). */
