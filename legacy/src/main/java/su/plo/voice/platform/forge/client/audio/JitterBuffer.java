@@ -82,6 +82,10 @@ final class JitterBuffer {
         return dropped;
     }
 
+    synchronized int size() {
+        return queue.size();
+    }
+
     synchronized boolean isEmpty() {
         return queue.isEmpty();
     }

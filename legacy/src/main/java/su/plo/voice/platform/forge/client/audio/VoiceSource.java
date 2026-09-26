@@ -57,6 +57,8 @@ final class VoiceSource {
     private double lastOcclusion = -1D;
     private long lastSequenceNumber = -1L;
     private long lastActivation;
+    /** Upstream creates the OpenAL stream with the source; idle time is measured from creation until the first frame. */
+    private final long createdAt;
     /** Upstream isActivated; written by the playback thread, read by the player icons. */
     volatile boolean activated;
 
@@ -65,16 +67,21 @@ final class VoiceSource {
     private static final VoiceDebug DEBUG = VoiceDebug.CLIENT;
     private volatile long received;
     private long decoded;
-    private long played;
+    /** Frames handed to the OpenAL stream; what OpenAL consumed is in the stream snapshot. */
+    private long submitted;
     private long concealed;
     private long late;
     private long stateMismatch;
     private long failures;
     private long summaryReceived;
     private long activationFrames;
+    private float lastGain;
+    private double lastSourceDistance = -1D;
+    private short lastPacketDistance;
 
-    VoiceSource(SourceInfo info) {
+    VoiceSource(SourceInfo info, long now) {
         this.info = info;
+        this.createdAt = now;
     }
 
     void offer(SourceAudioPacket packet, long now) {
@@ -88,8 +95,11 @@ final class VoiceSource {
         endRequestedAt = now;
     }
 
-    /** Playback thread, with the voice output context current. */
-    void pump(ClientConfig config, ClientState state, double[] listener, double volume, long now) {
+    /**
+     * Playback thread, with the voice output context current. Returns true when the stream was idle for
+     * {@link #STREAM_IDLE_CLOSE_MS}: upstream then closes the whole source, and the next frame asks for its info again.
+     */
+    boolean pump(ClientConfig config, ClientState state, double[] listener, double volume, long now) {
         buffer.configure(state.isAdaptiveJitterBuffer(), state.getJitterPacketDelay());
         while (true) {
             Object next = buffer.poll(now);
@@ -122,9 +132,8 @@ final class VoiceSource {
         }
         if (activated && now - lastActivation > RESET_TIMEOUT_MS) reset();
 
-        if (stream == null) return;
-        if (stream.update()) reset();
-        if (now - stream.lastBufferTime() > STREAM_IDLE_CLOSE_MS) closeStream();
+        if (stream != null && stream.update(now)) reset();
+        return now - (stream != null ? stream.lastBufferTime() : createdAt) > STREAM_IDLE_CLOSE_MS;
     }
 
     /** Playback thread: the output context is about to go away. */
@@ -212,7 +221,7 @@ final class VoiceSource {
         }
         stream.write(samples, now);
         if (DEBUG.enabled()) {
-            played++;
+            submitted++;
             activationFrames++;
         }
     }
@@ -234,6 +243,8 @@ final class VoiceSource {
         double dy = source[1] - listener[1];
         double dz = source[2] - listener[2];
         double sourceDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        lastSourceDistance = sourceDistance;
+        lastPacketDistance = distance;
 
         // Upstream updateSource order: occlusion, slider curve, directional angle gain, distance gain.
         if (state.isSoundOcclusion()) {
@@ -249,7 +260,8 @@ final class VoiceSource {
             volume *= angleGain(-dx / sourceDistance, -dy / sourceDistance, -dz / sourceDistance, look, innerAngle,
                     state.isExponentialDistanceGain());
         }
-        stream.setGain((float) Math.max(0D, volume * distanceGain(sourceDistance, distance, state.isExponentialDistanceGain())));
+        lastGain = (float) Math.max(0D, volume * distanceGain(sourceDistance, distance, state.isExponentialDistanceGain()));
+        stream.setGain(lastGain);
         if (distance > 0) canHear = sourceDistance <= distance;
         // Upstream advanced.panning off: the source plays at the listener, only its distance gain remains.
         if (state.isPanning()) {
@@ -271,14 +283,18 @@ final class VoiceSource {
     }
 
     /** Playback thread, every 5 seconds while debug logging is enabled: only sources with traffic. */
-    void summary(long now) {
+    void summary(long now, boolean listenerKnown) {
         long receivedNow = received;
         if (receivedNow == summaryReceived && !activated) return;
         summaryReceived = receivedNow;
-        DEBUG.log(Category.SOURCE, "source summary: {}, activated={}, received={}, decoded={}, played={}, concealed={}, "
-                        + "late={}, stateMismatch={}, jitterDropped={}, failures={}, lastSequence={}, lastPacketAge={}ms, stream={}",
-                describe(), activated, receivedNow, decoded, played, concealed, late, stateMismatch, buffer.dropped(), failures,
-                lastSequenceNumber, VoiceDebug.age(now, lastActivation), stream != null);
+        DEBUG.log(Category.SOURCE, "source summary: {}, activated={}, received={}, decoded={}, submitted={}, concealed={}, "
+                        + "late={}, stateMismatch={}, jitterDropped={}, jitterQueued={}, failures={}, lastSequence={}, "
+                        + "lastPacketAge={}ms, gain={}, sourceDistance={}, packetDistance={}, positionKnown={}, "
+                        + "listenerKnown={}, stream={}",
+                describe(), activated, receivedNow, decoded, submitted, concealed, late, stateMismatch, buffer.dropped(),
+                buffer.size(), failures, lastSequenceNumber, VoiceDebug.age(now, lastActivation), lastGain,
+                String.format("%.2f", lastSourceDistance), lastPacketDistance, position != null, listenerKnown,
+                stream == null ? "none" : stream.describe(now));
     }
 
     private void failed(String stage, Exception e) {

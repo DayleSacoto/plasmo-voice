@@ -48,7 +48,7 @@ public final class ClientVoiceSources {
                     info instanceof PlayerSourceInfo ? ((PlayerSourceInfo) info).getPlayerInfo().getPlayerNick() : "-",
                     info.getState(), info.getLineId(), info.isStereo());
         }
-        sources.computeIfAbsent(info.getId(), id -> new VoiceSource(info)).info = info;
+        sources.computeIfAbsent(info.getId(), id -> new VoiceSource(info, System.currentTimeMillis())).info = info;
     }
 
     public void onAudio(SourceAudioPacket packet) {
@@ -93,6 +93,11 @@ public final class ClientVoiceSources {
                     && ((PlayerSourceInfo) info).getPlayerInfo().getPlayerId().equals(playerId)) activated.add(info);
         }
         return activated;
+    }
+
+    /** Playback thread: upstream closes an idle source and forgets it; its next frame asks for the info again. */
+    void remove(VoiceSource source) {
+        sources.remove(source.info.getId(), source);
     }
 
     Collection<VoiceSource> all() {

@@ -146,12 +146,18 @@ public final class VoicePlayback implements AutoCloseable {
                     DEBUG.log(Category.SOURCE, "playback summary: output={}, sources={}, hrtf={}",
                             device == 0L ? "none" : openedDevice.isEmpty() ? "(system default)" : openedDevice,
                             sources.all().size(), openedHrtf);
-                    for (VoiceSource source : sources.all()) source.summary(now);
+                    for (VoiceSource source : sources.all()) source.summary(now, listener != null);
                 }
                 if (ensureDevice(now)) {
                     double[] current = listener;
                     updateListener(current);
-                    for (VoiceSource source : sources.all()) source.pump(config, state, current, state.volume(config, source.info), now);
+                    for (VoiceSource source : sources.all()) {
+                        if (source.pump(config, state, current, state.volume(config, source.info), now)) {
+                            source.release();
+                            sources.remove(source);
+                            if (DEBUG.enabled()) DEBUG.log(Category.SOURCE, "idle source closed: source={}", source.info.getId());
+                        }
+                    }
                     pumpLoopback(now);
                 } else {
                     // Nothing can play; keep the jitter buffers from holding stale frames.
@@ -273,7 +279,7 @@ public final class VoicePlayback implements AutoCloseable {
             loopback.write(frame, now);
         }
         if (loopback == null) return;
-        loopback.update();
+        loopback.update(now);
         if (!test.isActive() && now - loopback.lastBufferTime() > VoiceSource.STREAM_IDLE_CLOSE_MS) closeLoopback();
     }
 
