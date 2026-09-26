@@ -12,9 +12,18 @@ plugins {
 }
 
 group = "su.plo.voice"
-version = "2.1.17"
+// Upstream Plasmo Voice release this backport follows; the mod, mcmod.info and protocol report it unchanged.
+val upstreamVersion = "2.1.17"
+// Revision of the Forge 1.7.10 backport; only the artifact file names carry it.
+val legacyRevision = "r1"
 
-extensions.extraProperties.set("modVersion", "2.1.17")
+version = upstreamVersion
+
+extensions.extraProperties.set("modVersion", upstreamVersion)
+
+tasks.withType<AbstractArchiveTask>().configureEach {
+    archiveVersion.set("$upstreamVersion-$legacyRevision")
+}
 
 repositories {
     mavenCentral()
