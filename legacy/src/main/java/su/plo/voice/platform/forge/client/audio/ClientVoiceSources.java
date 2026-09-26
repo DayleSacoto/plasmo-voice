@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 
 import cpw.mods.fml.relauncher.Side;
@@ -30,14 +31,19 @@ public final class ClientVoiceSources {
     private final BooleanSupplier voiceDisabled;
     private final Predicate<SourceInfo> muted;
     private final Consumer<UUID> sourceInfoRequester;
+    private final BooleanSupplier adaptiveJitterBuffer;
+    private final IntSupplier jitterPacketDelay;
     private final Map<UUID, VoiceSource> sources = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastRequestById = new ConcurrentHashMap<>();
     private volatile boolean closed;
 
-    public ClientVoiceSources(BooleanSupplier voiceDisabled, Predicate<SourceInfo> muted, Consumer<UUID> sourceInfoRequester) {
+    public ClientVoiceSources(BooleanSupplier voiceDisabled, Predicate<SourceInfo> muted, Consumer<UUID> sourceInfoRequester,
+                              BooleanSupplier adaptiveJitterBuffer, IntSupplier jitterPacketDelay) {
         this.voiceDisabled = voiceDisabled;
         this.muted = muted;
         this.sourceInfoRequester = sourceInfoRequester;
+        this.adaptiveJitterBuffer = adaptiveJitterBuffer;
+        this.jitterPacketDelay = jitterPacketDelay;
     }
 
     public void updateSourceInfo(SourceInfo info) {
@@ -48,7 +54,8 @@ public final class ClientVoiceSources {
                     info instanceof PlayerSourceInfo ? ((PlayerSourceInfo) info).getPlayerInfo().getPlayerNick() : "-",
                     info.getState(), info.getLineId(), info.isStereo());
         }
-        sources.computeIfAbsent(info.getId(), id -> new VoiceSource(info, System.currentTimeMillis())).info = info;
+        sources.computeIfAbsent(info.getId(), id -> new VoiceSource(info, adaptiveJitterBuffer.getAsBoolean(),
+                jitterPacketDelay.getAsInt(), System.currentTimeMillis())).info = info;
     }
 
     public void onAudio(SourceAudioPacket packet) {

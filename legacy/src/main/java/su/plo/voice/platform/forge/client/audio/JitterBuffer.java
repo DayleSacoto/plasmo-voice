@@ -1,7 +1,9 @@
 package su.plo.voice.platform.forge.client.audio;
 
+import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.PriorityQueue;
+import java.util.Queue;
 
 import su.plo.voice.proto.packets.tcp.clientbound.SourceAudioEndPacket;
 import su.plo.voice.proto.packets.udp.clientbound.SourceAudioPacket;
@@ -12,38 +14,39 @@ import su.plo.voice.proto.packets.udp.clientbound.SourceAudioPacket;
  * <p>
  * Static: frames wait until a few are buffered so late ones can be reordered; after SourceAudioEnd everything left
  * is released. Adaptive: each frame is scheduled from the first frame's arrival plus 20 ms per sequence number,
- * delayed further by the measured arrival jitter.
+ * delayed further by the measured arrival jitter. With a delay of one frame or less both keep arrival order.
+ * Like upstream the queue is unbounded; the OpenAL stream drops frames once 100 are waiting.
  */
 final class JitterBuffer {
     /** Upstream advanced.jitter_packet_delay default. */
     static final int PACKET_DELAY = 3;
     static final long STALE_THRESHOLD_MS = 500L;
-    /** One second of 20 ms frames; newer frames are dropped while playback is stalled. */
-    static final int CAPACITY = 50;
     private static final long FRAME_MS = 20L;
 
-    private final PriorityQueue<Entry> queue = new PriorityQueue<>(Comparator.comparingLong(entry -> entry.sequenceNumber));
+    private final Queue<Entry> queue;
+    private final boolean adaptive;
+    private final int packetDelay;
     private SourceAudioEndPacket endPacket;
-    private boolean adaptive;
-    private int packetDelay = PACKET_DELAY;
     // Adaptive scheduling.
     private long firstArrival = -1L;
     private long firstSequenceNumber = -1L;
     private long lastArrival = -1L;
     private double jitterEstimate;
-    private long adaptiveDelay = PACKET_DELAY * FRAME_MS;
-    /** Frames dropped because the buffer was full or the frame was stale; read by the playback diagnostics. */
+    private long adaptiveDelay;
+    /** Stale frames dropped by the static buffer; read by the playback diagnostics. */
     private long dropped;
 
-    /** Upstream picks the buffer when a source is created; a changed setting starts over with an empty buffer. */
-    synchronized void configure(boolean adaptive, int packetDelay) {
-        if (this.adaptive == adaptive && this.packetDelay == packetDelay) return;
+    /** Upstream creates the buffer with its source; the settings stay until the source is recreated. */
+    JitterBuffer(boolean adaptive, int packetDelay) {
         this.adaptive = adaptive;
         this.packetDelay = packetDelay;
-        clear();
+        this.adaptiveDelay = packetDelay * FRAME_MS;
+        this.queue = packetDelay <= 1
+                ? new ArrayDeque<>()
+                : new PriorityQueue<>(Comparator.comparingLong(entry -> entry.sequenceNumber));
     }
 
-    synchronized boolean isAdaptive() {
+    boolean isAdaptive() {
         return adaptive;
     }
 
@@ -69,12 +72,12 @@ final class JitterBuffer {
             if (next == null || now < next.scheduledTime + adaptiveDelay) return null;
             return queue.poll().packet;
         }
-        while (endPacket != null || queue.size() >= packetDelay) {
-            Entry entry = queue.poll();
-            if (entry == null) return null;
-            if (now - entry.arrivalTime < STALE_THRESHOLD_MS) return entry.packet;
-            dropped++;
-        }
+        if (endPacket == null && queue.size() < packetDelay) return null;
+        Entry entry = queue.poll();
+        if (entry == null) return null;
+        // Upstream: a stale frame is dropped and this poll returns nothing.
+        if (now - entry.arrivalTime < STALE_THRESHOLD_MS) return entry.packet;
+        dropped++;
         return null;
     }
 
@@ -102,8 +105,7 @@ final class JitterBuffer {
 
     private void add(long sequenceNumber, Object packet, long now) {
         long scheduledTime = adaptive ? schedule(sequenceNumber, now) : now;
-        if (queue.size() < CAPACITY) queue.add(new Entry(sequenceNumber, packet, now, scheduledTime));
-        else dropped++;
+        queue.add(new Entry(sequenceNumber, packet, now, scheduledTime));
     }
 
     /** Upstream scheduledPlaybackTime: assumes the sender keeps a steady 20 ms frame rate. */

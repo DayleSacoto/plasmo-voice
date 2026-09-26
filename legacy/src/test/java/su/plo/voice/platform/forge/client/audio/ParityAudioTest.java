@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import com.plasmoverse.rnnoise.Denoise;
 import org.junit.Test;
+import su.plo.voice.proto.packets.tcp.clientbound.SourceAudioEndPacket;
 import su.plo.voice.proto.packets.udp.clientbound.SourceAudioPacket;
 
 import static org.junit.Assert.*;
@@ -65,8 +66,7 @@ public class ParityAudioTest {
 
     @Test
     public void adaptiveJitterBufferPlaysFramesOnTheirSchedule() {
-        JitterBuffer buffer = new JitterBuffer();
-        buffer.configure(true, 3);
+        JitterBuffer buffer = new JitterBuffer(true, 3);
         long t = 10_000L;
         buffer.offer(audio(10), t);
         // Upstream: until a second arrival measures the jitter, the extra delay is the full packet delay.
@@ -77,11 +77,14 @@ public class ParityAudioTest {
         assertNotNull(buffer.poll(t + 60));
         assertNull(buffer.poll(t + 79));
         assertNotNull(buffer.poll(t + 80));
-
-        // Switching the mode starts over with an empty buffer.
-        buffer.offer(audio(12), t + 40);
-        buffer.configure(false, 3);
         assertTrue(buffer.isEmpty());
+
+        // Upstream: after SourceAudioEnd the next stream is scheduled from its own first frame.
+        buffer.offer(new SourceAudioEndPacket(SOURCE, 12L), t + 100);
+        assertNotNull(buffer.poll(t + 1_000));
+        buffer.offer(audio(20), t + 5_000);
+        assertNull(buffer.poll(t + 5_059));
+        assertNotNull(buffer.poll(t + 5_060));
     }
 
     @Test

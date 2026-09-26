@@ -14,7 +14,7 @@ public class PlaybackTest {
 
     @Test
     public void jitterBufferReordersAfterDelay() {
-        JitterBuffer buffer = new JitterBuffer();
+        JitterBuffer buffer = new JitterBuffer(false, JitterBuffer.PACKET_DELAY);
         buffer.offer(audio(2), T);
         buffer.offer(audio(1), T);
         assertNull(buffer.poll(T)); // still buffering
@@ -25,7 +25,7 @@ public class PlaybackTest {
 
     @Test
     public void jitterBufferDrainsAfterEnd() {
-        JitterBuffer buffer = new JitterBuffer();
+        JitterBuffer buffer = new JitterBuffer(false, JitterBuffer.PACKET_DELAY);
         buffer.offer(audio(1), T);
         buffer.offer(new SourceAudioEndPacket(SOURCE, 2L), T);
         assertEquals(1L, ((SourceAudioPacket) buffer.poll(T)).getSequenceNumber());
@@ -37,22 +37,44 @@ public class PlaybackTest {
         assertNull(buffer.poll(T));
     }
 
+    /** Upstream StaticJitterBuffer: one stale frame per poll is dropped and that poll returns nothing. */
     @Test
-    public void jitterBufferSkipsStaleFramesAndIsBounded() {
+    public void jitterBufferDropsOneStaleFramePerPoll() {
         long later = T + JitterBuffer.STALE_THRESHOLD_MS;
-        JitterBuffer buffer = new JitterBuffer();
+        JitterBuffer buffer = new JitterBuffer(false, JitterBuffer.PACKET_DELAY);
         buffer.offer(audio(1), T);
         buffer.offer(audio(2), later);
         buffer.offer(audio(3), later);
         buffer.offer(audio(4), later);
+        assertNull(buffer.poll(later));
+        assertEquals(1L, buffer.dropped());
         assertEquals(2L, ((SourceAudioPacket) buffer.poll(later)).getSequenceNumber());
+    }
 
-        buffer.clear();
-        for (int i = 0; i < JitterBuffer.CAPACITY + 10; i++) buffer.offer(audio(i), T);
+    /** Upstream queues are unbounded; a stalled playback is limited only by the OpenAL stream's 100 frame queue. */
+    @Test
+    public void jitterBufferHasNoFrameCap() {
+        JitterBuffer buffer = new JitterBuffer(false, JitterBuffer.PACKET_DELAY);
+        for (int i = 0; i < 500; i++) buffer.offer(audio(i), T);
         buffer.offer(new SourceAudioEndPacket(SOURCE, 1_000L), T);
         int polled = 0;
         while (buffer.poll(T) != null) polled++;
-        assertEquals(JitterBuffer.CAPACITY, polled);
+        assertEquals(501, polled);
+        assertEquals(0L, buffer.dropped());
+    }
+
+    /** Upstream: a packet delay of one frame or less uses a FIFO queue, so frames keep their arrival order. */
+    @Test
+    public void jitterBufferWithoutDelayKeepsArrivalOrder() {
+        JitterBuffer buffer = new JitterBuffer(false, 1);
+        buffer.offer(audio(2), T);
+        buffer.offer(audio(1), T);
+        assertEquals(2L, ((SourceAudioPacket) buffer.poll(T)).getSequenceNumber());
+        assertEquals(1L, ((SourceAudioPacket) buffer.poll(T)).getSequenceNumber());
+
+        JitterBuffer none = new JitterBuffer(false, 0);
+        none.offer(audio(7), T);
+        assertEquals(7L, ((SourceAudioPacket) none.poll(T)).getSequenceNumber());
     }
 
     @Test

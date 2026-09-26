@@ -56,7 +56,7 @@ public class VoiceRoutingTest {
                 requests.add(sourceId);
                 // Stands in for the server's SourceInfoPacket reply on the client thread.
                 listener.sources.updateSourceInfo(sourceInfo(speaker, config));
-            });
+            }, () -> false, () -> 3);
             listener.sources = sources;
 
             try (AudioEncoder encoder = OpusCodec.createEncoder(

@@ -268,7 +268,8 @@ public final class ClientConnection implements AutoCloseable {
             state.acceptConfig(accepted);
             ClientVoiceSources created = new ClientVoiceSources(clientState::isVoiceDisabled,
                     info -> clientState.isMuted(accepted, info),
-                    sourceId -> requestSourceInfo(this.sources, sourceId));
+                    sourceId -> requestSourceInfo(this.sources, sourceId),
+                    clientState::isAdaptiveJitterBuffer, clientState::getJitterPacketDelay);
             sources = created;
             state.setSources(created);
             VoicePlayback startedPlayback = new VoicePlayback(accepted, clientState, created);

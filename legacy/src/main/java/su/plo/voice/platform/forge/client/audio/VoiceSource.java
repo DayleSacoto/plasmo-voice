@@ -34,7 +34,7 @@ final class VoiceSource {
     /** Upstream BaseClientAudioSource.OUTER_ANGLE. */
     private static final double OUTER_ANGLE = 180D;
 
-    final JitterBuffer buffer = new JitterBuffer();
+    final JitterBuffer buffer;
     volatile SourceInfo info;
     /** Eye position of the source player, or null while the entity is not loaded; set on the client thread. */
     volatile double[] position;
@@ -79,8 +79,10 @@ final class VoiceSource {
     private double lastSourceDistance = -1D;
     private short lastPacketDistance;
 
-    VoiceSource(SourceInfo info, long now) {
+    /** Upstream picks the jitter buffer when the source is created, from advanced.adaptive_jitter_buffer and delay. */
+    VoiceSource(SourceInfo info, boolean adaptiveJitterBuffer, int jitterPacketDelay, long now) {
         this.info = info;
+        this.buffer = new JitterBuffer(adaptiveJitterBuffer, jitterPacketDelay);
         this.createdAt = now;
     }
 
@@ -100,13 +102,12 @@ final class VoiceSource {
      * {@link #STREAM_IDLE_CLOSE_MS}: upstream then closes the whole source, and the next frame asks for its info again.
      */
     boolean pump(ClientConfig config, ClientState state, double[] listener, double volume, long now) {
-        buffer.configure(state.isAdaptiveJitterBuffer(), state.getJitterPacketDelay());
         while (true) {
             Object next = buffer.poll(now);
             if (next == null) {
                 // Upstream: when the adaptive schedule is due but the frame has not arrived, conceal it (PLC).
                 if (!buffer.isAdaptive() || !activated || buffer.isEmpty() || now - lastActivation <= 20L
-                        || decoder == null || stream == null || stream.stereo) break;
+                        || decoder == null || stream == null) break;
                 try {
                     write(decoder.decode(null), lastSequenceNumber + 1, now);
                     if (DEBUG.enabled()) concealed++;
