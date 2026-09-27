@@ -8,7 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiTextField;
 
-/** Upstream TextFieldWidget: the vanilla text box with a suggestion shown while it is empty. */
+/** Upstream TextFieldWidget: the vanilla text box with a suggestion shown while it is empty and not being edited. */
 @SideOnly(Side.CLIENT)
 final class TextFieldWidget extends Widget {
     private static final int SUGGESTION_COLOR = 0xAAAAAA;
@@ -38,9 +38,15 @@ final class TextFieldWidget extends Widget {
         field.yPosition = y;
         field.width = width;
         field.drawTextBox();
-        if (field.getText().isEmpty()) {
-            mc.fontRenderer.drawStringWithShadow(suggestion, x + 4, y + (height - 8) / 2, SUGGESTION_COLOR);
+        if (showsSuggestion(field.isFocused(), field.getText())) {
+            mc.fontRenderer.drawStringWithShadow(mc.fontRenderer.trimStringToWidth(suggestion, width - 8), x + 4,
+                    y + (height - 8) / 2, SUGGESTION_COLOR);
         }
+    }
+
+    /** Like GTNH NEI's search field: the hint is only drawn, never the value, and only while the box is not focused. */
+    static boolean showsSuggestion(boolean focused, String text) {
+        return !focused && text.isEmpty();
     }
 
     /** Also runs for clicks elsewhere, which take the focus away like vanilla. */

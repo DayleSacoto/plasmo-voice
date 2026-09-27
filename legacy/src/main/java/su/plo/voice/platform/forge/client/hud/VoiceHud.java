@@ -140,8 +140,9 @@ public final class VoiceHud extends Gui {
     }
 
     /**
-     * ponytail: the skin of a player loaded in the world, Steve otherwise; 1.7.10 has no profile cache
-     * for players out of render range. Load skins by profile if the overlay needs distant sources.
+     * The face and the hat layer over it, from the skin the world renderer uses for the player, Steve otherwise.
+     * ponytail: 1.7.10 has no profile cache for players out of render range. Load skins by profile if the overlay
+     * needs distant sources.
      */
     public static void drawHead(Minecraft mc, UUID playerId, int x, int y, int size) {
         EntityPlayer player = mc.theWorld.func_152378_a(playerId);
@@ -149,9 +150,22 @@ public final class VoiceHud extends Gui {
                 ? ((AbstractClientPlayer) player).getLocationSkin()
                 : AbstractClientPlayer.locationStevePng;
         mc.getTextureManager().bindTexture(skin);
+        // GTNH SimpleSkinBackport turns every player skin into a 64x64 texture, vanilla 1.7.10 skins are 64x32:
+        // the head sits at the same pixels in both, so its UVs come from the bound texture's real size.
+        float height = skinTextureHeight(GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH),
+                GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT));
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_CURRENT_BIT);
+        GL11.glEnable(GL11.GL_BLEND);
+        OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
         GL11.glColor4f(1F, 1F, 1F, 1F);
-        func_152125_a(x, y, 8F, 8F, 8, 8, size, size, 64F, 32F);
-        func_152125_a(x, y, 40F, 8F, 8, 8, size, size, 64F, 32F);
+        func_152125_a(x, y, 8F, 8F, 8, 8, size, size, 64F, height);
+        func_152125_a(x, y, 40F, 8F, 8, 8, size, size, 64F, height);
+        GL11.glPopAttrib();
+    }
+
+    /** Skin height in 64 pixel wide texture units: 32 for a legacy skin, 64 for a modern one (also in HD). */
+    static float skinTextureHeight(int width, int height) {
+        return width > 0 && height > 0 ? 64F * height / width : 32F;
     }
 
     /** Upstream getSourceSenderName: the source name, the voice player's nick, or the line name. */

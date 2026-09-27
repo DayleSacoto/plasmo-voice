@@ -12,7 +12,6 @@ import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
-import org.lwjgl.opengl.GL11;
 import su.plo.slib.api.entity.player.McGameProfile;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
@@ -44,13 +43,6 @@ final class VolumeTab extends SettingsTab {
                 });
     }
 
-    /** Upstream focuses the search whenever the tab opens. */
-    @Override
-    void init(int top, int bottom) {
-        super.init(top, bottom);
-        search.setFocused(true);
-    }
-
     /** A focused field keeps lwjgl3ify's text input on, so it is released with the tab. */
     @Override
     void removed() {
@@ -75,7 +67,6 @@ final class VolumeTab extends SettingsTab {
         addFullWidth(search, SEARCH_ROW_HEIGHT);
         shownPlayers = players(connection, config);
         shownPlayers.forEach((playerId, name) -> addVolume(PLAYER_ROW_HEIGHT, (mc, x, centerY) -> {
-            GL11.glEnable(GL11.GL_BLEND);
             VoiceHud.drawHead(mc, playerId, x, centerY - 12, 24);
             return 30;
         }, name, ClientState.playerVolumeKey(playerId)));
