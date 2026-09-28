@@ -50,6 +50,7 @@ import su.plo.voice.platform.forge.server.connection.UdpServer;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
 import su.plo.voice.platform.forge.server.connection.ServerSettings;
 import su.plo.voice.platform.forge.server.connection.ServerVoicePlayers;
+import su.plo.voice.platform.forge.update.UpdateChecker;
 
 @Getter
 @Mod(
@@ -211,6 +212,12 @@ public final class PlasmoVoiceMod {
         // getServerPort() is @SideOnly(SERVER): singleplayer has no fixed port, so upstream falls back to a random one.
         minecraftPort = event.getServer().isDedicatedServer() ? event.getServer().getServerPort() : -1;
         startUdpServer(settings);
+        // Singleplayer is covered by the client's check; the checker runs once per process anyway.
+        if (event.getServer().isDedicatedServer()) {
+            UpdateChecker.INSTANCE.start(settings.isCheckForUpdates(), release -> LOGGER.info(
+                    "New Forge 1.7.10 release of Plasmo Voice available: {} (current: {}) {}", release.label(),
+                    UpdateChecker.INSTANCE.getCurrent().label(), release.url()));
+        }
     }
 
     @Mod.EventHandler

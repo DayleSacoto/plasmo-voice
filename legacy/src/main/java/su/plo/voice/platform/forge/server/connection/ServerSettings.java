@@ -54,11 +54,13 @@ public final class ServerSettings {
     private final double playerIconYOffset;
     /** debug.enabled: Plasmo Voice server diagnostics in the server log; independent of the client setting. */
     private final boolean debug;
+    /** Legacy extension: updates.check_for_updates, one GitHub release check per dedicated server start. */
+    private final boolean checkForUpdates;
 
     public static ServerSettings defaults() {
         return new ServerSettings(UUID.randomUUID(), "0.0.0.0", 0, null, 0, 48_000, 1024, 15_000,
                 ServerConnection.DEFAULT_CLIENT_MOD_MIN_VERSION, Arrays.asList(8, 16, 32), 16, "VOIP", -1000,
-                "en_us", null, true, true, 16, false, 3_000L, Collections.emptySet(), 0D, false);
+                "en_us", null, true, true, 16, false, 3_000L, Collections.emptySet(), 0D, false, true);
     }
 
     public static ServerSettings load(File file, Logger logger) {
@@ -172,13 +174,16 @@ public final class ServerSettings {
         boolean debug = config.get("debug", "enabled", false,
                 "Plasmo Voice diagnostics in the server log (voice connections, UDP keep-alive, audio routing). "
                         + "Default: false").getBoolean(false);
+        boolean checkForUpdates = config.get("updates", "check_for_updates", true,
+                "Checks GitHub once per dedicated server start for a newer release of this Forge 1.7.10 backport and "
+                        + "logs it. Nothing is downloaded. Default: true").getBoolean(true);
 
         if (config.hasChanged()) config.save();
         return new ServerSettings(serverId, hostIp, hostPort, publicIp.isEmpty() ? null : publicIp, publicPort,
                 sampleRate, mtuSize, keepAliveTimeoutMs, clientModMinVersion, Collections.unmodifiableList(distances),
                 defaultDistance, opusMode, opusBitrate, defaultLanguage, forcedLanguage.isEmpty() ? null : forcedLanguage,
                 notifyMuted, notifyUnmuted, maxExtraDistance, clientModRequired, clientModRequiredCheckTimeoutMs,
-                Collections.unmodifiableSet(visibility), playerIconYOffset, debug);
+                Collections.unmodifiableSet(visibility), playerIconYOffset, debug, checkForUpdates);
     }
 
     /** Upstream reload restarts the UDP server only when the host settings changed. */

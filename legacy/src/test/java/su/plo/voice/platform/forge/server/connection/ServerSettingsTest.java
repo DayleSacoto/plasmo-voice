@@ -62,6 +62,18 @@ public class ServerSettingsTest {
         assertEquals(15_000, settings.getKeepAliveTimeoutMs());
     }
 
+    /** Legacy extension: the update check is on by default and can be turned off. */
+    @Test
+    public void updateCheckIsOnByDefaultAndConfigurable() {
+        assertTrue(ServerSettings.defaults().isCheckForUpdates());
+        File file = new File(folder.getRoot(), "updates/server.cfg");
+        assertTrue(ServerSettings.load(file, LOGGER).isCheckForUpdates());
+        Configuration config = new Configuration(file);
+        config.get("updates", "check_for_updates", true).set(false);
+        config.save();
+        assertFalse(ServerSettings.load(file, LOGGER).isCheckForUpdates());
+    }
+
     @Test
     public void invalidValuesFallBackToDefaults() {
         File file = new File(folder.getRoot(), "server.cfg");

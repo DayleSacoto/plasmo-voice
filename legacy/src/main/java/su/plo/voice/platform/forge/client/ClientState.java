@@ -124,6 +124,10 @@ public final class ClientState {
     private volatile boolean voiceLeveling;
     @Getter
     private volatile double voiceLevelingTarget = VoiceLeveler.DEFAULT_TARGET_DB;
+    /** Legacy extension: updates.check_for_updates, one GitHub release check per game session. */
+    @Getter
+    @Setter
+    private volatile boolean checkForUpdates = true;
     /** Runtime: upstream disables the noise suppression entry when RNNoise cannot load on this platform. */
     @Getter
     @Setter

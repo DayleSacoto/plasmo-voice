@@ -36,6 +36,9 @@ public final class ClientSettingsFile {
     private static final String DEBUG = "debug";
     private static final String DEBUG_COMMENT =
             "Plasmo Voice diagnostics in the game log (voice connection, UDP keep-alive, audio). Default: false";
+    private static final String UPDATES = "updates";
+    private static final String UPDATES_COMMENT = "Checks GitHub once per game session for a newer release of this "
+            + "Forge 1.7.10 backport and tells about it in chat. Nothing is downloaded. Default: true";
     private static final String SOURCE_STATES = OVERLAY + ".source_states";
     private static final String VOLUMES = VOICE + ".volumes";
     private static final boolean MAC = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
@@ -97,6 +100,7 @@ public final class ClientSettingsFile {
         state.setAlPlaybackBuffers(config.get(ADVANCED, "al_playback_buffers", 5).getInt(5));
         state.setCameraSoundListener(config.get(ADVANCED, "camera_sound_listener", true).getBoolean(true));
         state.setDebug(config.get(DEBUG, "enabled", false, DEBUG_COMMENT).getBoolean(false));
+        state.setCheckForUpdates(config.get(UPDATES, "check_for_updates", true, UPDATES_COMMENT).getBoolean(true));
 
         for (ConfigCategory volume : config.getCategory(VOLUMES).getChildren()) {
             if (volume.containsKey("volume")) state.setSourceVolume(volume.getName(), volume.get("volume").getDouble(1D));
@@ -168,6 +172,7 @@ public final class ClientSettingsFile {
         config.get(ADVANCED, "al_playback_buffers", 5).set(state.getAlPlaybackBuffers());
         config.get(ADVANCED, "camera_sound_listener", true).set(state.isCameraSoundListener());
         config.get(DEBUG, "enabled", false, DEBUG_COMMENT).set(state.isDebug());
+        config.get(UPDATES, "check_for_updates", true, UPDATES_COMMENT).set(state.isCheckForUpdates());
 
         config.removeCategory(config.getCategory(VOLUMES));
         state.volumes().forEach((key, volume) -> config.get(VOLUMES + "." + key, "volume", 1D).set(volume));

@@ -25,6 +25,19 @@ tasks.withType<AbstractArchiveTask>().configureEach {
     archiveVersion.set("$upstreamVersion-$legacyRevision")
 }
 
+// Backport release of this build for the update check, from the same values as the artifact name.
+tasks.processResources {
+    val backport = mapOf(
+        "upstreamVersion" to upstreamVersion,
+        "legacyRevision" to legacyRevision,
+        "minecraftVersion" to providers.gradleProperty("minecraftVersion").get(),
+    )
+    inputs.properties(backport)
+    filesMatching("plasmovoice/backport.properties") {
+        expand(backport)
+    }
+}
+
 repositories {
     mavenCentral()
 

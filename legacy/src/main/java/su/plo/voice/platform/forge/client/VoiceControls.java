@@ -59,6 +59,7 @@ public final class VoiceControls {
         MinecraftForge.EVENT_BUS.register(new VoiceHud(state));
         MinecraftForge.EVENT_BUS.register(new PlayerIcons(state, volumeAction));
         MinecraftForge.EVENT_BUS.register(new DistanceVisualizer(state));
+        UpdateNotification.register(state);
     }
 
     /** Screens receive keys directly, so they close themselves on the settings key like upstream. */

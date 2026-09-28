@@ -190,6 +190,21 @@ public class ClientSettingsTest {
         assertTrue(malformed.isStereoCapture());
     }
 
+    /** Legacy extension: the update check is on by default and persisted. */
+    @Test
+    public void updateCheckIsOnByDefaultAndPersisted() throws Exception {
+        assertTrue(new ClientState().isCheckForUpdates());
+        File file = new File(folder.getRoot(), "client.cfg");
+        ClientState state = new ClientState();
+        ClientSettingsFile.load(file, state);
+        assertTrue(state.isCheckForUpdates());
+        state.setCheckForUpdates(false);
+        ClientSettingsFile.save(file, state);
+        ClientState loaded = new ClientState();
+        ClientSettingsFile.load(file, loaded);
+        assertFalse(loaded.isCheckForUpdates());
+    }
+
     /** Legacy extension: off by default so playback stays upstream's; the target is persisted and clamped. */
     @Test
     public void voiceLevelingIsOffByDefaultAndPersisted() throws Exception {
