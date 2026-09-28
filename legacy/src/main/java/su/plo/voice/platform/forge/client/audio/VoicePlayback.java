@@ -146,7 +146,7 @@ public final class VoicePlayback implements AutoCloseable {
                     DEBUG.log(Category.SOURCE, "playback summary: output={}, sources={}, hrtf={}",
                             device == 0L ? "none" : openedDevice.isEmpty() ? "(system default)" : openedDevice,
                             sources.all().size(), openedHrtf);
-                    for (VoiceSource source : sources.all()) source.summary(now, listener != null);
+                    for (VoiceSource source : sources.all()) source.summary(now, listener != null, state);
                 }
                 if (ensureDevice(now)) {
                     double[] current = listener;

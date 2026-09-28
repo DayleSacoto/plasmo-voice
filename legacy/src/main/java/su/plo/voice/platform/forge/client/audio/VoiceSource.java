@@ -57,6 +57,8 @@ final class VoiceSource {
     private double lastOcclusion = -1D;
     private long lastSequenceNumber = -1L;
     private long lastActivation;
+    /** Kept across utterances: a speaker's microphone level does not change between them. */
+    private final VoiceLeveler leveler = new VoiceLeveler();
     /** Upstream creates the OpenAL stream with the source; idle time is measured from creation until the first frame. */
     private final long createdAt;
     /** Upstream isActivated; written by the playback thread, read by the player icons. */
@@ -109,7 +111,7 @@ final class VoiceSource {
                 if (!buffer.isAdaptive() || !activated || buffer.isEmpty() || now - lastActivation <= 20L
                         || decoder == null || stream == null) break;
                 try {
-                    write(decoder.decode(null), lastSequenceNumber + 1, now);
+                    write(decoder.decode(null), lastSequenceNumber + 1, state, now);
                     if (DEBUG.enabled()) concealed++;
                 } catch (IOException e) {
                     if (DEBUG.enabled()) failed("PLC decode", e);
@@ -191,13 +193,13 @@ final class VoiceSource {
                 long lost = sequenceNumber - (lastSequenceNumber + 1);
                 // Upstream packet compensation: conceal up to four lost frames.
                 for (long i = 1; lost >= 1 && lost <= 4 && i <= lost; i++) {
-                    write(current.isStereo() ? new short[0] : decoder.decode(null), lastSequenceNumber + i, now);
+                    write(current.isStereo() ? new short[0] : decoder.decode(null), lastSequenceNumber + i, state, now);
                 }
             }
             byte[] data = packet.getData();
             AesEncryption encryption = config.getEncryption();
             if (encryption != null) data = encryption.decrypt(data);
-            write(decoder.decode(data), sequenceNumber, now);
+            write(decoder.decode(data), sequenceNumber, state, now);
             if (DEBUG.enabled()) decoded++;
         } catch (GeneralSecurityException | IOException e) {
             // A corrupted or foreign frame is dropped; the next one is independent.
@@ -213,18 +215,29 @@ final class VoiceSource {
         activated = true;
     }
 
-    private void write(short[] samples, long sequenceNumber, long now) {
-        int channels = stream.stereo ? 2 : 1;
-        if (!activated) {
-            samples = fadeIn(samples, channels);
-        } else if (sequenceNumber + 1 == endSequenceNumber) {
-            samples = fadeOut(samples, channels);
-        }
-        stream.write(samples, now);
+    private void write(short[] samples, long sequenceNumber, ClientState state, long now) {
+        stream.write(prepare(samples, stream.stereo ? 2 : 1, sequenceNumber, state), now);
         if (DEBUG.enabled()) {
             submitted++;
             activationFrames++;
         }
+    }
+
+    /**
+     * The decoded frame as handed to OpenAL: voice leveling (legacy extension), then the fades. Volume, occlusion,
+     * directional and distance gain are OpenAL source gain and HRTF/panning is OpenAL positioning, all applied after
+     * this, so leveling measures the speaker's own signal and never compensates for any of them.
+     */
+    short[] prepare(short[] samples, int channels, long sequenceNumber, ClientState state) {
+        samples = leveler.process(samples, channels, leveling(state), state.getVoiceLevelingTarget());
+        if (!activated) return fadeIn(samples, channels);
+        if (sequenceNumber + 1 == endSequenceNumber) return fadeOut(samples, channels);
+        return samples;
+    }
+
+    /** Leveling covers player voices, of any activation line; addon sources are left as upstream plays them. */
+    private boolean leveling(ClientState state) {
+        return state.isVoiceLeveling() && info instanceof PlayerSourceInfo;
     }
 
     private void updateStream(SourceInfo current, ClientState state, short distance, double[] listener, double volume) {
@@ -284,17 +297,18 @@ final class VoiceSource {
     }
 
     /** Playback thread, every 5 seconds while debug logging is enabled: only sources with traffic. */
-    void summary(long now, boolean listenerKnown) {
+    void summary(long now, boolean listenerKnown, ClientState state) {
         long receivedNow = received;
         if (receivedNow == summaryReceived && !activated) return;
         summaryReceived = receivedNow;
         DEBUG.log(Category.SOURCE, "source summary: {}, activated={}, received={}, decoded={}, submitted={}, concealed={}, "
                         + "late={}, stateMismatch={}, jitterDropped={}, jitterQueued={}, failures={}, lastSequence={}, "
                         + "lastPacketAge={}ms, gain={}, sourceDistance={}, packetDistance={}, positionKnown={}, "
-                        + "listenerKnown={}, stream={}",
+                        + "listenerKnown={}, leveling={}, stream={}",
                 describe(), activated, receivedNow, decoded, submitted, concealed, late, stateMismatch, buffer.dropped(),
                 buffer.size(), failures, lastSequenceNumber, VoiceDebug.age(now, lastActivation), lastGain,
                 String.format("%.2f", lastSourceDistance), lastPacketDistance, position != null, listenerKnown,
+                leveler.describe(leveling(state), state.getVoiceLevelingTarget()),
                 stream == null ? "none" : stream.describe(now));
     }
 

@@ -14,6 +14,7 @@ import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
 import su.plo.slib.api.entity.player.McGameProfile;
 import su.plo.voice.platform.forge.client.ClientState;
+import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.hud.VoiceHud;
@@ -63,6 +64,8 @@ final class VolumeTab extends SettingsTab {
             addVolume(ROW_HEIGHT, iconLabel(new ResourceLocation(line.getIcon())), state.translate(line.getTranslation()), line.getName());
         }
 
+        addVoiceLeveling();
+
         addCategory("gui.plasmovoice.volume.players");
         addFullWidth(search, SEARCH_ROW_HEIGHT);
         shownPlayers = players(connection, config);
@@ -84,6 +87,24 @@ final class VolumeTab extends SettingsTab {
     boolean mouseClicked(int mouseX, int mouseY, int button) {
         if (!search.isMouseOver(mouseX, mouseY)) search.setFocused(false);
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /** Legacy extension: automatic voice leveling and its target speech level, in 1 dB steps. */
+    private void addVoiceLeveling() {
+        addCategory("gui.plasmovoice.volume.voice_leveling");
+        addOption(I18n.format("gui.plasmovoice.volume.voice_leveling"), "gui.plasmovoice.volume.voice_leveling.tooltip",
+                new ToggleWidget(ELEMENT_WIDTH, state::isVoiceLeveling, state::setVoiceLeveling),
+                () -> !state.isVoiceLeveling(), () -> state.setVoiceLeveling(false));
+        double range = VoiceLeveler.MAX_TARGET_DB - VoiceLeveler.MIN_TARGET_DB;
+        addOption(I18n.format("gui.plasmovoice.volume.voice_leveling_target"),
+                "gui.plasmovoice.volume.voice_leveling_target.tooltip",
+                new SliderWidget(ELEMENT_WIDTH,
+                        () -> (state.getVoiceLevelingTarget() - VoiceLeveler.MIN_TARGET_DB) / range,
+                        value -> state.setVoiceLevelingTarget(VoiceLeveler.MIN_TARGET_DB + Math.round(value * range)),
+                        value -> Math.round(value * range) / range,
+                        () -> String.format("%.0f dB", state.getVoiceLevelingTarget())),
+                () -> state.getVoiceLevelingTarget() == VoiceLeveler.DEFAULT_TARGET_DB,
+                () -> state.setVoiceLevelingTarget(VoiceLeveler.DEFAULT_TARGET_DB));
     }
 
     /** Upstream createVolumeSlider plus the mute toggle; reset restores both. */

@@ -13,6 +13,7 @@ import lombok.Setter;
 import net.minecraft.client.resources.I18n;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.audio.MicrophoneTest;
+import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
@@ -117,6 +118,12 @@ public final class ClientState {
     @Getter
     @Setter
     private volatile boolean hrtf;
+    /** Legacy extension, off by default: automatic per-player voice leveling towards a speech level in dBFS. */
+    @Getter
+    @Setter
+    private volatile boolean voiceLeveling;
+    @Getter
+    private volatile double voiceLevelingTarget = VoiceLeveler.DEFAULT_TARGET_DB;
     /** Runtime: upstream disables the noise suppression entry when RNNoise cannot load on this platform. */
     @Getter
     @Setter
@@ -225,6 +232,10 @@ public final class ClientState {
 
     public void setVolume(double volume) {
         this.volume = clamp(volume, 0D, 2D);
+    }
+
+    public void setVoiceLevelingTarget(double target) {
+        this.voiceLevelingTarget = clamp(target, VoiceLeveler.MIN_TARGET_DB, VoiceLeveler.MAX_TARGET_DB);
     }
 
     public void setActivationType(CaptureActivation.Type activationType) {

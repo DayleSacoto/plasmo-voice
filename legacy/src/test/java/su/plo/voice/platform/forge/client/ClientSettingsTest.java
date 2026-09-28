@@ -190,6 +190,32 @@ public class ClientSettingsTest {
         assertTrue(malformed.isStereoCapture());
     }
 
+    /** Legacy extension: off by default so playback stays upstream's; the target is persisted and clamped. */
+    @Test
+    public void voiceLevelingIsOffByDefaultAndPersisted() throws Exception {
+        ClientState state = new ClientState();
+        assertFalse(state.isVoiceLeveling());
+        assertEquals(-18D, state.getVoiceLevelingTarget(), 0D);
+        state.setVoiceLevelingTarget(0D);
+        assertEquals(-10D, state.getVoiceLevelingTarget(), 0D);
+        state.setVoiceLevelingTarget(-90D);
+        assertEquals(-30D, state.getVoiceLevelingTarget(), 0D);
+
+        File file = new File(folder.getRoot(), "client.cfg");
+        ClientState fresh = new ClientState();
+        ClientSettingsFile.load(file, fresh);
+        assertFalse(fresh.isVoiceLeveling());
+        assertEquals(-18D, fresh.getVoiceLevelingTarget(), 0D);
+
+        state.setVoiceLeveling(true);
+        state.setVoiceLevelingTarget(-22D);
+        ClientSettingsFile.save(file, state);
+        ClientState loaded = new ClientState();
+        ClientSettingsFile.load(file, loaded);
+        assertTrue(loaded.isVoiceLeveling());
+        assertEquals(-22D, loaded.getVoiceLevelingTarget(), 0D);
+    }
+
     @Test
     public void outOfRangeOrUnknownValuesFallBackToUpstreamDefaults() throws Exception {
         File file = new File(folder.getRoot(), "client.cfg");

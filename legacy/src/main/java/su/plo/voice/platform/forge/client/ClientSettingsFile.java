@@ -15,6 +15,7 @@ import net.minecraftforge.common.config.Property;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
+import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 
@@ -60,6 +61,9 @@ public final class ClientSettingsFile {
         state.setSoundOcclusion(config.get(VOICE, "sound_occlusion", false).getBoolean(false));
         state.setDirectionalSources(config.get(VOICE, "directional_sources", false).getBoolean(false));
         state.setHrtf(config.get(VOICE, "hrtf", false).getBoolean(false));
+        state.setVoiceLeveling(config.get(VOICE, "voice_leveling", false).getBoolean(false));
+        state.setVoiceLevelingTarget(config.get(VOICE, "voice_leveling_target", VoiceLeveler.DEFAULT_TARGET_DB)
+                .getDouble(VoiceLeveler.DEFAULT_TARGET_DB));
 
         String proximity = ACTIVATIONS + "." + VoiceActivation.PROXIMITY_ID;
         String type = config.get(proximity, "type", CaptureActivation.Type.PUSH_TO_TALK.name()).getString();
@@ -139,6 +143,8 @@ public final class ClientSettingsFile {
         config.get(VOICE, "sound_occlusion", false).set(state.isSoundOcclusion());
         config.get(VOICE, "directional_sources", false).set(state.isDirectionalSources());
         config.get(VOICE, "hrtf", false).set(state.isHrtf());
+        config.get(VOICE, "voice_leveling", false).set(state.isVoiceLeveling());
+        config.get(VOICE, "voice_leveling_target", VoiceLeveler.DEFAULT_TARGET_DB).set(state.getVoiceLevelingTarget());
 
         String proximity = ACTIVATIONS + "." + VoiceActivation.PROXIMITY_ID;
         config.get(proximity, "type", CaptureActivation.Type.PUSH_TO_TALK.name()).set(state.getActivationType().name());
