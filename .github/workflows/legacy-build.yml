@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 env:
-  JAR_NAME: plasmovoice-forge-1.7.10-2.1.17-r2.jar
-  ARTIFACT_NAME: PlasmoVoice-Forge-1.7.10-2.1.17-r2
+  JAR_NAME: plasmovoice-forge-1.7.10-2.1.17-r3.jar
+  ARTIFACT_NAME: PlasmoVoice-Forge-1.7.10-2.1.17-r3
 
 jobs:
   build:
