@@ -56,7 +56,11 @@ import su.plo.voice.platform.forge.update.UpdateChecker;
 @Mod(
         modid = PlasmoVoiceMod.MOD_ID,
         name = PlasmoVoiceMod.MOD_NAME,
-        version = PlasmoVoiceMod.VERSION)
+        version = PlasmoVoiceMod.VERSION,
+        // Upstream: voice is optional on both sides. FML would otherwise refuse any server or client without this
+        // exact mod version in the handshake; the voice protocol checks versions itself, and
+        // voice.client_mod_required decides about clients without the mod.
+        acceptableRemoteVersions = "*")
 public final class PlasmoVoiceMod {
 
     public static final String MOD_ID = "plasmovoice";
