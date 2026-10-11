@@ -332,7 +332,7 @@ public final class ClientConnection implements AutoCloseable {
         }
         channel.sendToServer(clientState.createPlayerInfo(
                 "1.7.10",
-                PlasmoVoiceMod.VERSION,
+                PlasmoVoiceMod.VOICE_COMPAT_VERSION,
                 getKeyPair().getPublic().getEncoded()
         ));
     }

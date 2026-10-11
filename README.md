@@ -81,9 +81,25 @@ Download the latest release:
 Place the same JAR in the `mods/` directory on both the client and Forge server.
 
 ```text
-plasmovoice-forge-1.7.10-2.1.17-rN.jar
+plasmovoice-forge-1.7.10-X.Y.Z.jar
 SHA256SUMS.txt
 ```
+
+## Versioning
+
+Plasmo Voice Legacy Forge uses its own independent release versioning: `0.4.0`, `0.4.1`, `0.5.0`, ... `1.0.0`.
+
+The original manual backport was based on Plasmo Voice 2.1.17. The two version lines are unrelated: Legacy Forge `0.4.0` is **not** upstream Plasmo Voice `0.4.0`, and the voice protocol stays the one of Plasmo Voice 2.1.17.
+
+- **PATCH** - bug fixes that do not intentionally change behavior
+- **MINOR** - new backwards-compatible Legacy Forge functionality
+- **MAJOR** - significant compatibility changes, once the project reaches a stable 1.x
+
+Releases are tagged `legacy-X.Y.Z` (`legacy-0.4.0`, `legacy-0.4.1`, ...). The in-game update notification reads only these tags.
+
+Legacy Forge is an independent maintenance branch and does not follow upstream releases: a newer upstream Plasmo Voice version is not an update for this mod. Upstream fixes are reviewed by hand and, where they apply, ported into a regular Legacy Forge release.
+
+Releases before `0.4.0` were published as `2.1.17-forge-1.7.10` and its `r1`, `r2` and `r3` revisions. They remain available as historical releases; that numbering is no longer used. Their update notification does not see `legacy-` releases, so updating from them to `0.4.0` is a one-time manual step.
 
 ## Server commands
 
@@ -133,4 +149,5 @@ Based on **Plasmo Voice 2.1.17** by the Plasmo Voice developers.
 - [Modrinth](https://modrinth.com/mod/plasmo-voice)
 - [CurseForge](https://www.curseforge.com/minecraft/mc-mods/plasmo-voice)
 
+> [!NOTE]
 > This Forge 1.7.10 branch is an unofficial community backport and is not maintained by the upstream Plasmo Voice developers.

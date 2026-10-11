@@ -12,31 +12,13 @@ plugins {
 }
 
 group = "su.plo.voice"
-// Upstream Plasmo Voice release this backport follows; the mod, mcmod.info and protocol report it unchanged.
-val upstreamVersion = "2.1.17"
-// Revision of the Forge 1.7.10 backport; only the artifact file names carry it.
-val legacyRevision = "r3"
+// Release version of Plasmo Voice Legacy Forge (gradle.properties). The GTNH convention takes modVersion for
+// mcmod.info and the generated Tags.VERSION; the archive names follow project.version.
+val legacyVersion = providers.gradleProperty("legacyVersion").get()
 
-version = upstreamVersion
+version = legacyVersion
 
-extensions.extraProperties.set("modVersion", upstreamVersion)
-
-tasks.withType<AbstractArchiveTask>().configureEach {
-    archiveVersion.set("$upstreamVersion-$legacyRevision")
-}
-
-// Backport release of this build for the update check, from the same values as the artifact name.
-tasks.processResources {
-    val backport = mapOf(
-        "upstreamVersion" to upstreamVersion,
-        "legacyRevision" to legacyRevision,
-        "minecraftVersion" to providers.gradleProperty("minecraftVersion").get(),
-    )
-    inputs.properties(backport)
-    filesMatching("plasmovoice/backport.properties") {
-        expand(backport)
-    }
-}
+extensions.extraProperties.set("modVersion", legacyVersion)
 
 repositories {
     mavenCentral()
@@ -148,6 +130,7 @@ tasks.test {
     javaLauncher.set(javaToolchains.launcherFor {
         languageVersion.set(JavaLanguageVersion.of(25))
     })
+    systemProperty("plasmovoice.legacyVersion", legacyVersion)
     testLogging {
         events("passed", "failed")
     }

@@ -15,97 +15,104 @@ import static org.junit.Assert.*;
 
 /** Network free: releases come from local JSON, the fetcher is a fake and the check runs synchronously. */
 public class UpdateCheckerTest {
-    private static final String MC = "1.7.10";
+    /** The releases published before the project got its own version numbers. */
+    private static final String[] HISTORICAL = {"2.1.17-forge-1.7.10", "2.1.17-forge-1.7.10-r1", "2.1.17-forge-1.7.10-r2",
+            "2.1.17-forge-1.7.10-r3"};
+    /** Tags in upstream Plasmo Voice numbering, and plain versions without the prefix of this project. */
+    private static final String[] NOT_LEGACY = {"2.1.18", "v2.1.18", "2.2.0", "v2.2.0", "2.2.0-beta.1", "3.0.0", "v0.5.0",
+            "0.5.0"};
 
     @Test
     public void noReleases() {
-        assertNull(UpdateChecker.newest("[]", MC));
+        assertNull(UpdateChecker.newest("[]"));
     }
 
     @Test
-    public void baseTagIsRevisionZero() {
-        Version base = Version.parse("2.1.17-forge-1.7.10", MC);
-        assertEquals(0, base.revision);
-        assertEquals("2.1.17", base.label());
-        assertTrue(base.compareTo(Version.parse("2.1.17-forge-1.7.10-r1", MC)) < 0);
+    public void legacyReleaseTagsParse() {
+        assertEquals("0.4.0", Version.parse("legacy-0.4.0").label());
+        assertEquals("1.12.3", Version.parse("legacy-1.12.3").label());
+        assertEquals("0.5.0", UpdateChecker.newest(list("legacy-0.4.0", "legacy-0.5.0", "legacy-0.4.9")).label());
     }
 
     @Test
-    public void revisionsParse() {
-        assertEquals(1, Version.parse("2.1.17-forge-1.7.10-r1", MC).revision);
-        assertEquals(2, Version.parse("2.1.17-forge-1.7.10-r2", MC).revision);
-        assertEquals("2.1.17-r2", Version.parse("2.1.17-forge-1.7.10-r2", MC).label());
-        assertEquals("2.1.17-r2", newest(release("2.1.17-forge-1.7.10-r1"), release("2.1.17-forge-1.7.10-r2"),
-                release("2.1.17-forge-1.7.10")).label());
+    public void versionsCompareNumerically() {
+        assertNewer("0.4.1", "0.4.0");
+        assertNewer("0.5.0", "0.4.9");
+        assertNewer("0.10.0", "0.9.9");
+        assertNewer("1.0.0", "0.99.0");
+        assertEquals(0, Version.parse("legacy-0.4.0").compareTo(Version.of("0.4.0")));
+        assertEquals("0.10.0", UpdateChecker.newest(list("legacy-0.9.9", "legacy-0.10.0", "legacy-0.2.0")).label());
     }
 
+    /** Releases of upstream Plasmo Voice have no effect, however much larger their numbers are. */
     @Test
-    public void revisionsCompareNumerically() {
-        assertTrue(Version.parse("2.1.17-forge-1.7.10-r10", MC).compareTo(Version.parse("2.1.17-forge-1.7.10-r9", MC)) > 0);
-        assertEquals("2.1.17-r10", newest(release("2.1.17-forge-1.7.10-r9"), release("2.1.17-forge-1.7.10-r10"),
-                release("2.1.17-forge-1.7.10-r2")).label());
+    public void upstreamAndUnprefixedTagsAreNeverAnUpdate() {
+        for (String tag : NOT_LEGACY) assertNull(tag, Version.parse(tag));
+        assertNull(UpdateChecker.newest(list(NOT_LEGACY)));
+        assertTrue(check("0.4.0", list(NOT_LEGACY)).isEmpty());
+        assertEquals("0.4.1", UpdateChecker.newest(list(with(NOT_LEGACY, "legacy-0.4.1"))).label());
     }
 
+    /** 2.1.17-forge-1.7.10 and its r1..r3 revisions stay published and are skipped without an error. */
     @Test
-    public void upstreamVersionComparesBeforeTheRevision() {
-        assertTrue(Version.parse("2.1.18-forge-1.7.10-r1", MC).compareTo(Version.parse("2.1.17-forge-1.7.10-r9", MC)) > 0);
-        assertTrue(Version.parse("2.1.17-forge-1.7.10-r9", MC).compareTo(Version.parse("2.1.10-forge-1.7.10-r9", MC)) > 0);
-        assertEquals(0, Version.parse("2.1-forge-1.7.10", MC).compareTo(Version.parse("2.1.0-forge-1.7.10", MC)));
+    public void historicalReleasesAreNeverAnUpdate() {
+        for (String tag : HISTORICAL) assertNull(tag, Version.parse(tag));
+        assertNull(UpdateChecker.newest(list(HISTORICAL)));
+        assertTrue(check("0.4.0", list(HISTORICAL)).isEmpty());
+        assertEquals("0.4.1", UpdateChecker.newest(list(with(HISTORICAL, "legacy-0.4.1"))).label());
     }
 
     @Test
     public void unrelatedAndMalformedTagsAreIgnored() {
-        for (String tag : new String[] {"2.1.17", "v2.1.17", "2.1.18", "2.1.17-forge-1.12.2-r5", "2.1.17-fabric-1.7.10-r5",
-                "2.1.17-forge-1.7.10-rX", "2.1.17-forge-1.7.10-r", "-forge-1.7.10-r5", "2.1.17-forge-1.7.10-r5-hotfix",
-                "2.1.17-forge-1.7.10-R5", "2.1.17-forge-1x7x10-r5", "latest", ""}) {
-            assertNull(tag, Version.parse(tag, MC));
+        for (String tag : new String[] {"legacy-0.4", "legacy-0.4.0.1", "legacy-0.4.0-beta", "legacy-0.4.x", "legacy-v0.4.0",
+                "legacy-", "legacy0.4.0", "Legacy-0.4.0", "legacy-0.4.0-forge-1.7.10", "legacy-0.4.0-r1", "r4", "2.1.17-r4",
+                "0.4.0-forge-1.7.10", "latest", ""}) {
+            assertNull(tag, Version.parse(tag));
         }
-        String json = "[" + release("2.2.0") + "," + release("v2.2.0") + "," + release("2.2.0-forge-1.12.2-r9") + ","
-                + release("2.1.17-forge-1.7.10-r1") + ",{\"tag_name\":null},{\"draft\":false},7,\"text\"]";
-        assertEquals("2.1.17-r1", UpdateChecker.newest(json, MC).label());
+        String json = "[" + release("legacy-0.5.0-beta") + "," + release("latest") + "," + release("legacy-0.4.1")
+                + ",{\"tag_name\":null},{\"draft\":false},7,\"text\"]";
+        assertEquals("0.4.1", UpdateChecker.newest(json).label());
     }
 
     @Test
     public void draftsAreIgnoredAndPublishedPreReleasesCount() {
-        String json = "[" + release("2.1.17-forge-1.7.10-r5", true, false) + ","
-                + release("2.1.17-forge-1.7.10-r4", false, true) + "," + release("2.1.17-forge-1.7.10-r3") + "]";
-        assertEquals("2.1.17-r4", UpdateChecker.newest(json, MC).label());
+        String json = "[" + release("legacy-0.6.0", true, false) + "," + release("legacy-0.5.0", false, true) + ","
+                + release("legacy-0.4.1") + "]";
+        assertEquals("0.5.0", UpdateChecker.newest(json).label());
     }
 
     @Test
     public void onlyReleasePagesOfTheRepositoryAreLinked() {
-        String own = "[{\"tag_name\":\"2.1.17-forge-1.7.10-r3\",\"draft\":false,\"prerelease\":true,"
-                + "\"html_url\":\"https://github.com/DayleSacoto/plasmo-voice/releases/tag/2.1.17-forge-1.7.10-r3\"}]";
-        assertEquals("https://github.com/DayleSacoto/plasmo-voice/releases/tag/2.1.17-forge-1.7.10-r3",
-                UpdateChecker.newest(own, MC).url());
+        String page = "https://github.com/DayleSacoto/plasmo-voice/releases/tag/legacy-0.4.1";
+        String own = "[{\"tag_name\":\"legacy-0.4.1\",\"draft\":false,\"prerelease\":true,\"html_url\":\"" + page + "\"}]";
+        assertEquals(page, UpdateChecker.newest(own).url());
         String foreign = own.replace("https://github.com/DayleSacoto/plasmo-voice/releases/", "https://example.com/");
-        assertEquals("https://github.com/DayleSacoto/plasmo-voice/releases/tag/2.1.17-forge-1.7.10-r3",
-                UpdateChecker.newest(foreign, MC).url());
+        assertEquals(page, UpdateChecker.newest(foreign).url());
     }
 
     @Test
     public void sameReleaseIsNoUpdate() {
-        assertTrue(check("2.1.17-forge-1.7.10-r2", list("2.1.17-forge-1.7.10-r2", "2.1.17-forge-1.7.10-r1")).isEmpty());
+        assertTrue(check("0.4.0", list("legacy-0.4.0", "legacy-0.3.9")).isEmpty());
     }
 
     @Test
     public void olderReleaseGetsTheUpdate() {
-        List<Release> found = check("2.1.17-forge-1.7.10-r2", list("2.1.17-forge-1.7.10-r3", "2.1.17-forge-1.7.10-r2"));
+        List<Release> found = check("0.4.0", list("legacy-0.4.1", "legacy-0.4.0"));
         assertEquals(1, found.size());
-        assertEquals("2.1.17-r3", found.get(0).label());
+        assertEquals("0.4.1", found.get(0).label());
     }
 
     @Test
     public void newerDevelopmentBuildIsNotOfferedADowngrade() {
-        assertTrue(check("2.1.17-forge-1.7.10-r4", list("2.1.17-forge-1.7.10-r3")).isEmpty());
-        assertTrue(check("2.1.18-forge-1.7.10", list("2.1.17-forge-1.7.10-r9")).isEmpty());
+        assertTrue(check("0.5.0", list("legacy-0.4.9")).isEmpty());
+        assertTrue(check("1.0.0", list("legacy-0.99.0")).isEmpty());
     }
 
     @Test
     public void malformedJsonFailsSafely() {
         for (String body : new String[] {"{", "{\"message\":\"API rate limit exceeded\"}", "<html>", "", "null"}) {
             List<Release> found = new ArrayList<>();
-            checker(address -> body, "2.1.17-forge-1.7.10-r2").start(true, found::add);
+            checker(address -> body, "0.4.0").start(true, found::add);
             assertTrue(body, found.isEmpty());
         }
     }
@@ -115,10 +122,10 @@ public class UpdateCheckerTest {
         List<Release> found = new ArrayList<>();
         checker(address -> {
             throw new UnknownHostException("api.github.com");
-        }, "2.1.17-forge-1.7.10-r2").start(true, found::add);
+        }, "0.4.0").start(true, found::add);
         checker(address -> {
             throw new IOException("HTTP 403");
-        }, "2.1.17-forge-1.7.10-r2").start(true, found::add);
+        }, "0.4.0").start(true, found::add);
         assertTrue(found.isEmpty());
     }
 
@@ -127,8 +134,8 @@ public class UpdateCheckerTest {
         AtomicInteger requests = new AtomicInteger();
         checker(address -> {
             requests.incrementAndGet();
-            return list("2.1.17-forge-1.7.10-r9");
-        }, "2.1.17-forge-1.7.10-r2").start(false, release -> fail());
+            return list("legacy-9.0.0");
+        }, "0.4.0").start(false, release -> fail());
         assertEquals(0, requests.get());
     }
 
@@ -139,20 +146,29 @@ public class UpdateCheckerTest {
         UpdateChecker checker = checker(address -> {
             requests.incrementAndGet();
             assertEquals(UpdateChecker.RELEASES_API, address);
-            return list("2.1.17-forge-1.7.10-r3");
-        }, "2.1.17-forge-1.7.10-r2");
+            return list("legacy-0.4.1");
+        }, "0.4.0");
         for (int i = 0; i < 3; i++) checker.start(true, found::add);
         assertEquals(1, requests.get());
         assertEquals(1, found.size());
     }
 
+    /** The installed version is the plain release version of this build, never the voice compatibility version. */
     @Test
-    public void currentVersionComesFromTheBuild() {
-        Version current = Version.current();
-        assertNotNull("plasmovoice/backport.properties is filled in by processResources", current);
-        assertEquals(MC, current.minecraftVersion);
-        assertTrue(current.label().startsWith(PlasmoVoiceMod.VERSION));
-        assertNotNull(UpdateChecker.INSTANCE.getCurrent());
+    public void installedVersionIsTheLegacyReleaseVersion() {
+        Version current = UpdateChecker.INSTANCE.getCurrent();
+        assertNotNull(current);
+        assertEquals(PlasmoVoiceMod.VERSION, current.label());
+        assertNotEquals(PlasmoVoiceMod.VOICE_COMPAT_VERSION, current.label());
+        // The tag of this build's own release is the same version; only a later legacy release is an update.
+        assertEquals(0, Version.parse("legacy-" + PlasmoVoiceMod.VERSION).compareTo(current));
+        assertTrue(Version.parse("legacy-999.0.0").compareTo(current) > 0);
+        assertTrue(check(PlasmoVoiceMod.VERSION, list(with(HISTORICAL, NOT_LEGACY))).isEmpty());
+    }
+
+    private static void assertNewer(String newer, String older) {
+        assertTrue(newer + " > " + older, Version.of(newer).compareTo(Version.of(older)) > 0);
+        assertTrue(older + " < " + newer, Version.of(older).compareTo(Version.of(newer)) < 0);
     }
 
     private static List<Release> check(String current, String json) {
@@ -162,11 +178,13 @@ public class UpdateCheckerTest {
     }
 
     private static UpdateChecker checker(UpdateChecker.Fetcher fetcher, String current) {
-        return new UpdateChecker(fetcher, Version.parse(current, MC), Runnable::run);
+        return new UpdateChecker(fetcher, Version.of(current), Runnable::run);
     }
 
-    private static Release newest(String... releases) {
-        return UpdateChecker.newest("[" + String.join(",", releases) + "]", MC);
+    private static String[] with(String[] tags, String... more) {
+        String[] all = java.util.Arrays.copyOf(tags, tags.length + more.length);
+        System.arraycopy(more, 0, all, tags.length, more.length);
+        return all;
     }
 
     private static String list(String... tags) {

@@ -6,7 +6,6 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.Properties;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -19,10 +18,12 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import su.plo.voice.platform.forge.PlasmoVoiceMod;
 
 /**
- * Legacy extension: tells about a newer release of this Forge 1.7.10 backport. Reads the public GitHub release list
- * of the backport repository once per game or dedicated server process and never downloads anything.
+ * Legacy extension: tells about a newer release of Plasmo Voice Legacy Forge. Reads the public GitHub release list
+ * of its repository once per game or dedicated server process and never downloads anything. Only releases tagged
+ * {@code legacy-X.Y.Z} are compared; releases of upstream Plasmo Voice are never an update for this mod.
  * Common code without client classes, so it is safe on a dedicated server.
  */
 public final class UpdateChecker {
@@ -49,7 +50,7 @@ public final class UpdateChecker {
         this.executor = executor;
     }
 
-    /** The release of this jar; null when the build did not fill in plasmovoice/backport.properties. */
+    /** The release version of this jar. */
     public Version getCurrent() {
         return current;
     }
@@ -62,11 +63,11 @@ public final class UpdateChecker {
         if (!enabled || current == null || !started.compareAndSet(false, true)) return;
         executor.execute(() -> {
             try {
-                Release newest = newest(fetcher.fetch(RELEASES_API), current.minecraftVersion);
+                Release newest = newest(fetcher.fetch(RELEASES_API));
                 if (newest != null && newest.version.compareTo(current) > 0) {
                     onNewer.accept(newest);
                 } else {
-                    LOGGER.debug("No newer Plasmo Voice backport release than {}", current.label());
+                    LOGGER.debug("No newer Plasmo Voice Legacy Forge release than {}", current.label());
                 }
             } catch (IOException | RuntimeException e) {
                 LOGGER.debug("Plasmo Voice update check failed: {}", e.toString());
@@ -75,10 +76,11 @@ public final class UpdateChecker {
     }
 
     /**
-     * The newest backport release in a GitHub release list: drafts and tags of other formats are skipped, published
-     * pre-releases count (backport releases are tested as pre-releases). Null when there is none.
+     * The newest Legacy Forge release in a GitHub release list: drafts and tags that are not a Legacy Forge version
+     * (see {@link Version#parse}) are skipped, published pre-releases count (releases are tested as pre-releases).
+     * Null when there is none.
      */
-    static Release newest(String json, String minecraftVersion) {
+    static Release newest(String json) {
         JsonElement root = new JsonParser().parse(json);
         if (!root.isJsonArray()) throw new JsonParseException("not a release list");
         Release newest = null;
@@ -86,11 +88,12 @@ public final class UpdateChecker {
             if (!element.isJsonObject()) continue;
             JsonObject release = element.getAsJsonObject();
             if (bool(release, "draft")) continue;
-            Version version = Version.parse(string(release, "tag_name"), minecraftVersion);
+            String tag = string(release, "tag_name");
+            Version version = Version.parse(tag);
             if (version == null || newest != null && version.compareTo(newest.version) <= 0) continue;
             // Only a release page of this repository is offered as a link.
             String url = string(release, "html_url");
-            newest = new Release(version, url != null && url.startsWith(RELEASES_PAGE) ? url : RELEASES_PAGE + "tag/" + version.tag);
+            newest = new Release(version, url != null && url.startsWith(RELEASES_PAGE) ? url : RELEASES_PAGE + "tag/" + tag);
         }
         return newest;
     }
@@ -153,68 +156,56 @@ public final class UpdateChecker {
     }
 
     /**
-     * A backport tag: {@code <upstream version>-forge-<minecraft version>[-r<revision>]}; the tag without a revision
-     * is revision 0. Compared by upstream version, then revision, both numerically.
+     * A Legacy Forge release version, X.Y.Z, compared numerically. A release of this project is tagged
+     * {@code legacy-X.Y.Z}. Every other tag of the repository is not a Legacy Forge release: tags that follow
+     * upstream Plasmo Voice numbering, and the releases published before 0.4.0.
      */
     public static final class Version implements Comparable<Version> {
-        final String tag;
-        private final int[] base;
-        final int revision;
-        final String minecraftVersion;
+        static final String TAG_PREFIX = "legacy-";
+        private static final Pattern VERSION = Pattern.compile("(\\d{1,9})\\.(\\d{1,9})\\.(\\d{1,9})");
 
-        private Version(String tag, int[] base, int revision, String minecraftVersion) {
-            this.tag = tag;
-            this.base = base;
-            this.revision = revision;
-            this.minecraftVersion = minecraftVersion;
+        private final int major;
+        private final int minor;
+        private final int patch;
+
+        private Version(int major, int minor, int patch) {
+            this.major = major;
+            this.minor = minor;
+            this.patch = patch;
         }
 
-        /** Null for any other tag, including backports for another Minecraft version. */
-        static Version parse(String tag, String minecraftVersion) {
-            if (tag == null) return null;
-            Matcher matcher = Pattern.compile("(\\d{1,9}(?:\\.\\d{1,9}){0,3})-forge-" + Pattern.quote(minecraftVersion)
-                    + "(?:-r(\\d{1,9}))?").matcher(tag);
+        /** The version of a release tag; null for every tag that is not {@code legacy-X.Y.Z}. */
+        static Version parse(String tag) {
+            return tag != null && tag.startsWith(TAG_PREFIX) ? of(tag.substring(TAG_PREFIX.length())) : null;
+        }
+
+        /** A plain X.Y.Z version; null when it is anything else. */
+        static Version of(String version) {
+            Matcher matcher = VERSION.matcher(version);
             if (!matcher.matches()) return null;
-            String[] parts = matcher.group(1).split("\\.");
-            int[] base = new int[parts.length];
-            for (int i = 0; i < parts.length; i++) base[i] = Integer.parseInt(parts[i]);
-            return new Version(tag, base, matcher.group(2) == null ? 0 : Integer.parseInt(matcher.group(2)), minecraftVersion);
+            return new Version(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)),
+                    Integer.parseInt(matcher.group(3)));
         }
 
-        /** From plasmovoice/backport.properties, which the build fills in from the artifact version. */
+        /** The version of this build: legacyVersion from gradle.properties. */
         static Version current() {
-            Properties properties = new Properties();
-            try (InputStream in = UpdateChecker.class.getResourceAsStream("/plasmovoice/backport.properties")) {
-                if (in == null) return null;
-                properties.load(in);
-            } catch (IOException e) {
-                return null;
-            }
-            String minecraftVersion = properties.getProperty("minecraft_version", "");
-            String revision = properties.getProperty("legacy_revision", "");
-            return parse(properties.getProperty("upstream_version", "") + "-forge-" + minecraftVersion
-                    + (revision.isEmpty() ? "" : "-" + revision), minecraftVersion);
+            return of(PlasmoVoiceMod.VERSION);
         }
 
-        /** Upstream version and revision, e.g. 2.1.17-r3, or 2.1.17 for the first backport release. */
         public String label() {
-            StringBuilder label = new StringBuilder();
-            for (int part : base) label.append(label.length() == 0 ? "" : ".").append(part);
-            return revision == 0 ? label.toString() : label + "-r" + revision;
+            return major + "." + minor + "." + patch;
         }
 
         @Override
         public int compareTo(Version other) {
-            for (int i = 0; i < Math.max(base.length, other.base.length); i++) {
-                int compared = Integer.compare(i < base.length ? base[i] : 0, i < other.base.length ? other.base[i] : 0);
-                if (compared != 0) return compared;
-            }
-            return Integer.compare(revision, other.revision);
+            int compared = Integer.compare(major, other.major);
+            if (compared == 0) compared = Integer.compare(minor, other.minor);
+            return compared != 0 ? compared : Integer.compare(patch, other.patch);
         }
 
         @Override
         public String toString() {
-            return tag;
+            return label();
         }
     }
 }

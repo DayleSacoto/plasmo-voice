@@ -3,6 +3,7 @@ package su.plo.voice.platform.forge.server.connection;
 import java.security.KeyPairGenerator;
 
 import org.junit.Test;
+import su.plo.voice.platform.forge.PlasmoVoiceMod;
 import su.plo.voice.platform.forge.server.connection.ServerConnection.PlayerInfoResult;
 
 import static org.junit.Assert.*;
@@ -17,6 +18,18 @@ public class ServerVersionTest {
         // Upstream clients report loader-prefixed and snapshot versions.
         assertEquals(PlayerInfoResult.ACCEPTED, ServerConnection.checkVersion("neoforge-1.21.1-2.1.17", SERVER, MIN));
         assertEquals(PlayerInfoResult.ACCEPTED, ServerConnection.checkVersion("2.1.17+ALPHA", SERVER, MIN));
+    }
+
+    /**
+     * The handshake carries the voice compatibility version. The release version of this mod has its own numbering
+     * and is not a voice version: a server, upstream or legacy, would turn such a client away.
+     */
+    @Test
+    public void handshakeVersionIsTheVoiceCompatibilityVersionNotTheReleaseVersion() {
+        assertEquals(SERVER, PlasmoVoiceMod.VOICE_COMPAT_VERSION);
+        assertEquals(PlayerInfoResult.ACCEPTED, ServerConnection.checkVersion(PlasmoVoiceMod.VOICE_COMPAT_VERSION,
+                PlasmoVoiceMod.VOICE_COMPAT_VERSION, MIN));
+        assertEquals(PlayerInfoResult.UNSUPPORTED_VERSION, ServerConnection.checkVersion("0.4.0", SERVER, MIN));
     }
 
     @Test

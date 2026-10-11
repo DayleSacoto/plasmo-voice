@@ -65,7 +65,17 @@ public final class PlasmoVoiceMod {
 
     public static final String MOD_ID = "plasmovoice";
     public static final String MOD_NAME = "Plasmo Voice";
-    public static final String VERSION = "2.1.17";
+    /**
+     * Release version of Plasmo Voice Legacy Forge, generated from legacyVersion in gradle.properties: what Forge,
+     * the settings screen, the logs and the update check report. It has its own numbering, unrelated to upstream.
+     */
+    public static final String VERSION = Tags.VERSION;
+    /**
+     * Version of the voice handshake: the client sends it in PlayerInfoPacket and the server checks clients against
+     * it, so peers that speak the same voice protocol accept each other. It changes only with the implemented
+     * protocol, never with a release of this mod.
+     */
+    public static final String VOICE_COMPAT_VERSION = "2.1.17";
 
     private static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
     /** Upstream PlayerInfoRequestScheduler: resend delays until the client answers. */
@@ -88,7 +98,8 @@ public final class PlasmoVoiceMod {
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        LOGGER.info("Initializing {} {} for Forge 1.7.10", MOD_NAME, VERSION);
+        LOGGER.info("Initializing {} Legacy Forge {} for Forge 1.7.10 (voice compatibility version {})", MOD_NAME, VERSION,
+                VOICE_COMPAT_VERSION);
     }
 
     @Mod.EventHandler
@@ -156,7 +167,7 @@ public final class PlasmoVoiceMod {
                                 ? "generation " + existing.getUdpSession().getGeneration() : "none");
             }
 
-            ServerConnection.PlayerInfoResult result = connection.handle(info, VERSION,
+            ServerConnection.PlayerInfoResult result = connection.handle(info, VOICE_COMPAT_VERSION,
                     serverConfig.getSettings().getClientModMinVersion());
             if (result != ServerConnection.PlayerInfoResult.ACCEPTED) {
                 if (result == ServerConnection.PlayerInfoResult.UNSUPPORTED_VERSION) {

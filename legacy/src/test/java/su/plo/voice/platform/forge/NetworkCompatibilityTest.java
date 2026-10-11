@@ -34,11 +34,15 @@ public class NetworkCompatibilityTest {
         Map<String, String> none = Collections.emptyMap();
         assertTrue("client without the mod", holder.check(none, Side.CLIENT));
         assertTrue("server without the mod", holder.check(none, Side.SERVER));
-        assertTrue(holder.check(Collections.singletonMap(PlasmoVoiceMod.MOD_ID, "2.1.16"), Side.CLIENT));
+        // Other public releases: older and newer Legacy Forge versions, and r3, which reported the upstream 2.1.17.
+        for (String remote : new String[] {"0.3.0", "0.4.1", "1.0.0", "2.1.17"}) {
+            assertTrue(remote, holder.check(Collections.singletonMap(PlasmoVoiceMod.MOD_ID, remote), Side.CLIENT));
+            assertTrue(remote, holder.check(Collections.singletonMap(PlasmoVoiceMod.MOD_ID, remote), Side.SERVER));
+        }
         assertTrue(holder.check(Collections.singletonMap(PlasmoVoiceMod.MOD_ID, PlasmoVoiceMod.VERSION), Side.SERVER));
     }
 
-    /** What FML did before: "Mod rejections [FMLMod:plasmovoice{2.1.17}]" for a client without the mod. */
+    /** What FML did up to r3: "Mod rejections [FMLMod:plasmovoice{2.1.17}]" for a client without the mod. */
     @Test
     public void defaultCheckRejectedClientsWithoutTheMod() {
         assertFalse(holder("").check(Collections.<String, String>emptyMap(), Side.CLIENT));
