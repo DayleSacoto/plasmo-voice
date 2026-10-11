@@ -172,7 +172,7 @@ jobs:
         jq -n --arg name "Plasmo Voice Legacy Forge $VERSION" \
           --arg changelog "Plasmo Voice Legacy Forge $VERSION for Minecraft 1.7.10 / Forge. Release notes: $RELEASE_URL" \
           '{changelog: $changelog, changelogType: "markdown", displayName: $name,
-            gameVersionNames: ["1.7.10", "Forge"], releaseType: "beta"}' > metadata.json
+            gameVersionNames: ["1.7.10", "Forge", "Client", "Server"], releaseType: "beta"}' > metadata.json
 
         response=$(curl --silent --show-error --fail-with-body --max-time 600 \
           -H "X-Api-Token: $CURSEFORGE_TOKEN" \
