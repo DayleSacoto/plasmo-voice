@@ -82,8 +82,9 @@ Place the same JAR in the `mods/` directory on both the client and Forge server.
 
 ```text
 plasmovoice-forge-1.7.10-X.Y.Z.jar
-SHA256SUMS.txt
 ```
+
+A release also has a `-dev` JAR (deobfuscated, for a mod development environment) and a `-sources` JAR. They are for mod developers and are not installed.
 
 ## Versioning
 

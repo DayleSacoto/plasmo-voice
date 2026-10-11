@@ -1,161 +1,121 @@
 name: Build
 
+# Verification of the Legacy Forge branch, and the build that release.yml calls for a release tag. Never publishes
+# anything itself: the three JARs are left as artifacts of the run.
 on:
+  push:
+    branches:
+      - 1.7.10
+  pull_request:
+    branches:
+      - 1.7.10
+  workflow_dispatch:
   workflow_call:
-    inputs:
-      snapshot:
-        type: boolean
-        default: false
+
+permissions:
+  contents: read
 
 jobs:
-  discover:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      client-chains: ${{ steps.list.outputs.chains }}
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: legacy
 
     steps:
+    # Keep the LF line endings stored in Git so bundled lang/toml resources match a non-Windows checkout.
+    - name: Disable CRLF conversion
+      working-directory: ${{ github.workspace }}
+      run: git config --global core.autocrlf false
+
     - uses: actions/checkout@v7.0.1
-    - name: List client chains
-      id: list
+
+    - name: Set up JDK 25
+      uses: actions/setup-java@v5.7.0
+      with:
+        distribution: temurin
+        java-version: '25'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6.3.0
+      with:
+        add-job-summary: on-failure
+
+    # legacyVersion in legacy/gradle.properties is the one source of the release version and of the file names.
+    - name: Read the Legacy Forge version
       run: |
-        chains=$(python3 .github/scripts/client-chains.py)
-        echo "chains=$chains" >> "$GITHUB_OUTPUT"
+        $ErrorActionPreference = 'Stop'
+        $match = Select-String -LiteralPath 'gradle.properties' -Pattern '^legacyVersion=(.+)$'
+        if (-not $match) { throw 'legacyVersion is missing from gradle.properties' }
+        $version = $match.Matches[0].Groups[1].Value.Trim()
+        $base = "plasmovoice-forge-1.7.10-$version"
+        @(
+          "LEGACY_VERSION=$version"
+          "RUNTIME_JAR=${base}.jar"
+          "DEV_JAR=${base}-dev.jar"
+          "SOURCES_JAR=${base}-sources.jar"
+        ) | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-  build-shared-cache:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - name: Compute gradle home cache key
-        id: key
-        run: |
-          wrapper=${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
-          deps=${{ hashFiles('gradle/libs.versions.toml', 'gradle.properties', '**/*.gradle.kts', 'client/versions.json') }}
-          wrapper_version=$(grep "^distributionUrl=" gradle/wrapper/gradle-wrapper.properties | cut -d '-' -f2)
-          
-          echo "wrapper_version=$wrapper_version" >> "$GITHUB_OUTPUT"
-          echo "key=gradle-home-$wrapper-$deps" >> "$GITHUB_OUTPUT"
-
-      - name: Check gradle home cache
-        id: probe
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.gradle/caches/${{ steps.key.outputs.wrapper_version }}/generated-gradle-jars
-            ~/.gradle/caches/${{ steps.key.outputs.wrapper_version }}/kotlin-dsl
-            ~/.gradle/caches/modules-2
-            ~/.gradle/wrapper
-          key: ${{ steps.key.outputs.key }}
-          lookup-only: true
-
-      - uses: ./.github/actions/setup-build
-        if: steps.probe.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
-
-      - name: Seed gradle home cache
-        if: steps.probe.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
-        run: |
-          ./gradlew help :common:assemble --stacktrace -Pproject.client.disable=true
-          ./gradlew --stop
-
-      - name: Save gradle home cache
-        if: steps.probe.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
-        continue-on-error: true
-        uses: actions/cache/save@v6.1.0
-        with:
-          path: |
-            ~/.gradle/caches/${{ steps.key.outputs.wrapper_version }}/generated-gradle-jars
-            ~/.gradle/caches/${{ steps.key.outputs.wrapper_version }}/kotlin-dsl
-            ~/.gradle/caches/modules-2
-            ~/.gradle/wrapper
-          key: ${{ steps.key.outputs.key }}
-
-  build-client:
-    needs: [discover, build-shared-cache]
-    name: build-client (${{ matrix.chain.leaf }})
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        chain: ${{ fromJson(needs.discover.outputs.client-chains) }}
-
-    steps:
-    - uses: actions/checkout@v7.0.1
-    - uses: ./.github/actions/setup-build
-
-    - name: Compute essential loom cache key
-      id: key
+    # build makes all three JARs: the reobfuscated mod, the deobfuscated -dev JAR and the -sources JAR.
+    - name: Build with Gradle
       run: |
-        deps=${{ hashFiles('gradle/libs.versions.toml', 'gradle.properties', '**/*.gradle.kts', 'client/versions.json') }}
-        
-        echo "key=gradle-loom[${{ matrix.chain.leaf }}]-$deps" >> "$GITHUB_OUTPUT"
-        echo "restore_key=gradle-loom[${{ matrix.chain.leaf }}]-" >> "$GITHUB_OUTPUT"
+        $ErrorActionPreference = 'Stop'
+        foreach ($tasks in @(@('--stop'), @('clean'), @('compileKotlin', 'compileJava'), @('test'), @('verifyShadedJar'), @('build'))) {
+          ./gradlew.bat @tasks --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw "gradlew $tasks failed with exit code $LASTEXITCODE" }
+        }
 
-    - name: Restore Essential loom cache
-      uses: actions/cache/restore@v6.1.0
-      with:
-        path: |
-          ~/.gradle/caches/essential-loom
-          !~/.gradle/caches/essential-loom/minecraftMaven
-        key: ${{ steps.key.outputs.key }}
-        restore-keys: ${{ steps.key.outputs.restore_key }}
+    - name: Check the distribution JARs
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        function Test-Jar($name, $entry) {
+          $path = Join-Path 'build/libs' $name
+          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "JAR not found: $path" }
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $path))
+          try {
+            if (-not ($zip.Entries | Where-Object FullName -eq $entry)) { throw "$name does not contain $entry" }
+          } finally {
+            $zip.Dispose()
+          }
+          $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+          "- ``$name``: $((Get-Item -LiteralPath $path).Length) bytes, SHA-256 ``$hash``"
+        }
+        $mod = 'su/plo/voice/platform/forge/PlasmoVoiceMod'
+        @(
+          "# Plasmo Voice Legacy Forge $env:LEGACY_VERSION"
+          ''
+          '- Minecraft: 1.7.10'
+          '- Java: 25'
+          '- Tests: passed'
+          (Test-Jar $env:RUNTIME_JAR "$mod.class")
+          (Test-Jar $env:DEV_JAR "$mod.class")
+          (Test-Jar $env:SOURCES_JAR "$mod.java")
+        ) -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
-    - name: Build ${{ matrix.chain.leaf }} chain with Gradle
-      env:
-        SNAPSHOT_ARG: ${{ inputs.snapshot && '-Psnapshot=true' || '' }}
-      run: ./gradlew ${{ matrix.chain.tasks }} --stacktrace -Pproject.client.only=${{ matrix.chain.leaf }} $SNAPSHOT_ARG
-
-    - name: Save Essential loom cache
-      if: github.ref_name == github.event.repository.default_branch
-      uses: actions/cache/save@v6.1.0
-      with:
-        path: |
-          ~/.gradle/caches/essential-loom
-          !~/.gradle/caches/essential-loom/minecraftMaven
-        key: ${{ steps.key.outputs.key }}
-
-    - name: Upload build artifact
-      uses: plasmoapp/actions/.github/actions/upload-artifacts@main
-      with:
-        files_glob: build/libs/*.jar
-        archive: false
-        retention_days: 7
-        if_no_files_found: error
-        summary: false
-
-  build-server-proxy:
-    needs: build-shared-cache
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - server:paper
-          - proxy:velocity
-          - proxy:bungee
-
-    steps:
-    - uses: actions/checkout@v7.0.1
-    - uses: ./.github/actions/setup-build
-
-    - name: Build ${{ matrix.target }} with Gradle
-      env:
-        SNAPSHOT_ARG: ${{ inputs.snapshot && '-Psnapshot=true' || '' }}
-      run: ./gradlew ":${{ matrix.target }}:build" --stacktrace -Pproject.client.disable=true $SNAPSHOT_ARG
-
-    - name: Upload build artifact
+    # One artifact per JAR, not zipped: with archive disabled the artifact is the file itself, under its own name.
+    - name: Upload the mod JAR
       uses: actions/upload-artifact@v7.0.1
       with:
-        path: build/libs/*.jar
+        path: legacy/build/libs/${{ env.RUNTIME_JAR }}
         archive: false
-        retention-days: 7
         if-no-files-found: error
+        retention-days: 30
+
+    - name: Upload the dev JAR
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        path: legacy/build/libs/${{ env.DEV_JAR }}
+        archive: false
+        if-no-files-found: error
+        retention-days: 30
+
+    - name: Upload the sources JAR
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        path: legacy/build/libs/${{ env.SOURCES_JAR }}
+        archive: false
+        if-no-files-found: error
+        retention-days: 30

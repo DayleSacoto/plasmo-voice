@@ -1,268 +1,188 @@
-name: Publish Release
+name: Release
 
+# Publishes Plasmo Voice Legacy Forge for a pushed tag legacy-X.Y.Z, where X.Y.Z is legacyVersion in
+# legacy/gradle.properties:
+#
+#   validate -> build -> github      (GitHub Release with the mod, -dev and -sources JARs)
+#                     -> curseforge  (the mod JAR only)
+#
+# The tagged commit is built once, by build.yml; both publishing jobs take its artifacts and do not depend on each
+# other. Nothing is published when validation, the tests or the build fail.
+#
+# The GitHub Release is a pre-release and the CurseForge file is a beta: the project is in active development, and
+# the update check of installed copies counts pre-releases. The tag never carries a pre-release suffix.
+# To promote a tested release: gh release edit legacy-X.Y.Z --prerelease=false --latest
+#
+# CurseForge needs two repository settings (Settings -> Secrets and variables -> Actions):
+#   secret   CURSEFORGE_TOKEN       an API token of the CurseForge author account
+#   variable CURSEFORGE_PROJECT_ID  the numeric ID of the CurseForge project
 on:
-  workflow_dispatch:
-    inputs:
-      release-type:
-        description: 'Release type'
-        required: true
-        type: choice
-        options:
-          - release
-          - beta
-          - alpha
-      publish-maven:
-        description: 'Publish to Maven repository'
-        type: boolean
-        default: true
-      publish-modrinth:
-        description: 'Publish to Modrinth'
-        type: boolean
-        default: true
-      publish-curseforge:
-        description: 'Publish to CurseForge'
-        type: boolean
-        default: true
-      publish-github:
-        description: 'Publish to GitHub Releases'
-        type: boolean
-        default: true
-      publish-dokka:
-        description: 'Deploy Dokka docs to GitHub Pages'
-        type: boolean
-        default: true
+  push:
+    tags:
+      - 'legacy-*'
+
+permissions:
+  contents: read
 
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      runtime-jar: ${{ steps.tag.outputs.runtime-jar }}
+      dev-jar: ${{ steps.tag.outputs.dev-jar }}
+      sources-jar: ${{ steps.tag.outputs.sources-jar }}
+
+    steps:
+    - uses: actions/checkout@v7.0.1
+      with:
+        persist-credentials: false
+
+    # legacyVersion in legacy/gradle.properties is the one source of the release version and of the file names.
+    - name: Validate the release tag
+      id: tag
+      shell: pwsh
+      working-directory: legacy
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $tag = $env:GITHUB_REF_NAME
+        if ($env:GITHUB_REF_TYPE -ne 'tag' -or $tag -cnotmatch '^legacy-[0-9]+\.[0-9]+\.[0-9]+$') {
+          throw "Not a release tag: '$tag'. A release tag is legacy-X.Y.Z"
+        }
+        $match = Select-String -LiteralPath 'gradle.properties' -Pattern '^legacyVersion=(.+)$'
+        if (-not $match) { throw 'legacyVersion is missing from gradle.properties' }
+        $version = $match.Matches[0].Groups[1].Value.Trim()
+        if ($tag -cne "legacy-$version") {
+          throw "Tag $tag does not match legacyVersion=$version in legacy/gradle.properties"
+        }
+        $base = "plasmovoice-forge-1.7.10-$version"
+        @(
+          "version=$version"
+          "runtime-jar=${base}.jar"
+          "dev-jar=${base}-dev.jar"
+          "sources-jar=${base}-sources.jar"
+        ) | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
   build:
+    needs: validate
+    permissions:
+      contents: read
     uses: ./.github/workflows/build.yml
 
-  maven-publish:
+  github:
+    needs: [validate, build]
     runs-on: ubuntu-latest
+
     permissions:
-      contents: read
+      contents: write
+
+    env:
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      RUNTIME_JAR: ${{ needs.validate.outputs.runtime-jar }}
+      DEV_JAR: ${{ needs.validate.outputs.dev-jar }}
+      SOURCES_JAR: ${{ needs.validate.outputs.sources-jar }}
 
     steps:
-    - uses: actions/checkout@v7.0.1
-    - uses: ./.github/actions/setup-build
-
-    - name: Build with Gradle (everything except client)
-      run: ./gradlew build --stacktrace -Pproject.client.disable=true
-
-    - name: Check if already published
-      id: maven-check
-      run: |
-        VERSION=$(grep "^version=" gradle.properties | cut -d'=' -f2)
-        URL="https://repo.plasmoverse.com/releases/su/plo/voice/common/${VERSION}/common-${VERSION}.jar"
-        CODE=$(curl -s -o /dev/null -w '%{http_code}' -I \
-          --connect-timeout 10 --max-time 30 \
-          --retry 3 --retry-delay 2 --retry-all-errors "$URL" || true)
-        echo "HTTP $CODE for $URL"
-        case "$CODE" in
-          200)
-            echo "$VERSION is already published, skipping maven publication"
-            echo "published=true" >> "$GITHUB_OUTPUT"
-            ;;
-          404)
-            echo "published=false" >> "$GITHUB_OUTPUT"
-            ;;
-          *)
-            echo "::error::unexpected HTTP $CODE checking $URL"
-            exit 1
-            ;;
-        esac
-
-    - name: Publish to releases maven repository
-      if: ${{ inputs.publish-maven && steps.maven-check.outputs.published != 'true' }}
+    - name: Refuse to replace an existing release
       env:
-        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-      run: ./gradlew publish -Pproject.client.disable=true
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        existing=$(gh release list --limit 1000 --json tagName --jq '.[].tagName')
+        if grep -Fxq -- "$GITHUB_REF_NAME" <<< "$existing"; then
+          echo "::error::A release for $GITHUB_REF_NAME already exists. Published releases are not replaced."
+          exit 1
+        fi
 
-  modrinth:
-    needs: build
-    if: ${{ inputs.publish-modrinth }}
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-
-    steps:
-    - uses: actions/checkout@v7.0.1
-    - name: Download build artifacts
+    - name: Download the mod JAR
       uses: actions/download-artifact@v8.0.1
       with:
-        pattern: '*.jar'
-        path: build/libs/
-        merge-multiple: true
+        name: ${{ needs.validate.outputs.runtime-jar }}
+        path: dist
 
-    - name: Publish Paper to Modrinth
-      uses: apehum/mc-publish@master
+    - name: Download the dev JAR
+      uses: actions/download-artifact@v8.0.1
       with:
-        name: 'Plasmo Voice'
-        split-releases: true
-        files-primary: build/libs/*-@(Paper)-*.jar
+        name: ${{ needs.validate.outputs.dev-jar }}
+        path: dist
 
-        changelog-file: server/changelog.md
-        version-type: ${{ inputs.release-type }}
-
-        game-versions: |
-          >=1.21
-
-        modrinth-unfeature-mode: 'subset'
-        modrinth-id: 1bZhdhsH
-        modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-
-    - name: Publish Bungee/Velocity to Modrinth
-      uses: apehum/mc-publish@master
+    - name: Download the sources JAR
+      uses: actions/download-artifact@v8.0.1
       with:
-        name: 'Plasmo Voice'
-        split-releases: true
-        files-primary: build/libs/*-@(BungeeCord|Velocity)-*.jar
+        name: ${{ needs.validate.outputs.sources-jar }}
+        path: dist
 
-        changelog-file: proxy/changelog.md
-        version-type: ${{ inputs.release-type }}
-
-        game-versions: |
-          >=1.21
-
-        modrinth-unfeature-mode: 'subset'
-        modrinth-id: 1bZhdhsH
-        modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-
-    - name: Publish Client to Modrinth
-      uses: apehum/mc-publish@master
-      with:
-        name: 'Plasmo Voice'
-        split-releases: true
-        files-primary: build/libs/*-@(neoforge|fabric)-*.jar
-
-        environment: client_and_server
-
-        changelog-file: client/changelog.md
-        version-type: ${{ inputs.release-type }}
-
-        modrinth-unfeature-mode: 'subset'
-        modrinth-id: 1bZhdhsH
-        modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+    # The pushed tag is the release tag: --verify-tag stops gh from creating one. The assets are the three JARs.
+    - name: Create the GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        expected=$(printf '%s\n' "dist/$DEV_JAR" "dist/$RUNTIME_JAR" "dist/$SOURCES_JAR" | sort)
+        found=$(find dist -type f | sort)
+        if [[ "$found" != "$expected" ]]; then
+          echo "::error::Expected exactly the three release JARs in dist, found: $found"
+          exit 1
+        fi
+        gh release create "$GITHUB_REF_NAME" "dist/$RUNTIME_JAR" "dist/$DEV_JAR" "dist/$SOURCES_JAR" \
+          --verify-tag --generate-notes --prerelease --title "Plasmo Voice Legacy Forge $VERSION"
 
   curseforge:
-    needs: build
-    if: ${{ inputs.publish-curseforge }}
+    needs: [validate, build]
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+      RUNTIME_JAR: ${{ needs.validate.outputs.runtime-jar }}
 
     steps:
-    - uses: actions/checkout@v7.0.1
-    - name: Download build artifacts
+    # End users get the mod JAR only: the -dev and -sources JARs are never downloaded here.
+    - name: Download the mod JAR
       uses: actions/download-artifact@v8.0.1
       with:
-        pattern: '*.jar'
-        path: build/libs/
-        merge-multiple: true
+        name: ${{ needs.validate.outputs.runtime-jar }}
+        path: dist
 
-    - name: Publish Client to CurseForge
-      uses: apehum/mc-publish@master
-      with:
-        name: 'Plasmo Voice'
-        split-releases: true
-        files-primary: build/libs/*-@(neoforge|fabric)-*.jar
-
-        environment: client_and_server
-
-        changelog-file: client/changelog.md
-        version-type: ${{ inputs.release-type }}
-
-        curseforge-id: 467028
-        curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-
-  github:
-    needs: build
-    if: ${{ inputs.publish-github }}
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-    - uses: actions/checkout@v7.0.1
-    - name: Download build artifacts
-      uses: actions/download-artifact@v8.0.1
-      with:
-        pattern: '*.jar'
-        path: build/libs/
-        merge-multiple: true
-
-    - name: Aggregate changelog
+    # upload-file only ever adds a file and never replaces one; CurseForge rejects a JAR the project already has as
+    # a duplicate. No retry: a retry after a timeout could upload the file twice.
+    - name: Upload the mod JAR to CurseForge
+      env:
+        CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+        CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+        RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
       run: |
-        {
-          sed -e 's|^### Client$|### Client (Fabric/Forge/NeoForge)|' \
-              -e 's|^### Server$|### Server (Paper/Minestom/Fabric/Forge/NeoForge)|' \
-              client/changelog.md
-          if [ -s proxy/changelog.md ]; then
-            echo
-            echo "### Proxy (Velocity/BungeeCord)"
-            cat proxy/changelog.md
-          fi
-        } > release-changelog.md
-        cat release-changelog.md
-
-    - name: Publish to GitHub
-      uses: apehum/mc-publish@master
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        github-generate-changelog: false
-        github-prerelease: ${{ inputs.release-type != 'release' }}
-        changelog-file: release-changelog.md
-
-  dokka:
-    needs: build
-    if: ${{ inputs.publish-dokka }}
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-    - uses: actions/checkout@v7.0.1
-    - uses: ./.github/actions/setup-build
-
-    - name: Restore previous doc versions
-      run: |
-        mkdir -p previousDocVersions
-        git fetch origin gh-pages --depth=1 || exit 0
-        WORK=$(mktemp -d)
-        git worktree add "$WORK" origin/gh-pages
-
-        # preserve already-archived older versions
-        if [ -d "$WORK/older" ]; then
-          cp -r "$WORK/older"/* previousDocVersions/ 2>/dev/null || true
+        if [[ ! "$CURSEFORGE_PROJECT_ID" =~ ^[0-9]+$ ]]; then
+          echo "::error::Set the repository variable CURSEFORGE_PROJECT_ID to the numeric ID of the CurseForge project"
+          exit 1
+        fi
+        if [[ -z "$CURSEFORGE_TOKEN" ]]; then
+          echo "::error::Set the repository secret CURSEFORGE_TOKEN"
+          exit 1
+        fi
+        found=$(find dist -type f)
+        if [[ "$found" != "dist/$RUNTIME_JAR" ]]; then
+          echo "::error::Expected only dist/$RUNTIME_JAR, found: $found"
+          exit 1
         fi
 
-        # archive the currently deployed version (skip if same as current)
-        if [ -f "$WORK/version.json" ]; then
-          PREV_VERSION=$(jq -r '.version' "$WORK/version.json")
-          CURRENT_VERSION=$(grep "^version=" gradle.properties | cut -d'=' -f2)
-          if [ -n "$PREV_VERSION" ] && [ "$PREV_VERSION" != "$CURRENT_VERSION" ]; then
-            mkdir -p "previousDocVersions/$PREV_VERSION"
-            rsync -a --exclude='older/' "$WORK/" "previousDocVersions/$PREV_VERSION/"
-          fi
-        fi
+        jq -n --arg name "Plasmo Voice Legacy Forge $VERSION" \
+          --arg changelog "Plasmo Voice Legacy Forge $VERSION for Minecraft 1.7.10 / Forge. Release notes: $RELEASE_URL" \
+          '{changelog: $changelog, changelogType: "markdown", displayName: $name,
+            gameVersionNames: ["1.7.10", "Forge"], releaseType: "beta"}' > metadata.json
 
-        git worktree remove "$WORK"
-
-    - name: Build dokka
-      run: ./gradlew dokkaGeneratePublicationHtml -Pproject.client.disable=true
-
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v4.1.0
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./build/dokka/html
-        force_orphan: false
-        cname: dokka.plasmovoice.com
+        response=$(curl --silent --show-error --fail-with-body --max-time 600 \
+          -H "X-Api-Token: $CURSEFORGE_TOKEN" \
+          -F "metadata=<metadata.json" -F "file=@dist/$RUNTIME_JAR" \
+          "https://minecraft.curseforge.com/api/projects/$CURSEFORGE_PROJECT_ID/upload-file") || {
+          echo "::error::CurseForge upload failed: $response"
+          exit 1
+        }
+        file_id=$(jq -er '.id' <<< "$response") || {
+          echo "::error::CurseForge returned no file ID: $response"
+          exit 1
+        }
+        echo "CurseForge file $file_id: \`$RUNTIME_JAR\` (beta)" >> "$GITHUB_STEP_SUMMARY"
