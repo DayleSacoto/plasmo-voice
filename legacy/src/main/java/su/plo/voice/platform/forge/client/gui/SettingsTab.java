@@ -23,6 +23,8 @@ abstract class SettingsTab {
     static final int ELEMENT_WIDTH = 124;
     static final int ROW_HEIGHT = 24;
     private static final int TOOLTIP_WIDTH = 200;
+    /** Extra rows above and below the label text that still count as over it. */
+    static final int LABEL_HOVER_TOLERANCE = 1;
     private static final ResourceLocation RESET_ICON = new ResourceLocation("plasmovoice", "textures/icons/reset.png");
 
     final VoiceSettingsScreen screen;
@@ -254,6 +256,16 @@ abstract class SettingsTab {
         return lines;
     }
 
+    /**
+     * Whether the mouse is over rendered label text: its exact width, its rows plus
+     * {@link #LABEL_HOVER_TOLERANCE} above and below. Empty text is never hovered.
+     */
+    static boolean isOverLabel(int mouseX, int mouseY, int textX, int textY, int textWidth, int textHeight) {
+        if (textWidth <= 0) return false;
+        return mouseX >= textX && mouseX < textX + textWidth
+                && mouseY >= textY - LABEL_HOVER_TOLERANCE && mouseY < textY + textHeight + LABEL_HOVER_TOLERANCE;
+    }
+
     /** Draws the label icon centered on the row and returns the label indent. */
     interface LabelIcon {
         int draw(Minecraft mc, int x, int centerY);
@@ -341,6 +353,11 @@ abstract class SettingsTab {
         private final List<Widget> widgets = new ArrayList<>();
         private int left;
         private int y;
+        /** Bounds of the label text as last rendered; the description shows only over it. */
+        private int labelTextX;
+        private int labelTextY;
+        private int labelTextWidth;
+        private int labelTextHeight;
 
         OptionRow(int height, LabelIcon labelIcon, String label, String tooltipKey, Widget element, IconWidget reset,
                   List<Widget> buttons) {
@@ -382,7 +399,13 @@ abstract class SettingsTab {
             int labelX = left;
             if (labelIcon != null) labelX += labelIcon.draw(mc, left, y + height / 2);
             int labelWidth = element.x - labelX - 4;
-            font.drawStringWithShadow(Widget.fit(font, label, labelWidth), labelX, y + height / 2 - font.FONT_HEIGHT / 2, 0xFFFFFF);
+            String text = Widget.fit(font, label, labelWidth);
+            int textY = y + height / 2 - font.FONT_HEIGHT / 2;
+            font.drawStringWithShadow(text, labelX, textY, 0xFFFFFF);
+            labelTextX = labelX;
+            labelTextY = textY;
+            labelTextWidth = font.getStringWidth(text);
+            labelTextHeight = font.FONT_HEIGHT;
             element.render(mc, mouseX, mouseY);
             for (Widget button : buttons) button.render(mc, mouseX, mouseY);
             reset.render(mc, mouseX, mouseY);
@@ -398,7 +421,9 @@ abstract class SettingsTab {
             for (Widget widget : widgets) {
                 if (widget.isMouseOver(mouseX, mouseY)) return widget.tooltip(mouseX, mouseY);
             }
-            if (mouseX < element.x && tooltipKey != null) return I18n.format(tooltipKey);
+            if (tooltipKey != null && isOverLabel(mouseX, mouseY, labelTextX, labelTextY, labelTextWidth, labelTextHeight)) {
+                return I18n.format(tooltipKey);
+            }
             return null;
         }
     }
