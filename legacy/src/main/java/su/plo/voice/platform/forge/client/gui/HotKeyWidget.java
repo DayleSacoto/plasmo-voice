@@ -7,7 +7,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.client.settings.GameSettings;
 import org.lwjgl.input.Keyboard;
 import su.plo.voice.platform.forge.client.VoiceHotkeys;
@@ -101,7 +101,7 @@ final class HotKeyWidget extends Widget {
 
     /** Vanilla key names ("LMENU", "Button 2") joined like upstream. */
     static String format(List<Integer> keys) {
-        if (keys.isEmpty()) return I18n.format("gui.none");
+        if (keys.isEmpty()) return VoiceLang.format("gui.plasmovoice.hotkeys.none");
         StringBuilder text = new StringBuilder();
         for (int key : keys) {
             if (text.length() > 0) text.append(" + ");

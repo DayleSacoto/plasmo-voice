@@ -1,0 +1,119 @@
+# Übersetzungen für den Einstellungsbildschirm von Plasmo Voice (UTF-8).
+# Format: key=value. Zeilen mit # sind Kommentare. \n ist ein Zeilenumbruch in Tooltips.
+# %s, %1$s, %d und %% unverändert lassen.
+# Fehlende Schlüssel greifen auf den eingebauten Text zurück, dann auf Englisch.
+# Diese Datei löschen, um beim nächsten Start eine frische Kopie aus der Mod zu erhalten.
+# Servernachrichten werden in config/plasmovoice/languages/ übersetzt, nicht hier.
+
+# Bildschirm
+gui.plasmovoice.title=%1$s %2$s – Einstellungen
+gui.plasmovoice.toggle.microphone=Mikrofon umschalten\n%s
+gui.plasmovoice.toggle.voice=Sprachchat umschalten\n%s
+gui.plasmovoice.toggle.currently=Aktuell: %s
+gui.plasmovoice.toggle.enabled=AKTIVIERT
+gui.plasmovoice.toggle.disabled=DEAKTIVIERT
+gui.plasmovoice.toggle.on=An
+gui.plasmovoice.toggle.off=Aus
+gui.plasmovoice.not_available=Plasmo Voice ist auf diesem Server nicht installiert
+gui.plasmovoice.connecting=Verbindung zum UDP-Server wird hergestellt...
+gui.plasmovoice.cannot_connect_to_udp=Verbindung zum UDP-Server nicht möglich.\nDer UDP-Port ist höchstwahrscheinlich geschlossen. Siehe Wiki:\n%s
+message.plasmovoice.close=Schließen
+
+# Tab „Geräte“
+gui.plasmovoice.devices=Geräte
+gui.plasmovoice.devices.microphone=Mikrofon
+gui.plasmovoice.devices.activation_threshold=Aktivierungsschwelle
+gui.plasmovoice.devices.activation_threshold.tooltip=Wird nur verwendet, wenn die Aktivierungsart auf „Sprachaktivierung“ steht.\n\nStelle den Regler auf einen Wert, den deine Lautstärke nur beim Sprechen überschreitet.
+gui.plasmovoice.devices.not_available=Nicht verfügbar
+gui.plasmovoice.devices.microphone_volume=Mikrofonlautstärke
+gui.plasmovoice.devices.noise_suppression=Rauschunterdrückung
+gui.plasmovoice.devices.noise_suppression.tooltip=RNNoise-Rauschunterdrückung.\n\nNutzt ein neuronales Netz. Funktioniert gut, kann aber viel CPU-Leistung beanspruchen.\n\nGilt für dein Mikrofon.
+gui.plasmovoice.devices.stereo_capture=Stereo-Aufnahme
+gui.plasmovoice.devices.stereo_capture.tooltip=Nimmt den Ton in Stereo auf und wandelt ihn dann in Mono um.\nKann die Qualität verbessern, macht den Ton aber leiser.
+gui.plasmovoice.devices.disable_input_device=Eingabe deaktivieren
+gui.plasmovoice.devices.disable_input_device.tooltip=Deaktiviert die Verwendung jeglicher Mikrofone vollständig.\n\nNützlich, wenn Bluetooth-Kopfhörer das Mikrofon abschalten müssen, um im Stereomodus zu bleiben.
+gui.plasmovoice.devices.failed_to_initialize_microphone.tooltip=Mikrofon konnte nicht initialisiert werden\n%s\n\nWähle ein anderes Gerät oder klicke auf diese Schaltfläche, um unser Wiki mit möglichen Lösungen zu öffnen.
+gui.plasmovoice.devices.output=Ausgabe
+gui.plasmovoice.devices.output_device=Ausgabegerät
+gui.plasmovoice.devices.volume=Lautstärke
+gui.plasmovoice.devices.volume.tooltip=Eine Lautstärke über 100%% kann zu Verzerrungen führen.
+gui.plasmovoice.devices.occlusion=Schallabschirmung
+gui.plasmovoice.devices.occlusion.tooltip=Schickt einen Strahl von dir zu jeder Tonquelle und dämpft den Ton, wenn Blöcke im Weg sind.\n\nNützlich, wenn du Spieler in anderen Räumen nicht hören möchtest. Funktioniert aber nicht immer korrekt, daher am besten deaktiviert lassen, wenn du es nicht brauchst.
+gui.plasmovoice.devices.directional_sources=Richtwirkung
+gui.plasmovoice.devices.directional_sources.tooltip=Macht den Ton etwas leiser, wenn die Quelle nicht zu dir blickt und du außerhalb des eingestellten Winkels bist.\n\nGilt für die Spieler, die du hörst.
+gui.plasmovoice.devices.hrtf=HRTF
+gui.plasmovoice.devices.hrtf.tooltip=Verbessert die Genauigkeit der Audiopositionierung, sodass sich leichter erkennen lässt, woher ein Ton im 3D-Raum kommt.\n\nKann die Audioqualität leicht verringern.\n\nGilt für die Spieler, die du hörst.
+
+# Tab „Lautstärke“
+gui.plasmovoice.volume=Lautstärke
+gui.plasmovoice.volume.sources=Quellenlautstärke
+gui.plasmovoice.volume.players=Spielerlautstärke
+gui.plasmovoice.volume.players_search=Suchen...
+gui.plasmovoice.volume.voice_leveling=Lautstärkeausgleich
+gui.plasmovoice.volume.voice_leveling.tooltip=Dreht Spieler mit lauten Mikrofonen automatisch leiser und hebt leise Stimmen sanft an, sodass alle ungefähr gleich laut klingen.\n\nReichweite, Schallabschirmung und deine Spielerlautstärken wirken weiterhin zusätzlich.\n\nGilt für die Spieler, die du hörst.
+gui.plasmovoice.volume.voice_leveling_target=Zielpegel
+gui.plasmovoice.volume.voice_leveling_target.tooltip=Sprachpegel, auf den die Spieler angeglichen werden.\n\nHöher bedeutet lauter.
+
+# Tab „Aktivierung“
+gui.plasmovoice.activation=Aktivierung
+gui.plasmovoice.activation.type=Aktivierungsart
+gui.plasmovoice.activation.type_ptt=Push-to-Talk
+gui.plasmovoice.activation.type_voice=Sprachaktivierung
+gui.plasmovoice.activation.toggle=„%s“ umschalten\n%s
+gui.plasmovoice.activation.distance=Reichweite (%s)
+gui.plasmovoice.activation.ptt_button=Push-to-Talk-Taste
+gui.plasmovoice.activation.toggle_button=Umschalttaste
+
+# Tab „Overlay“
+gui.plasmovoice.overlay=Overlay
+gui.plasmovoice.overlay.activation_icon=HUD-Symbol
+gui.plasmovoice.overlay.activation_icon_show=HUD-Symbol anzeigen
+gui.plasmovoice.overlay.activation_icon_position=HUD-Symbolposition
+gui.plasmovoice.overlay.activation_icon_position.choose=Symbolposition wählen
+gui.plasmovoice.overlay.hud_position.top_left=Oben links
+gui.plasmovoice.overlay.hud_position.top_center=Oben mittig
+gui.plasmovoice.overlay.hud_position.top_right=Oben rechts
+gui.plasmovoice.overlay.hud_position.bottom_left=Unten links
+gui.plasmovoice.overlay.hud_position.bottom_center=Unten mittig
+gui.plasmovoice.overlay.hud_position.bottom_right=Unten rechts
+gui.plasmovoice.overlay.source_icons=Entitätssymbole
+gui.plasmovoice.overlay.show_source_icons=Entitätssymbole anzeigen
+gui.plasmovoice.overlay.show_source_icons.hud=Nur GUI
+gui.plasmovoice.overlay.show_source_icons.always=Immer
+gui.plasmovoice.overlay.show_source_icons.hidden=Ausgeblendet
+gui.plasmovoice.overlay.enable=Overlay aktivieren
+gui.plasmovoice.overlay.position=Overlay-Position
+gui.plasmovoice.overlay.position.choose=Overlay-Position wählen
+gui.plasmovoice.overlay.style=Overlay-Stil
+gui.plasmovoice.overlay.style.name_skin=Name und Skin
+gui.plasmovoice.overlay.style.skin=Nur Skin
+gui.plasmovoice.overlay.style.name=Nur Name
+gui.plasmovoice.overlay.sources=Overlay-Quellen
+
+# Tab „Erweitert“
+gui.plasmovoice.advanced=Erweitert
+gui.plasmovoice.advanced.visual=Anzeige & Oberfläche
+gui.plasmovoice.advanced.visualize_voice_distance=Sprachreichweite anzeigen
+gui.plasmovoice.advanced.visualize_voice_distance_on_join=Beim Beitritt anzeigen
+gui.plasmovoice.advanced.audio_engine=Audio-Engine
+gui.plasmovoice.advanced.directional_sources_angle=Richtwirkungswinkel
+gui.plasmovoice.advanced.directional_sources_angle.tooltip=Der Winkel, innerhalb dessen du eine Quelle mit 100%% hörst, wenn „Richtwirkung“ aktiviert ist.\n\n360 hat denselben Effekt wie das Deaktivieren der Option.
+gui.plasmovoice.advanced.panning=Stereo-Positionierung
+gui.plasmovoice.advanced.adaptive_jitter_buffer=Adaptiver Jitter-Puffer
+gui.plasmovoice.advanced.adaptive_jitter_buffer.tooltip=Zeitbasierter Netzwerk-Jitter-Puffer, dessen Verzögerung sich an die Verbindungsqualität anpasst.\n\nAktiviere diese Option, falls du wegen einer schlechten Verbindung Audioartefakte hörst.
+gui.plasmovoice.advanced.exponential_volume=Exponentielle Lautstärke
+gui.plasmovoice.advanced.exponential_volume.volume_slider=Lautstärkeregler
+gui.plasmovoice.advanced.exponential_volume.distance_gain=Entfernungsdämpfung
+
+# Tab „Tasten“
+gui.plasmovoice.hotkeys=Tasten
+gui.plasmovoice.hotkeys.none=Keine
+key.plasmovoice.general=Allgemein
+key.plasmovoice.general.mute_microphone=Mikrofon stummschalten
+key.plasmovoice.general.disable_voice=Sprachchat deaktivieren
+key.plasmovoice.general.action=Aktionstaste
+key.plasmovoice.occlusion=Schallabschirmung
+key.plasmovoice.occlusion.toggle=Schallabschirmung umschalten
+key.plasmovoice.distance=Sprachreichweite (%s)
+key.plasmovoice.distance.increase=Reichweite erhöhen
+key.plasmovoice.distance.decrease=Reichweite verringern

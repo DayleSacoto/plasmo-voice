@@ -5,7 +5,7 @@ import java.util.function.Consumer;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import su.plo.voice.platform.forge.client.ClientState;
 
 /**
@@ -28,7 +28,7 @@ final class AdvancedTab extends SettingsTab {
 
         addCategory("gui.plasmovoice.advanced.audio_engine");
         // Upstream IntSliderWidget over 100..360 in 1 degree steps, shown as the bare number.
-        addOption(I18n.format("gui.plasmovoice.advanced.directional_sources_angle"),
+        addOption(VoiceLang.format("gui.plasmovoice.advanced.directional_sources_angle"),
                 "gui.plasmovoice.advanced.directional_sources_angle.tooltip",
                 new SliderWidget(ELEMENT_WIDTH,
                         () -> (state.getDirectionalSourcesAngle() - 100) / 260D,
@@ -37,7 +37,7 @@ final class AdvancedTab extends SettingsTab {
                         () -> String.valueOf(state.getDirectionalSourcesAngle())),
                 () -> state.getDirectionalSourcesAngle() == 145, () -> state.setDirectionalSourcesAngle(145));
         addToggle("gui.plasmovoice.advanced.panning", true, state::isPanning, state::setPanning);
-        addOption(I18n.format("gui.plasmovoice.advanced.adaptive_jitter_buffer"),
+        addOption(VoiceLang.format("gui.plasmovoice.advanced.adaptive_jitter_buffer"),
                 "gui.plasmovoice.advanced.adaptive_jitter_buffer.tooltip",
                 new ToggleWidget(ELEMENT_WIDTH, state::isAdaptiveJitterBuffer, state::setAdaptiveJitterBuffer),
                 () -> !state.isAdaptiveJitterBuffer(), () -> state.setAdaptiveJitterBuffer(false));
@@ -50,7 +50,7 @@ final class AdvancedTab extends SettingsTab {
     }
 
     private void addToggle(String key, boolean defaultValue, BooleanSupplier getter, Consumer<Boolean> setter) {
-        addOption(I18n.format(key), null, new ToggleWidget(ELEMENT_WIDTH, getter, setter),
+        addOption(VoiceLang.format(key), null, new ToggleWidget(ELEMENT_WIDTH, getter, setter),
                 () -> getter.getAsBoolean() == defaultValue, () -> setter.accept(defaultValue));
     }
 }

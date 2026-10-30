@@ -10,7 +10,7 @@ import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.input.Keyboard;
@@ -65,7 +65,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
     }
 
     private void addTab(String nameKey, String icon, SettingsTab tab) {
-        tabButtons.add(new TabButton(fontRendererObj, I18n.format(nameKey), icon));
+        tabButtons.add(new TabButton(fontRendererObj, VoiceLang.format(nameKey), icon));
         tabs.add(tab);
     }
 
@@ -207,7 +207,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
     }
 
     private String title() {
-        return I18n.format("gui.plasmovoice.title", "Plasmo Voice", PlasmoVoiceMod.VERSION);
+        return VoiceLang.format("gui.plasmovoice.title", "Plasmo Voice", PlasmoVoiceMod.VERSION);
     }
 
     /** Same darkened options background the vanilla lists use for their header. */
@@ -227,10 +227,10 @@ public final class VoiceSettingsScreen extends GuiScreen {
 
     private void drawToggleTooltip(String key, boolean enabled, int mouseX, int mouseY) {
         String stateText = enabled
-                ? EnumChatFormatting.GREEN + I18n.format("gui.plasmovoice.toggle.enabled")
-                : EnumChatFormatting.RED + I18n.format("gui.plasmovoice.toggle.disabled");
-        String currently = EnumChatFormatting.GRAY + I18n.format("gui.plasmovoice.toggle.currently", stateText);
-        func_146283_a(Arrays.asList(lines(I18n.format(key, currently))), mouseX, mouseY);
+                ? EnumChatFormatting.GREEN + VoiceLang.format("gui.plasmovoice.toggle.enabled")
+                : EnumChatFormatting.RED + VoiceLang.format("gui.plasmovoice.toggle.disabled");
+        String currently = EnumChatFormatting.GRAY + VoiceLang.format("gui.plasmovoice.toggle.currently", stateText);
+        func_146283_a(Arrays.asList(lines(VoiceLang.format(key, currently))), mouseX, mouseY);
     }
 
     /** Upstream translations use "\n"; .lang files keep it as two literal characters. */

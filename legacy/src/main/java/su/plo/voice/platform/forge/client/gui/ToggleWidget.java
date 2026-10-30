@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 
 /** Upstream ToggleButton: slider background with the knob on the left (off) or right (on). */
 @SideOnly(Side.CLIENT)
@@ -25,7 +25,7 @@ final class ToggleWidget extends Widget {
         boolean on = value.getAsBoolean();
         drawButtonBackground(mc, x, y, width, 0);
         drawKnob(on ? x + width - 8 : x, y);
-        drawCenteredString(mc.fontRenderer, I18n.format(on ? "message.plasmovoice.on" : "message.plasmovoice.off"),
+        drawCenteredString(mc.fontRenderer, VoiceLang.format(on ? "gui.plasmovoice.toggle.on" : "gui.plasmovoice.toggle.off"),
                 x + width / 2, y + (height - 8) / 2, textColor(mouseX, mouseY));
     }
 

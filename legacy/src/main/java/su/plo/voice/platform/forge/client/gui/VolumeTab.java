@@ -10,7 +10,7 @@ import java.util.UUID;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.ResourceLocation;
 import su.plo.slib.api.entity.player.McGameProfile;
 import su.plo.voice.platform.forge.client.ClientState;
@@ -38,7 +38,7 @@ final class VolumeTab extends SettingsTab {
     VolumeTab(VoiceSettingsScreen screen, ClientState state) {
         super(screen, state);
         search = new TextFieldWidget(Minecraft.getMinecraft().fontRenderer, CONTAINER_WIDTH,
-                I18n.format("gui.plasmovoice.volume.players_search"), text -> {
+                VoiceLang.format("gui.plasmovoice.volume.players_search"), text -> {
                     query = text.toLowerCase(Locale.ROOT);
                     rebuild();
                 });
@@ -92,11 +92,11 @@ final class VolumeTab extends SettingsTab {
     /** Legacy extension: automatic voice leveling and its target speech level, in 1 dB steps. */
     private void addVoiceLeveling() {
         addCategory("gui.plasmovoice.volume.voice_leveling");
-        addOption(I18n.format("gui.plasmovoice.volume.voice_leveling"), "gui.plasmovoice.volume.voice_leveling.tooltip",
+        addOption(VoiceLang.format("gui.plasmovoice.volume.voice_leveling"), "gui.plasmovoice.volume.voice_leveling.tooltip",
                 new ToggleWidget(ELEMENT_WIDTH, state::isVoiceLeveling, state::setVoiceLeveling),
                 () -> !state.isVoiceLeveling(), () -> state.setVoiceLeveling(false));
         double range = VoiceLeveler.MAX_TARGET_DB - VoiceLeveler.MIN_TARGET_DB;
-        addOption(I18n.format("gui.plasmovoice.volume.voice_leveling_target"),
+        addOption(VoiceLang.format("gui.plasmovoice.volume.voice_leveling_target"),
                 "gui.plasmovoice.volume.voice_leveling_target.tooltip",
                 new SliderWidget(ELEMENT_WIDTH,
                         () -> (state.getVoiceLevelingTarget() - VoiceLeveler.MIN_TARGET_DB) / range,

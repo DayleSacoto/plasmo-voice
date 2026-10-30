@@ -1,0 +1,119 @@
+# Переклади екрана налаштувань Plasmo Voice (UTF-8).
+# Формат: key=value. Рядки, що починаються з #, — коментарі. \n — розрив рядка в підказках.
+# Не змінюйте %s, %1$s, %d та %%.
+# Відсутні ключі беруться з вбудованого тексту, а потім з англійської.
+# Видаліть цей файл, щоб під час наступного запуску отримати свіжу копію з модифікації.
+# Повідомлення сервера перекладаються в config/plasmovoice/languages/, а не тут.
+
+# Екран
+gui.plasmovoice.title=Налаштування %1$s %2$s
+gui.plasmovoice.toggle.microphone=Перемкнути мікрофон\n%s
+gui.plasmovoice.toggle.voice=Перемкнути голосовий чат\n%s
+gui.plasmovoice.toggle.currently=Зараз: %s
+gui.plasmovoice.toggle.enabled=УВІМКНЕНО
+gui.plasmovoice.toggle.disabled=ВИМКНЕНО
+gui.plasmovoice.toggle.on=Увімк.
+gui.plasmovoice.toggle.off=Вимк.
+gui.plasmovoice.not_available=На цьому сервері не встановлено Plasmo Voice
+gui.plasmovoice.connecting=Підключення до UDP-сервера...
+gui.plasmovoice.cannot_connect_to_udp=Не вдалося підключитися до UDP-сервера.\nНайімовірніше, UDP-порт закрито. Докладніше у вікі:\n%s
+message.plasmovoice.close=Закрити
+
+# Вкладка «Пристрої»
+gui.plasmovoice.devices=Пристрої
+gui.plasmovoice.devices.microphone=Мікрофон
+gui.plasmovoice.devices.activation_threshold=Поріг активації
+gui.plasmovoice.devices.activation_threshold.tooltip=Використовується лише тоді, коли обрано тип активації «Активація голосом».\n\nВстановіть повзунок на рівень, який ваша гучність перевищує, лише коли ви говорите.
+gui.plasmovoice.devices.not_available=Недоступно
+gui.plasmovoice.devices.microphone_volume=Гучність мікрофона
+gui.plasmovoice.devices.noise_suppression=Придушення шуму
+gui.plasmovoice.devices.noise_suppression.tooltip=Придушення шуму RNNoise.\n\nВикористовує нейромережу. Працює добре, але може сильно навантажувати процесор.\n\nЗастосовується до вашого мікрофона.
+gui.plasmovoice.devices.stereo_capture=Стереозахоплення
+gui.plasmovoice.devices.stereo_capture.tooltip=Захоплює звук у стерео, а потім перетворює його на моно.\nМоже покращити якість, але робить звук тихішим.
+gui.plasmovoice.devices.disable_input_device=Вимкнути введення звуку
+gui.plasmovoice.devices.disable_input_device.tooltip=Повністю вимикає використання будь-якого мікрофона.\n\nКорисно, коли Bluetooth-навушникам потрібно вимкнути мікрофон, щоб залишатися в стереорежимі.
+gui.plasmovoice.devices.failed_to_initialize_microphone.tooltip=Не вдалося ініціалізувати мікрофон\n%s\n\nОберіть інший пристрій або натисніть цю кнопку, щоб відкрити нашу вікі з можливими розв'язками.
+gui.plasmovoice.devices.output=Виведення
+gui.plasmovoice.devices.output_device=Пристрій виведення
+gui.plasmovoice.devices.volume=Гучність
+gui.plasmovoice.devices.volume.tooltip=Гучність понад 100%% може спричинити спотворення.
+gui.plasmovoice.devices.occlusion=Приглушення блоками
+gui.plasmovoice.devices.occlusion.tooltip=Спрямовує промінь від вас до кожного джерела звуку й приглушує звук, якщо на шляху є блоки.\n\nКорисно, якщо ви не хочете чути людей в інших кімнатах, але працює не завжди коректно, тож тримайте параметр вимкненим, коли він не потрібен.
+gui.plasmovoice.devices.directional_sources=Спрямовані джерела
+gui.plasmovoice.devices.directional_sources.tooltip=Трохи приглушує звук, якщо джерело повернуте не до вас і ви перебуваєте поза заданим кутом.\n\nЗастосовується до гравців, яких ви чуєте.
+gui.plasmovoice.devices.hrtf=HRTF
+gui.plasmovoice.devices.hrtf.tooltip=Підвищує точність позиціонування звуку, допомагаючи зрозуміти, звідки він лунає в тривимірному просторі.\n\nМоже трохи погіршити якість звуку.\n\nЗастосовується до гравців, яких ви чуєте.
+
+# Вкладка «Гучність»
+gui.plasmovoice.volume=Гучність
+gui.plasmovoice.volume.sources=Гучність джерел
+gui.plasmovoice.volume.players=Гучність гравців
+gui.plasmovoice.volume.players_search=Пошук...
+gui.plasmovoice.volume.voice_leveling=Вирівнювання голосів
+gui.plasmovoice.volume.voice_leveling.tooltip=Автоматично знижує гучність гравців із гучними мікрофонами та плавно підсилює тихих, щоб усі звучали приблизно однаково гучно.\n\nДальність, приглушення блоками та задана вами гучність гравців продовжують діяти поверх цього.\n\nЗастосовується до гравців, яких ви чуєте.
+gui.plasmovoice.volume.voice_leveling_target=Цільовий рівень
+gui.plasmovoice.volume.voice_leveling_target.tooltip=Рівень мовлення, до якого вирівнюються гравці.\n\nЧим вище, тим гучніше.
+
+# Вкладка «Активація»
+gui.plasmovoice.activation=Активація
+gui.plasmovoice.activation.type=Тип активації
+gui.plasmovoice.activation.type_ptt=Натисни й говори
+gui.plasmovoice.activation.type_voice=Активація голосом
+gui.plasmovoice.activation.toggle=Перемкнути «%s»\n%s
+gui.plasmovoice.activation.distance=%s: дальність
+gui.plasmovoice.activation.ptt_button=Кнопка для розмови
+gui.plasmovoice.activation.toggle_button=Кнопка перемикання
+
+# Вкладка «Оверлей»
+gui.plasmovoice.overlay=Оверлей
+gui.plasmovoice.overlay.activation_icon=Значок HUD
+gui.plasmovoice.overlay.activation_icon_show=Показувати значок HUD
+gui.plasmovoice.overlay.activation_icon_position=Позиція значка HUD
+gui.plasmovoice.overlay.activation_icon_position.choose=Оберіть позицію значка
+gui.plasmovoice.overlay.hud_position.top_left=Угорі ліворуч
+gui.plasmovoice.overlay.hud_position.top_center=Угорі по центру
+gui.plasmovoice.overlay.hud_position.top_right=Угорі праворуч
+gui.plasmovoice.overlay.hud_position.bottom_left=Внизу ліворуч
+gui.plasmovoice.overlay.hud_position.bottom_center=Внизу по центру
+gui.plasmovoice.overlay.hud_position.bottom_right=Внизу праворуч
+gui.plasmovoice.overlay.source_icons=Значки сутностей
+gui.plasmovoice.overlay.show_source_icons=Показувати значки
+gui.plasmovoice.overlay.show_source_icons.hud=Лише в GUI
+gui.plasmovoice.overlay.show_source_icons.always=Завжди
+gui.plasmovoice.overlay.show_source_icons.hidden=Приховано
+gui.plasmovoice.overlay.enable=Увімкнути оверлей
+gui.plasmovoice.overlay.position=Позиція оверлею
+gui.plasmovoice.overlay.position.choose=Оберіть позицію оверлею
+gui.plasmovoice.overlay.style=Стиль оверлею
+gui.plasmovoice.overlay.style.name_skin=Ім'я та скін
+gui.plasmovoice.overlay.style.skin=Лише скін
+gui.plasmovoice.overlay.style.name=Лише ім'я
+gui.plasmovoice.overlay.sources=Джерела оверлею
+
+# Вкладка «Додатково»
+gui.plasmovoice.advanced=Додатково
+gui.plasmovoice.advanced.visual=Вигляд та інтерфейс
+gui.plasmovoice.advanced.visualize_voice_distance=Показ дальності голосу
+gui.plasmovoice.advanced.visualize_voice_distance_on_join=Показ під час входу
+gui.plasmovoice.advanced.audio_engine=Звуковий рушій
+gui.plasmovoice.advanced.directional_sources_angle=Кут спрямованості
+gui.plasmovoice.advanced.directional_sources_angle.tooltip=Кут, у межах якого ви чуєте джерело на 100%%, коли ввімкнено спрямовані джерела.\n\nЗначення 360 рівнозначне вимкненню параметра.
+gui.plasmovoice.advanced.panning=Стереопанорама
+gui.plasmovoice.advanced.adaptive_jitter_buffer=Адаптивний джитер-буфер
+gui.plasmovoice.advanced.adaptive_jitter_buffer.tooltip=Мережевий джитер-буфер на основі часу, затримка якого підлаштовується під якість з'єднання.\n\nСпробуйте ввімкнути цей параметр, якщо чуєте артефакти звуку через погане з'єднання.
+gui.plasmovoice.advanced.exponential_volume=Експоненційна гучність
+gui.plasmovoice.advanced.exponential_volume.volume_slider=Повзунок гучності
+gui.plasmovoice.advanced.exponential_volume.distance_gain=Згасання за відстанню
+
+# Вкладка «Клавіші»
+gui.plasmovoice.hotkeys=Клавіші
+gui.plasmovoice.hotkeys.none=Немає
+key.plasmovoice.general=Загальні
+key.plasmovoice.general.mute_microphone=Вимкнути мікрофон
+key.plasmovoice.general.disable_voice=Вимкнути голосовий чат
+key.plasmovoice.general.action=Кнопка дії
+key.plasmovoice.occlusion=Приглушення блоками
+key.plasmovoice.occlusion.toggle=Увімк./вимк. приглушення блоками
+key.plasmovoice.distance=%s: дальність голосу
+key.plasmovoice.distance.increase=Збільшити дальність голосу
+key.plasmovoice.distance.decrease=Зменшити дальність голосу

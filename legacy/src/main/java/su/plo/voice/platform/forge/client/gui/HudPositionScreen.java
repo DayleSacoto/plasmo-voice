@@ -6,7 +6,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import org.lwjgl.input.Keyboard;
 
 /**
@@ -44,7 +44,7 @@ final class HudPositionScreen extends GuiScreen {
                     : name.endsWith("RIGHT") ? width - BUTTON_OFFSET - BUTTON_WIDTH
                     : width / 2 - BUTTON_WIDTH / 2;
             int y = name.startsWith("TOP") ? BUTTON_OFFSET : height - 20 - BUTTON_OFFSET;
-            GuiButton button = new GuiButton(i, x, y, BUTTON_WIDTH, 20, I18n.format(translations[i]));
+            GuiButton button = new GuiButton(i, x, y, BUTTON_WIDTH, 20, VoiceLang.format(translations[i]));
             button.enabled = !name.equals(disabled);
             buttonList.add(button);
         }
@@ -64,7 +64,7 @@ final class HudPositionScreen extends GuiScreen {
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         drawDefaultBackground();
-        String text = I18n.format(chooseKey);
+        String text = VoiceLang.format(chooseKey);
         fontRendererObj.drawStringWithShadow(text, width / 2 - fontRendererObj.getStringWidth(text) / 2,
                 height / 2 - fontRendererObj.FONT_HEIGHT, 0xFFFFFF);
         super.drawScreen(mouseX, mouseY, partialTicks);

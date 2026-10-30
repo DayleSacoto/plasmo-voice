@@ -5,7 +5,7 @@ import java.util.List;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 import su.plo.voice.platform.forge.client.ClientState;
@@ -43,8 +43,8 @@ final class ActivationTab extends SettingsTab {
 
     private void addType(String activationName) {
         List<String> types = Arrays.asList(
-                I18n.format("gui.plasmovoice.activation.type_ptt"),
-                I18n.format("gui.plasmovoice.activation.type_voice"));
+                VoiceLang.format("gui.plasmovoice.activation.type_ptt"),
+                VoiceLang.format("gui.plasmovoice.activation.type_voice"));
         boolean pushToTalk = state.getActivationType() == CaptureActivation.Type.PUSH_TO_TALK;
         DropDownWidget dropDown = new DropDownWidget(pushToTalk ? ELEMENT_WIDTH : ELEMENT_WIDTH - 24,
                 () -> types.get(state.getActivationType().ordinal()), types, index -> {
@@ -55,7 +55,7 @@ final class ActivationTab extends SettingsTab {
             state.setActivationType(CaptureActivation.Type.PUSH_TO_TALK);
             rebuild();
         };
-        String label = I18n.format("gui.plasmovoice.activation.type");
+        String label = VoiceLang.format("gui.plasmovoice.activation.type");
         if (pushToTalk) {
             addOption(label, null, dropDown, () -> true, reset);
             return;
@@ -65,10 +65,10 @@ final class ActivationTab extends SettingsTab {
                 () -> state.isActivationToggled() ? DISABLED_ICON : ENABLED_ICON,
                 () -> state.setActivationToggled(!state.isActivationToggled()),
                 () -> true,
-                () -> I18n.format("gui.plasmovoice.activation.toggle", activationName,
-                        EnumChatFormatting.GRAY + I18n.format("gui.plasmovoice.toggle.currently", state.isActivationToggled()
-                                ? EnumChatFormatting.RED + I18n.format("gui.plasmovoice.toggle.disabled")
-                                : EnumChatFormatting.GREEN + I18n.format("gui.plasmovoice.toggle.enabled"))));
+                () -> VoiceLang.format("gui.plasmovoice.activation.toggle", activationName,
+                        EnumChatFormatting.GRAY + VoiceLang.format("gui.plasmovoice.toggle.currently", state.isActivationToggled()
+                                ? EnumChatFormatting.RED + VoiceLang.format("gui.plasmovoice.toggle.disabled")
+                                : EnumChatFormatting.GREEN + VoiceLang.format("gui.plasmovoice.toggle.enabled"))));
         addOption(label, null, dropDown, () -> false, reset, toggle);
     }
 
@@ -78,7 +78,7 @@ final class ActivationTab extends SettingsTab {
         // ponytail: a free distance range (-1, max) gets no control until a server needs the upstream text field.
         if (distances.isEmpty() || distances.get(0) == -1) return;
         int last = distances.size() - 1;
-        addOption(I18n.format("gui.plasmovoice.activation.distance", state.translate(activation.getTranslation())), null,
+        addOption(VoiceLang.format("gui.plasmovoice.activation.distance", state.translate(activation.getTranslation())), null,
                 new SliderWidget(ELEMENT_WIDTH,
                         () -> last == 0 ? 0D : distances.indexOf(current(config, activation)) / (double) last,
                         value -> state.changeActivationDistance(activation.getId(), distances.get((int) Math.round(value * last))),

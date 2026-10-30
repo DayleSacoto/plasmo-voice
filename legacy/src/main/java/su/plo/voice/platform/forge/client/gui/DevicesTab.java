@@ -10,7 +10,7 @@ import java.util.function.Supplier;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.ResourceLocation;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -58,8 +58,8 @@ final class DevicesTab extends SettingsTab {
                     }
                 },
                 test::isInputOpen,
-                () -> test.isInputOpen() ? null : I18n.format("gui.plasmovoice.devices.not_available"));
-        addOption(I18n.format("gui.plasmovoice.devices.activation_threshold"),
+                () -> test.isInputOpen() ? null : VoiceLang.format("gui.plasmovoice.devices.not_available"));
+        addOption(VoiceLang.format("gui.plasmovoice.devices.activation_threshold"),
                 "gui.plasmovoice.devices.activation_threshold.tooltip", threshold,
                 () -> state.getActivationThreshold() == DEFAULT_THRESHOLD,
                 () -> state.setActivationThreshold(DEFAULT_THRESHOLD), testButton);
@@ -99,7 +99,7 @@ final class DevicesTab extends SettingsTab {
         for (String device : devices) names.add(format(device));
         DropDownWidget dropDown = new DropDownWidget(warning == null ? ELEMENT_WIDTH : ELEMENT_WIDTH - 24,
                 () -> {
-                    if (devices.isEmpty()) return I18n.format("gui.plasmovoice.devices.not_available");
+                    if (devices.isEmpty()) return VoiceLang.format("gui.plasmovoice.devices.not_available");
                     String selected = current.get();
                     return format(selected.isEmpty() && defaultDevice != null ? defaultDevice : selected);
                 },
@@ -110,9 +110,9 @@ final class DevicesTab extends SettingsTab {
                 });
         dropDown.active = enabled && !devices.isEmpty();
         if (warning == null) {
-            addOption(I18n.format(labelKey), null, dropDown, () -> current.get().isEmpty(), () -> select.accept(""));
+            addOption(VoiceLang.format(labelKey), null, dropDown, () -> current.get().isEmpty(), () -> select.accept(""));
         } else {
-            addOption(I18n.format(labelKey), null, dropDown, () -> current.get().isEmpty(), () -> select.accept(""), warning);
+            addOption(VoiceLang.format(labelKey), null, dropDown, () -> current.get().isEmpty(), () -> select.accept(""), warning);
         }
     }
 
@@ -120,7 +120,7 @@ final class DevicesTab extends SettingsTab {
     private IconWidget microphoneWarning(String defaultDevice) {
         String device = state.getInputDevice().isEmpty() ? defaultDevice : state.getInputDevice();
         IconWidget warning = new IconWidget(() -> WARNING_ICON, () -> openUri(MICROPHONE_HELP_URL), () -> true,
-                () -> I18n.format("gui.plasmovoice.devices.failed_to_initialize_microphone.tooltip",
+                () -> VoiceLang.format("gui.plasmovoice.devices.failed_to_initialize_microphone.tooltip",
                         format(device == null ? "" : device)));
         warning.iconColor = WARNING_COLOR;
         return warning;
@@ -137,7 +137,7 @@ final class DevicesTab extends SettingsTab {
 
     /** Upstream VolumeSliderWidget: 0-200 % in 5 % steps; holding left shift disables the snapping. */
     private void addVolume(String labelKey, DoubleSupplier current, DoubleConsumer set) {
-        addOption(I18n.format(labelKey), "gui.plasmovoice.devices.volume.tooltip",
+        addOption(VoiceLang.format(labelKey), "gui.plasmovoice.devices.volume.tooltip",
                 new SliderWidget(ELEMENT_WIDTH,
                         () -> current.getAsDouble() / 2D,
                         value -> set.accept(value * 2D),
@@ -154,7 +154,7 @@ final class DevicesTab extends SettingsTab {
 
     private ToggleWidget addToggle(String labelKey, BooleanSupplier current, Consumer<Boolean> set) {
         ToggleWidget toggle = new ToggleWidget(ELEMENT_WIDTH, current, set);
-        addOption(I18n.format(labelKey), labelKey + ".tooltip", toggle, () -> !current.getAsBoolean(), () -> set.accept(false));
+        addOption(VoiceLang.format(labelKey), labelKey + ".tooltip", toggle, () -> !current.getAsBoolean(), () -> set.accept(false));
         return toggle;
     }
 

@@ -6,7 +6,7 @@ import java.util.List;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.ResourceLocation;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
@@ -26,11 +26,11 @@ final class OverlayTab extends SettingsTab {
     @Override
     void build() {
         addCategory("gui.plasmovoice.overlay.activation_icon");
-        addOption(I18n.format("gui.plasmovoice.overlay.activation_icon_show"), null,
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.activation_icon_show"), null,
                 new ToggleWidget(ELEMENT_WIDTH, state::isShowActivationIcon, state::setShowActivationIcon),
                 state::isShowActivationIcon, () -> state.setShowActivationIcon(true));
-        addOption(I18n.format("gui.plasmovoice.overlay.activation_icon_position"), null,
-                new ButtonWidget(ELEMENT_WIDTH, () -> I18n.format(state.getActivationIconPosition().translation),
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.activation_icon_position"), null,
+                new ButtonWidget(ELEMENT_WIDTH, () -> VoiceLang.format(state.getActivationIconPosition().translation),
                         this::chooseIconPosition),
                 () -> state.getActivationIconPosition() == HudOptions.IconPosition.BOTTOM_CENTER,
                 () -> state.setActivationIconPosition(HudOptions.IconPosition.BOTTOM_CENTER));
@@ -38,25 +38,25 @@ final class OverlayTab extends SettingsTab {
         addCategory("gui.plasmovoice.overlay.source_icons");
         List<String> iconModes = new ArrayList<>();
         for (String mode : new String[] {"hud", "always", "hidden"}) {
-            iconModes.add(I18n.format("gui.plasmovoice.overlay.show_source_icons." + mode));
+            iconModes.add(VoiceLang.format("gui.plasmovoice.overlay.show_source_icons." + mode));
         }
-        addOption(I18n.format("gui.plasmovoice.overlay.show_source_icons"), null,
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.show_source_icons"), null,
                 new DropDownWidget(ELEMENT_WIDTH, () -> iconModes.get(state.getShowSourceIcons()), iconModes,
                         state::setShowSourceIcons),
                 () -> state.getShowSourceIcons() == 0, () -> state.setShowSourceIcons(0));
 
         addCategory("gui.plasmovoice.overlay");
-        addOption(I18n.format("gui.plasmovoice.overlay.enable"), null,
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.enable"), null,
                 new ToggleWidget(ELEMENT_WIDTH, state::isOverlayEnabled, state::setOverlayEnabled),
                 state::isOverlayEnabled, () -> state.setOverlayEnabled(true));
-        addOption(I18n.format("gui.plasmovoice.overlay.position"), null,
-                new ButtonWidget(ELEMENT_WIDTH, () -> I18n.format(state.getOverlayPosition().translation),
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.position"), null,
+                new ButtonWidget(ELEMENT_WIDTH, () -> VoiceLang.format(state.getOverlayPosition().translation),
                         this::chooseOverlayPosition),
                 () -> state.getOverlayPosition() == HudOptions.OverlayPosition.TOP_LEFT,
                 () -> state.setOverlayPosition(HudOptions.OverlayPosition.TOP_LEFT));
         List<String> styles = new ArrayList<>();
-        for (HudOptions.OverlayStyle style : HudOptions.OverlayStyle.values()) styles.add(I18n.format(style.translation));
-        addOption(I18n.format("gui.plasmovoice.overlay.style"), null,
+        for (HudOptions.OverlayStyle style : HudOptions.OverlayStyle.values()) styles.add(VoiceLang.format(style.translation));
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.style"), null,
                 new DropDownWidget(ELEMENT_WIDTH, () -> styles.get(state.getOverlayStyle().ordinal()), styles,
                         index -> state.setOverlayStyle(HudOptions.OverlayStyle.values()[index])),
                 () -> state.getOverlayStyle() == HudOptions.OverlayStyle.NAME_SKIN,

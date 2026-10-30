@@ -29,6 +29,7 @@ import su.plo.voice.platform.forge.client.gui.VoiceSettingsScreen;
 import su.plo.voice.platform.forge.client.hud.DistanceVisualizer;
 import su.plo.voice.platform.forge.client.hud.PlayerIcons;
 import su.plo.voice.platform.forge.client.hud.VoiceHud;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 
 /** The vanilla settings key plus the upstream voice hotkeys (HotkeyActions and VoiceClientActivation). */
@@ -51,6 +52,7 @@ public final class VoiceControls {
         state.setSettingsFile(settings);
         ClientSettingsFile.load(settings, state);
         VoiceDebug.CLIENT.setEnabled(state.isDebug());
+        VoiceLang.register(new File(Loader.instance().getConfigDir(), "plasmovoice/lang"));
 
         ClientRegistry.registerKeyBinding(SETTINGS_KEY);
         PlayerVolumeAction volumeAction = new PlayerVolumeAction(state);

@@ -86,6 +86,15 @@ plasmovoice-forge-1.7.10-X.Y.Z.jar
 
 A release also has a `-dev` JAR (deobfuscated, for a mod development environment) and a `-sources` JAR. They are for mod developers and are not installed.
 
+## Settings screen languages
+
+The settings screen follows the language selected in Minecraft. English, Russian, Ukrainian, German and French are built in.
+On the first start the client creates editable copies in `config/plasmovoice/lang/` (`en_us.lang`, `ru_ru.lang`, ...).
+Edit them in UTF-8 and press F3+T to reload. The mod never overwrites an existing file: keys missing from it fall back
+to the built-in text, then to another region of the same language (Canadian French uses `fr_fr.lang`), then to English. Delete a file to get a fresh copy on the next start. To add a language, create
+a file named after the Minecraft language code, for example `pl_pl.lang`.
+Server messages are translated separately, in `config/plasmovoice/languages/` on the server.
+
 ## Versioning
 
 Plasmo Voice Legacy Forge uses its own independent release versioning: `0.4.0`, `0.4.1`, `0.5.0`, ... `1.0.0`.

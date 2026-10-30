@@ -4,7 +4,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.EnumChatFormatting;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.VoiceControls;
@@ -30,7 +30,7 @@ public final class VoiceNotAvailableScreen extends GuiScreen {
         int x = (width - WIDTH) / 2;
         y = (height - HEIGHT) / 2;
         buttonList.clear();
-        closeButton = new GuiButton(0, x + 10, 0, WIDTH - 20, 20, I18n.format("message.plasmovoice.close"));
+        closeButton = new GuiButton(0, x + 10, 0, WIDTH - 20, 20, VoiceLang.format("message.plasmovoice.close"));
         buttonList.add(closeButton);
     }
 
@@ -67,11 +67,11 @@ public final class VoiceNotAvailableScreen extends GuiScreen {
     private String message() {
         ClientConnectionState connection = state.getConnection();
         if (connection == null || !connection.isConnected()) {
-            return I18n.format("gui.plasmovoice.not_available");
+            return VoiceLang.format("gui.plasmovoice.not_available");
         }
         if (connection.getUdp() != null && connection.getUdp().isClosed()) {
-            return I18n.format("gui.plasmovoice.cannot_connect_to_udp", EnumChatFormatting.YELLOW + WIKI_LINK);
+            return VoiceLang.format("gui.plasmovoice.cannot_connect_to_udp", EnumChatFormatting.YELLOW + WIKI_LINK);
         }
-        return I18n.format("gui.plasmovoice.connecting");
+        return VoiceLang.format("gui.plasmovoice.connecting");
     }
 }

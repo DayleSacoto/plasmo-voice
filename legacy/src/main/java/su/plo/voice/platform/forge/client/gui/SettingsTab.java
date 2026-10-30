@@ -11,7 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.client.resources.I18n;
+import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 import su.plo.voice.platform.forge.client.ClientState;
@@ -77,12 +77,12 @@ abstract class SettingsTab {
     }
 
     void addHotkey(String labelKey, String name) {
-        addOption(I18n.format(labelKey), null, new HotKeyWidget(this, state.getHotkeys(), name),
+        addOption(VoiceLang.format(labelKey), null, new HotKeyWidget(this, state.getHotkeys(), name),
                 () -> state.getHotkeys().isDefault(name), () -> state.getHotkeys().reset(name));
     }
 
     void addCategory(String translationKey, Object... args) {
-        rows.add(new CategoryRow(I18n.format(translationKey, args)));
+        rows.add(new CategoryRow(VoiceLang.format(translationKey, args)));
     }
 
     /** A category with a server translated name. */
@@ -422,7 +422,7 @@ abstract class SettingsTab {
                 if (widget.isMouseOver(mouseX, mouseY)) return widget.tooltip(mouseX, mouseY);
             }
             if (tooltipKey != null && isOverLabel(mouseX, mouseY, labelTextX, labelTextY, labelTextWidth, labelTextHeight)) {
-                return I18n.format(tooltipKey);
+                return VoiceLang.format(tooltipKey);
             }
             return null;
         }
