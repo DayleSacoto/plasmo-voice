@@ -1,0 +1,9 @@
+key.plasmovoice.settings=Sprachchat-Einstellungen
+message.plasmovoice.on=Ein
+message.plasmovoice.off=Aus
+pv.activation.proximity=Umgebung
+message.plasmovoice.distance_changed=%s Sprachreichweite: %d
+message.plasmovoice.activation.toggle=%s: %s
+key.category.plasmovoice.name=Plasmo Voice
+message.plasmovoice.occlusion_changed=Schalldämpfung durch Hindernisse: %s
+message.plasmovoice.update_available=[Plasmo Voice] Neue Version für Forge 1.7.10 verfügbar: %s (aktuell: %s)

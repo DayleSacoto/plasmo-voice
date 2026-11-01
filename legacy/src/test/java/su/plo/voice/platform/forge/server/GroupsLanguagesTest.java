@@ -68,7 +68,7 @@ public class GroupsLanguagesTest {
     }
 
     private static Map<String, String> bundled(String language) throws IOException {
-        try (InputStream in = GroupsLanguagesTest.class.getResourceAsStream("/plasmovoice/languages/groups/" + language + ".toml")) {
+        try (InputStream in = GroupsLanguagesTest.class.getResourceAsStream("/plasmovoice/lang/server/groups/" + language + ".toml")) {
             assertNotNull(language + " is bundled", in);
             return ServerLanguages.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
         }

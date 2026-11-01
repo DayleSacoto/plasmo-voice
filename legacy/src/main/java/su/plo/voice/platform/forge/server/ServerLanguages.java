@@ -20,7 +20,7 @@ import org.apache.logging.log4j.Logger;
  */
 public final class ServerLanguages {
     private static final String FALLBACK_LANGUAGE = "en_us";
-    private static final String BUNDLED = "/plasmovoice/languages/" + FALLBACK_LANGUAGE + ".toml";
+    private static final String BUNDLED = "/plasmovoice/lang/server/core/" + FALLBACK_LANGUAGE + ".toml";
     static final String[] GROUPS_LANGUAGES = {"en_us", "ru_ru", "uk_ua", "de_de", "fr_fr"};
 
     private final Map<String, Map<String, String>> server = new HashMap<>();
@@ -90,7 +90,7 @@ public final class ServerLanguages {
     static Map<String, Map<String, String>> loadGroups(File folder, Logger logger) {
         Map<String, Map<String, String>> loaded = new HashMap<>();
         for (String name : GROUPS_LANGUAGES) {
-            String resource = "/plasmovoice/languages/groups/" + name + ".toml";
+            String resource = "/plasmovoice/lang/server/groups/" + name + ".toml";
             try (InputStream in = ServerLanguages.class.getResourceAsStream(resource)) {
                 if (in == null) throw new IOException(resource + " is missing");
                 byte[] data = in.readAllBytes();

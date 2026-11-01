@@ -1,0 +1,9 @@
+key.plasmovoice.settings=Paramètres du chat vocal
+message.plasmovoice.on=Activé
+message.plasmovoice.off=Désactivé
+pv.activation.proximity=Proximité
+message.plasmovoice.distance_changed=%s Portée de la voix : %d
+message.plasmovoice.activation.toggle=%s: %s
+key.category.plasmovoice.name=Plasmo Voice
+message.plasmovoice.occlusion_changed=Atténuation du son par les obstacles : %s
+message.plasmovoice.update_available=[Plasmo Voice] Nouvelle version pour Forge 1.7.10 disponible : %s (actuelle : %s)

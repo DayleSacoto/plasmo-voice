@@ -1,0 +1,9 @@
+key.plasmovoice.settings=Настройки голосового чата
+message.plasmovoice.on=Вкл
+message.plasmovoice.off=Выкл
+pv.activation.proximity=Поблизости
+message.plasmovoice.distance_changed=%s Дальность голоса: %d
+message.plasmovoice.activation.toggle=%s: %s
+key.category.plasmovoice.name=Plasmo Voice
+message.plasmovoice.occlusion_changed=Приглушение звука за препятствиями: %s
+message.plasmovoice.update_available=[Plasmo Voice] Доступна новая версия для Forge 1.7.10: %s (текущая: %s)

@@ -100,6 +100,38 @@ public class BundledLangTest {
         }
     }
 
+    private static final List<String> VANILLA = java.util.Arrays.asList("en_US", "ru_RU", "uk_UA", "de_DE", "fr_FR");
+
+    private static Map<String, String> vanilla(String locale) throws Exception {
+        byte[] data;
+        try (java.io.InputStream in = BundledLangTest.class.getResourceAsStream("/assets/plasmovoice/lang/" + locale + ".lang")) {
+            assertNotNull("assets/plasmovoice/lang/" + locale + ".lang is missing", in);
+            data = in.readAllBytes();
+        }
+        assertTrue(locale + " is not valid UTF-8", LangFile.isValidUtf8(data));
+        Map<String, String> entries = new java.util.LinkedHashMap<>();
+        for (String line : new String(data, StandardCharsets.UTF_8).split("\\r?\\n")) {
+            if (line.trim().isEmpty() || line.startsWith("#")) continue;
+            int equals = line.indexOf('=');
+            assertTrue(locale + " malformed line: " + line, equals > 0);
+            assertNull(locale + " duplicate key: " + line, entries.put(line.substring(0, equals), line.substring(equals + 1)));
+        }
+        return entries;
+    }
+
+    @Test
+    public void vanillaLayerHasTheSameKeysAndPlaceholdersInEveryLanguage() throws Exception {
+        Map<String, String> en = vanilla("en_US");
+        for (String locale : VANILLA) {
+            Map<String, String> translated = vanilla(locale);
+            assertEquals(locale + " key set", en.keySet(), translated.keySet());
+            en.forEach((key, english) -> {
+                assertEquals(locale + " " + key + " placeholders", placeholders(english), placeholders(translated.get(key)));
+                assertFalse(locale + " " + key + " is empty", translated.get(key).trim().isEmpty());
+            });
+        }
+    }
+
     @Test
     public void migratedKeysAreGoneFromResourceAssets() throws Exception {
         byte[] data = BundledLangTest.class.getResourceAsStream("/assets/plasmovoice/lang/en_US.lang").readAllBytes();

@@ -32,9 +32,9 @@ public final class VoiceTranslations {
             Arrays.asList("en_us", "ru_ru", "uk_ua", "de_de", "fr_fr"));
     private static final String EXTENSION = ".lang";
 
-    /** Default source of bundled files: classpath resources next to the server's plasmovoice/languages. */
+    /** Default source of bundled files: classpath resources under plasmovoice/lang/client. */
     public static final Function<String, byte[]> CLASSPATH = language -> {
-        try (InputStream in = VoiceTranslations.class.getResourceAsStream("/plasmovoice/lang/" + language + EXTENSION)) {
+        try (InputStream in = VoiceTranslations.class.getResourceAsStream("/plasmovoice/lang/client/" + language + EXTENSION)) {
             return in == null ? null : in.readAllBytes();
         } catch (IOException e) {
             return null;
