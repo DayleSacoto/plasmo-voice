@@ -21,6 +21,7 @@ import org.apache.logging.log4j.Logger;
 public final class ServerLanguages {
     private static final String FALLBACK_LANGUAGE = "en_us";
     private static final String BUNDLED = "/plasmovoice/languages/" + FALLBACK_LANGUAGE + ".toml";
+    static final String[] GROUPS_LANGUAGES = {"en_us", "ru_ru", "uk_ua", "de_de", "fr_fr"};
 
     private final Map<String, Map<String, String>> server = new HashMap<>();
     private final Map<String, Map<String, String>> client = new HashMap<>();
@@ -64,6 +65,12 @@ public final class ServerLanguages {
             }
         }
 
+        // pv-addon-groups registers its own language files; their keys fill in the core languages.
+        loadGroups(new File(folder, "groups"), logger).forEach((name, keys) -> {
+            Map<String, String> language = loaded.computeIfAbsent(name, ignored -> new HashMap<>());
+            keys.forEach(language::putIfAbsent);
+        });
+
         Map<String, String> defaults = loaded.getOrDefault(defaultLanguage, Collections.emptyMap());
         Map<String, String> fallback = loaded.get(FALLBACK_LANGUAGE);
         loaded.forEach((name, keys) -> {
@@ -74,6 +81,43 @@ public final class ServerLanguages {
             languages.client.put(name, scope(merged, "client."));
         });
         return languages;
+    }
+
+    /**
+     * Voice groups languages: each bundled file is copied to {@code folder} if missing; files there override the
+     * bundled keys, and keys added by a newer bundle still appear.
+     */
+    static Map<String, Map<String, String>> loadGroups(File folder, Logger logger) {
+        Map<String, Map<String, String>> loaded = new HashMap<>();
+        for (String name : GROUPS_LANGUAGES) {
+            String resource = "/plasmovoice/languages/groups/" + name + ".toml";
+            try (InputStream in = ServerLanguages.class.getResourceAsStream(resource)) {
+                if (in == null) throw new IOException(resource + " is missing");
+                byte[] data = in.readAllBytes();
+                loaded.put(name, parse(new String(data, StandardCharsets.UTF_8)));
+                File file = new File(folder, name + ".toml");
+                if (!file.exists()) {
+                    folder.mkdirs();
+                    Files.write(file.toPath(), data);
+                }
+            } catch (IOException | IllegalArgumentException e) {
+                logger.warn("Failed to load bundled groups language {}: {}", name, e.getMessage());
+            }
+        }
+        File[] files = folder.listFiles((dir, name) -> name.endsWith(".toml"));
+        if (files == null) return loaded;
+        for (File file : files) {
+            String name = file.getName().substring(0, file.getName().length() - 5).toLowerCase(Locale.ROOT);
+            try {
+                Map<String, String> language = parse(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8));
+                Map<String, String> bundled = loaded.get(name);
+                if (bundled != null) bundled.forEach(language::putIfAbsent);
+                loaded.put(name, language);
+            } catch (IOException | IllegalArgumentException e) {
+                logger.warn("Failed to load groups language {}: {}", file.getName(), e.getMessage());
+            }
+        }
+        return loaded;
     }
 
     /** Client scope for LanguagePacket. */

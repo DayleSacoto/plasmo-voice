@@ -1,0 +1,127 @@
+# Voice groups messages, adapted from pv-addon-groups (MIT, Copyright (c) 2022 Plasmo).
+# Копіюється до config/plasmovoice/languages/groups/, якщо там немає файлу; редагуйте копію в цій теці.
+
+[server.pv.addon.groups]
+divider = "&8&m-----------------------------------------------------"
+
+[server.pv.addon.groups.tooltip]
+group_uuid = "Uuid: %s"
+password_protected = "Групу захищено паролем"
+
+[server.pv.addon.groups.format]
+group_name = "&6[%s]"
+players_and_owner = "&7Гравці: &r%1$s&7, власник: &r%2$s"
+only_players = "&7Гравці: &r%s"
+invite = "%1$s запрошує вас до голосової групи %2$s"
+page = "&7Сторінка &r%1$s/%2$s"
+
+[server.pv.addon.groups.icons]
+password_protected = "&6⛨"
+
+[server.pv.addon.groups.button]
+next = "&e>"
+prev = "&e<"
+leave = "&c← Вийти"
+join = "&e→ Приєднатися"
+invite = "&e✉ Запросити"
+
+[server.pv.addon.groups.arg]
+permissions = "<список дозволів через кому>"
+name = "<назва>"
+groups_uuid = "<uuid групи>"
+password = "<пароль>"
+page = "[сторінка]"
+
+[server.pv.addon.groups.notifications]
+new_owner = "%s — новий власник групи"
+player_left = "%s залишає групу"
+player_join = "%s приєднується до групи"
+group_deleted = "Групу видалено"
+name_change = "Назву групи змінено з «%1$s» на «%2$s»"
+password_changed = "Пароль групи змінено"
+permissions_changed = "Дозволи групи змінено"
+kicked = "&cВас виключили з групи"
+player_kicked = "%s виключено з групи"
+banned = "&cВас заблоковано в групі"
+player_banned = "%s заблоковано в групі"
+player_unbanned = "%s розблоковано в групі"
+persistent_true = "Тепер група постійна"
+persistent_false = "Група більше не постійна"
+password_unset = "Захист паролем знято"
+permissions_unset = "Захист за дозволами знято"
+
+[server.pv.addon.groups.error]
+uuid_parse = "&cПомилка розбору Uuid. «%s» не є Uuid"
+no_permission = "&cНемає дозволу: «%s»"
+group_not_found = "&cГрупу не знайдено"
+not_in_group = "&cЩоб виконати цю команду, потрібно бути в групі"
+unknown = "&cНевідома помилка"
+name_length = "&cДовжина назви групи має бути від %1$s до %2$s символів"
+unknown_subcommand = "&cНевідома команда. Доступні команди: %s"
+player_not_found = "&cГравця з таким іменем немає"
+
+[server.pv.addon.groups.command.set.error]
+usage = "&cВикористання: /groups set <прапорець> <значення>"
+unknown_flag = "&cНевідомий прапорець: \"%1$s\". Доступні прапорці: %2$s"
+identical_value = "&cЗначення збігається з поточним"
+invalid_value = "&cНедійсне значення: \"%s\""
+
+[server.pv.addon.groups.command.unset.error]
+usage = "&cВикористання: /groups unset <прапорець>"
+unknown_flag = "&cПрапорець \"%1$s\" не можна скинути. Доступні прапорці: %2$s"
+password_not_set = "&cГрупу й так не захищено паролем"
+permissions_not_set = "&cФільтр дозволів і так порожній"
+
+[server.pv.addon.groups.command.browse.error]
+page_not_found = "&cСторінку не знайдено"
+no_groups = "&cГруп немає. Створіть групу командою \"/groups create\""
+
+[server.pv.addon.groups.command.invite]
+success = "&aЗапрошення надіслано гравцеві %s"
+
+[server.pv.addon.groups.command.invite.error]
+usage = "&cВикористання: /groups invite <гравець>"
+invite_self = "&cНе можна запросити самого себе"
+already_joined = "&cГравець уже в групі"
+banned = "&cГравця заблоковано в цій групі"
+
+[server.pv.addon.groups.command.join]
+success = "&aВи приєдналися до групи"
+
+[server.pv.addon.groups.command.join.error]
+usage = "&cВикористання: /groups join <uuid групи> [пароль]"
+already_joined = "&cВи вже в цій групі"
+banned = "&cВас заблоковано в цій групі"
+no_permission = "&cУ вас немає дозволу приєднатися до цієї групи"
+password_arg_missing = "&cДля приєднання до цієї групи потрібен пароль"
+wrong_password = "&cНевірний пароль"
+
+[server.pv.addon.groups.command.transfer.error]
+usage = "&cВикористання: /groups transfer <гравець>"
+already_owner = "&cВи вже власник групи"
+not_in_group = "&cГравця немає в групі"
+
+[server.pv.addon.groups.command.kick.error]
+usage = "&cВикористання: /groups kick <гравець>"
+not_in_group = "&cГравця немає в групі"
+
+[server.pv.addon.groups.command.ban.error]
+usage = "&cВикористання: /groups ban <гравець>"
+already_banned = "&cГравця вже заблоковано в групі"
+
+[server.pv.addon.groups.command.unban.error]
+usage = "&cВикористання: /groups unban <гравець>"
+not_banned = "&cГравця не заблоковано в групі"
+
+[server.pv.addon.groups.command.create]
+success = "&aГрупу створено:"
+
+[server.pv.addon.groups.command.leave]
+success = "&aВи залишили групу"
+
+[server.pv.addon.groups.gui]
+done = "&aГотово"
+updated = "&aГрупу оновлено"
+
+[client.pv.activation]
+groups = "Групи"

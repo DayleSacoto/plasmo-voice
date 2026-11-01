@@ -1,0 +1,127 @@
+# Voice groups messages, adapted from pv-addon-groups (MIT, Copyright (c) 2022 Plasmo).
+# Copied to config/plasmovoice/languages/groups/ if missing; edit the copy there.
+
+[server.pv.addon.groups]
+divider = "&8&m-----------------------------------------------------"
+
+[server.pv.addon.groups.tooltip]
+group_uuid = "Uuid: %s"
+password_protected = "Group is password protected"
+
+[server.pv.addon.groups.format]
+group_name = "&6[%s]"
+players_and_owner = "&7Players: &r%1$s&7, owned by &r%2$s"
+only_players = "&7Players: &r%s"
+invite = "%1$s invited you to join voice group %2$s"
+page = "&7Page &r%1$s/%2$s"
+
+[server.pv.addon.groups.icons]
+password_protected = "&6⛨"
+
+[server.pv.addon.groups.button]
+next = "&e>"
+prev = "&e<"
+leave = "&c← Leave"
+join = "&e→ Join"
+invite = "&e✉ Invite"
+
+[server.pv.addon.groups.arg]
+permissions = "<list of comma separated permissions>"
+name = "<name>"
+groups_uuid = "<group uuid>"
+password = "<password>"
+page = "[page]"
+
+[server.pv.addon.groups.notifications]
+new_owner = "%s is the new owner of the group"
+player_left = "%s left the group"
+player_join = "%s joined the group"
+group_deleted = "Group was deleted"
+name_change = "Group name was changed from '%1$s' to '%2$s'"
+password_changed = "Group password changed"
+permissions_changed = "Group permissions changed"
+kicked = "&cYou've been kicked out of the group"
+player_kicked = "%s was kicked out of the group"
+banned = "&cYou've been banned in the group"
+player_banned = "%s was banned in the group"
+player_unbanned = "%s was unbanned in the group"
+persistent_true = "The group is persistent now"
+persistent_false = "The group is no longer persistent"
+password_unset = "Password protection was removed"
+permissions_unset = "Permissions protection was removed"
+
+[server.pv.addon.groups.error]
+uuid_parse = "&cUuid parse error. '%s' is not a Uuid"
+no_permission = "&cNo permission: '%s'"
+group_not_found = "&cGroup not found"
+not_in_group = "&cYou need to be in the group to execute this command"
+unknown = "&cUnknown error"
+name_length = "&cGroup name should be between %1$s and %2$s characters long"
+unknown_subcommand = "&cUnknown command. Available commands: %s"
+player_not_found = "&cNo player with such a name"
+
+[server.pv.addon.groups.command.set.error]
+usage = "&cUsage: /groups set <flag> <value>"
+unknown_flag = "&cUnknown flag: \"%1$s\". Available flags: %2$s"
+identical_value = "&cThe value is identical to current value"
+invalid_value = "&cInvalid value: \"%s\""
+
+[server.pv.addon.groups.command.unset.error]
+usage = "&cUsage: /groups unset <flag>"
+unknown_flag = "&cCan't unset flag \"%1$s\". Available flags: %2$s"
+password_not_set = "&cGroup is already not protected with password"
+permissions_not_set = "&cPermissions filter is already empty"
+
+[server.pv.addon.groups.command.browse.error]
+page_not_found = "&cPage not found"
+no_groups = "&cNo groups. Create groups using \"/groups create\""
+
+[server.pv.addon.groups.command.invite]
+success = "&aInvitation sent to %s"
+
+[server.pv.addon.groups.command.invite.error]
+usage = "&cUsage: /groups invite <player>"
+invite_self = "&cYou can't invite yourself"
+already_joined = "&cPlayer already joined the group"
+banned = "&cPlayer is banned in this group"
+
+[server.pv.addon.groups.command.join]
+success = "&aYou joined the group"
+
+[server.pv.addon.groups.command.join.error]
+usage = "&cUsage: /groups join <group uuid> [password]"
+already_joined = "&cYou already joined this group"
+banned = "&cYou've been banned in this group"
+no_permission = "&cYou don't have permission to join this group"
+password_arg_missing = "&cThis group requires a password to join"
+wrong_password = "&cIncorrect password"
+
+[server.pv.addon.groups.command.transfer.error]
+usage = "&cUsage: /groups transfer <player>"
+already_owner = "&cYou are already the owner of the group"
+not_in_group = "&cPlayer is not in the group"
+
+[server.pv.addon.groups.command.kick.error]
+usage = "&cUsage: /groups kick <player>"
+not_in_group = "&cPlayer is not in the group"
+
+[server.pv.addon.groups.command.ban.error]
+usage = "&cUsage: /groups ban <player>"
+already_banned = "&cPlayer is already banned in the group"
+
+[server.pv.addon.groups.command.unban.error]
+usage = "&cUsage: /groups unban <player>"
+not_banned = "&cPlayer is not banned in the group"
+
+[server.pv.addon.groups.command.create]
+success = "&aThe group was created:"
+
+[server.pv.addon.groups.command.leave]
+success = "&aYou left the group"
+
+[server.pv.addon.groups.gui]
+done = "&aDone"
+updated = "&aGroup updated"
+
+[client.pv.activation]
+groups = "Groups"
