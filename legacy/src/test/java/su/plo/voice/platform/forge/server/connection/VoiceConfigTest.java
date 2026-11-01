@@ -55,18 +55,20 @@ public class VoiceConfigTest {
         ServerConfig server = new ServerConfig();
         ConfigPacket packet = decode(server.createPacket(pair.getPublic()), pair).getPacket();
 
-        VoiceSourceLine line = packet.getSourceLines().iterator().next();
-        assertEquals(1, packet.getSourceLines().size());
-        assertEquals(VoiceSourceLine.PROXIMITY_ID, line.getId());
+        VoiceSourceLine line = packet.getSourceLines().stream()
+                .filter(it -> it.getId().equals(VoiceSourceLine.PROXIMITY_ID)).findFirst().orElse(null);
+        assertNotNull(line);
+        assertEquals(2, packet.getSourceLines().size());
         assertEquals("pv.activation.proximity", line.getTranslation());
         assertEquals("plasmovoice:textures/icons/speaker.png", line.getIcon());
         assertEquals(1.0, line.getDefaultVolume(), 0.0);
         assertEquals(1, line.getWeight());
         assertFalse(line.hasPlayers());
 
-        VoiceActivation activation = packet.getActivations().iterator().next();
-        assertEquals(1, packet.getActivations().size());
-        assertEquals(VoiceActivation.PROXIMITY_ID, activation.getId());
+        VoiceActivation activation = packet.getActivations().stream()
+                .filter(it -> it.getId().equals(VoiceActivation.PROXIMITY_ID)).findFirst().orElse(null);
+        assertNotNull(activation);
+        assertEquals(2, packet.getActivations().size());
         assertEquals("pv.activation.proximity", activation.getTranslation());
         assertEquals("plasmovoice:textures/icons/microphone.png", activation.getIcon());
         assertEquals(Arrays.asList(8, 16, 32), activation.getDistances());
@@ -78,13 +80,44 @@ public class VoiceConfigTest {
         assertEquals(1, activation.getWeight());
 
         ClientConfig client = decode(server.createPacket(pair.getPublic()), pair);
-        assertEquals(java.util.Collections.singletonMap(VoiceActivation.PROXIMITY_ID, 16), client.activationDistances());
+        assertEquals(Integer.valueOf(16), client.activationDistances().get(VoiceActivation.PROXIMITY_ID));
 
         java.util.Map<java.util.UUID, Integer> sent = new java.util.HashMap<>();
         sent.put(VoiceActivation.PROXIMITY_ID, 32);
         sent.put(java.util.UUID.randomUUID(), 8); // unknown activations are ignored
         assertEquals(java.util.Collections.singletonMap(VoiceActivation.PROXIMITY_ID, 32),
                 server.knownActivationDistances(sent));
+    }
+
+    /** pv-addon-groups GroupsAddon: activation and source line "groups", weight 10, no distances. */
+    @Test
+    public void groupsLineAndActivationMatchUpstreamAddon() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair pair = generator.generateKeyPair();
+        ServerConfig server = new ServerConfig();
+        ConfigPacket packet = decode(server.createPacket(pair.getPublic()), pair).getPacket();
+
+        VoiceSourceLine line = packet.getSourceLines().stream()
+                .filter(it -> it.getName().equals("groups")).findFirst().orElse(null);
+        assertNotNull(line);
+        assertEquals(server.getGroupsLine().getId(), line.getId());
+        assertEquals("pv.activation.groups", line.getTranslation());
+        assertEquals("plasmovoice:textures/icons/speaker_group.png", line.getIcon());
+        assertEquals(10, line.getWeight());
+        assertFalse(line.hasPlayers());
+
+        VoiceActivation activation = packet.getActivations().stream()
+                .filter(it -> it.getName().equals("groups")).findFirst().orElse(null);
+        assertNotNull(activation);
+        assertEquals(server.getGroupsActivation().getId(), activation.getId());
+        assertEquals("pv.activation.groups", activation.getTranslation());
+        assertEquals("plasmovoice:textures/icons/microphone_group.png", activation.getIcon());
+        assertTrue(activation.getDistances().isEmpty());
+        assertFalse(activation.isProximity());
+        assertTrue(activation.isTransitive());
+        assertFalse(activation.isStereoSupported());
+        assertEquals(10, activation.getWeight());
     }
 
     @Test

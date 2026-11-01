@@ -17,6 +17,7 @@ import lombok.Getter;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.common.config.Property;
 import org.apache.logging.log4j.Logger;
+import su.plo.voice.platform.forge.server.groups.GroupsSettings;
 import su.plo.voice.proto.data.config.PlayerIconVisibility;
 
 /** Persisted subset of upstream VoiceServerConfig, stored as a Forge config file. */
@@ -56,11 +57,14 @@ public final class ServerSettings {
     private final boolean debug;
     /** Legacy extension: updates.check_for_updates, one GitHub release check per dedicated server start. */
     private final boolean checkForUpdates;
+    /** pv-addon-groups groups.toml, as the [groups] category. */
+    private final GroupsSettings groups;
 
     public static ServerSettings defaults() {
         return new ServerSettings(UUID.randomUUID(), "0.0.0.0", 0, null, 0, 48_000, 1024, 15_000,
                 ServerConnection.DEFAULT_CLIENT_MOD_MIN_VERSION, Arrays.asList(8, 16, 32), 16, "VOIP", -1000,
-                "en_us", null, true, true, 16, false, 3_000L, Collections.emptySet(), 0D, false, true);
+                "en_us", null, true, true, 16, false, 3_000L, Collections.emptySet(), 0D, false, true,
+                GroupsSettings.defaults());
     }
 
     public static ServerSettings load(File file, Logger logger) {
@@ -178,12 +182,40 @@ public final class ServerSettings {
                 "Checks GitHub once per dedicated server start for a newer release of this Forge 1.7.10 backport and "
                         + "logs it. Nothing is downloaded. Default: true").getBoolean(true);
 
+        GroupsSettings groups = loadGroups(config, logger);
+
         if (config.hasChanged()) config.save();
         return new ServerSettings(serverId, hostIp, hostPort, publicIp.isEmpty() ? null : publicIp, publicPort,
                 sampleRate, mtuSize, keepAliveTimeoutMs, clientModMinVersion, Collections.unmodifiableList(distances),
                 defaultDistance, opusMode, opusBitrate, defaultLanguage, forcedLanguage.isEmpty() ? null : forcedLanguage,
                 notifyMuted, notifyUnmuted, maxExtraDistance, clientModRequired, clientModRequiredCheckTimeoutMs,
-                Collections.unmodifiableSet(visibility), playerIconYOffset, debug, checkForUpdates);
+                Collections.unmodifiableSet(visibility), playerIconYOffset, debug, checkForUpdates, groups);
+    }
+
+    /** pv-addon-groups Config.kt; its commented-out distance options are left out. */
+    private static GroupsSettings loadGroups(Configuration config, Logger logger) {
+        GroupsSettings defaults = GroupsSettings.defaults();
+        boolean enabled = config.get("groups", "enabled", defaults.isEnabled(),
+                "Voice groups: the \"groups\" activation and the /groups command. Changing it needs a server restart. "
+                        + "Default: true").getBoolean(defaults.isEnabled());
+        int activationWeight = intValue(config.get("groups", "activation_weight", defaults.getActivationWeight(),
+                "Priority of the groups activation; higher runs first on the client. Default: 10"),
+                Integer.MIN_VALUE, Integer.MAX_VALUE, logger, "groups.activation_weight");
+        int sourceLineWeight = intValue(config.get("groups", "sourceline_weight", defaults.getSourceLineWeight(),
+                "Order of the groups source line in the client settings and overlay. Default: 10"),
+                Integer.MIN_VALUE, Integer.MAX_VALUE, logger, "groups.sourceline_weight");
+        String nameFormat = config.get("groups", "default_group_name_format", defaults.getDefaultGroupNameFormat(),
+                "Name of a group created without name:, %player% is the creator. Default: %player%'s group").getString();
+        int minimumNameLength = intValue(config.get("groups", "minimum_name_length", defaults.getMinimumNameLength(),
+                "Default: 3"), 1, 256, logger, "groups.minimum_name_length");
+        int maximumNameLength = intValue(config.get("groups", "maximum_name_length", defaults.getMaximumNameLength(),
+                "Default: 32"), 1, 256, logger, "groups.maximum_name_length");
+        if (minimumNameLength > maximumNameLength) {
+            minimumNameLength = invalid(logger, "groups.minimum_name_length", minimumNameLength, Math.min(
+                    defaults.getMinimumNameLength(), maximumNameLength));
+        }
+        return new GroupsSettings(enabled, activationWeight, sourceLineWeight, nameFormat, minimumNameLength,
+                maximumNameLength);
     }
 
     /** Upstream reload restarts the UDP server only when the host settings changed. */

@@ -50,6 +50,11 @@ import su.plo.voice.platform.forge.server.connection.UdpServer;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
 import su.plo.voice.platform.forge.server.connection.ServerSettings;
 import su.plo.voice.platform.forge.server.connection.ServerVoicePlayers;
+import su.plo.voice.platform.forge.server.groups.Group;
+import su.plo.voice.platform.forge.server.groups.GroupProfile;
+import su.plo.voice.platform.forge.server.groups.GroupsListener;
+import su.plo.voice.platform.forge.server.groups.GroupsManager;
+import su.plo.voice.platform.forge.server.groups.GroupsStore;
 import su.plo.voice.platform.forge.update.UpdateChecker;
 
 @Getter
@@ -92,6 +97,13 @@ public final class PlasmoVoiceMod {
     private long lastMuteExpiryCheck;
 
     private ServerVoicePlayers voicePlayers;
+    /** pv-addon-groups state for one server lifecycle; null while groups are disabled. */
+    private GroupsManager groupsManager;
+    @Getter(AccessLevel.NONE)
+    private GroupsStore groupsStore;
+    /** Chat side of the groups notifications, available once the server has started. */
+    @Getter(AccessLevel.NONE)
+    private GroupsListener groupsMessages;
     /** Players that have not sent a voice packet yet (upstream PlayerInfoRequestScheduler and ModRequiredKickHandler). */
     @Getter(AccessLevel.NONE)
     private final Map<UUID, PendingPlayer> pendingPlayers = new HashMap<>();
@@ -211,6 +223,7 @@ public final class PlasmoVoiceMod {
                     event.player.getUniqueID());
         }
         pendingPlayers.remove(event.player.getUniqueID());
+        if (groupsManager != null) groupsManager.playerOffline(event.player.getUniqueID());
         voicePlayers.remove(event.player.getUniqueID());
         if (udpServer != null) udpServer.removeSession(event.player.getUniqueID());
     }
@@ -224,6 +237,7 @@ public final class PlasmoVoiceMod {
         applySettings(settings);
         mutes = new VoiceMutes(new File(configFolder(), "voice_mutes.json"), LOGGER);
         mutes.load();
+        startGroups(settings);
         // getServerPort() is @SideOnly(SERVER): singleplayer has no fixed port, so upstream falls back to a random one.
         minecraftPort = event.getServer().isDedicatedServer() ? event.getServer().getServerPort() : -1;
         startUdpServer(settings);
@@ -257,6 +271,7 @@ public final class PlasmoVoiceMod {
 
     @Mod.EventHandler
     public void serverStopping(FMLServerStoppingEvent event) {
+        stopGroups();
         if (udpServer != null) udpServer.close();
         udpServer = null;
         serverConfig = null;
@@ -277,10 +292,13 @@ public final class PlasmoVoiceMod {
         }
         voiceChannel.sendToPlayer(player, new PlayerInfoRequestPacket());
         if (serverConfig != null) pendingPlayers.put(player.getUniqueID(), new PendingPlayer(player, System.currentTimeMillis()));
+        // pv-addon-groups onPlayerJoin: a remembered membership is back online.
+        if (groupsManager != null) groupsManager.playerOnline(groupProfile(player));
     }
 
     @Mod.EventHandler
     public void serverStopped(FMLServerStoppedEvent event) {
+        stopGroups();
         if (udpServer != null) udpServer.close();
         udpServer = null;
         serverConfig = null;
@@ -312,8 +330,76 @@ public final class PlasmoVoiceMod {
             return;
         }
         udpServer.setProximityActivation(serverConfig.getProximityActivation());
+        applyGroupsRouting();
         udpServer.setMaxExtraBroadcastDistance(settings.getMaxExtraAudioBroadcastDistance());
         voicePlayers.resendConfig(serverConfig);
+    }
+
+    /**
+     * pv-addon-groups GroupsAddon.onConfigLoaded: persistent groups from config/plasmovoice/groups.json. Enabling or
+     * disabling groups takes effect with the next server start.
+     */
+    private void startGroups(ServerSettings settings) {
+        groupsManager = null;
+        groupsStore = null;
+        if (!settings.getGroups().isEnabled()) return;
+        groupsStore = new GroupsStore(new File(configFolder(), "groups.json"), LOGGER);
+        groupsManager = new GroupsManager(new GroupsListener() {
+            @Override
+            public void notifyGroup(Group group, String key, Object... args) {
+                if (groupsMessages != null) groupsMessages.notifyGroup(group, key, args);
+            }
+
+            @Override
+            public void notifyPlayer(UUID player, String key, Object... args) {
+                if (groupsMessages != null) groupsMessages.notifyPlayer(player, key, args);
+            }
+
+            @Override
+            public void routesChanged(Group group) {
+                if (serverConfig != null) voicePlayers.sendGroupSources(groupsManager.routes(group), serverConfig);
+            }
+
+            @Override
+            public void changed() {
+                if (groupsStore != null) groupsStore.save(groupsManager.snapshot());
+            }
+        });
+        groupsManager.setNameFallback(net.minecraftforge.common.UsernameCache::getLastKnownUsername);
+        groupsManager.restore(groupsStore.load());
+        voicePlayers.setGroupRoutes(groupsManager::route);
+        voicePlayers.setGroupRoutesBySource(groupsManager::routeBySource);
+        voicePlayers.setVoiceConnected(playerId -> {
+            // A (re)connected client has no group sources yet.
+            Group group = groupsManager == null ? null : groupsManager.groupOf(playerId);
+            if (group != null && serverConfig != null) voicePlayers.sendGroupSources(groupsManager.routes(group), serverConfig);
+        });
+    }
+
+    /** pv-addon-groups onAddonShutdown: the persistent groups are saved, the runtime state is dropped. */
+    private void stopGroups() {
+        if (groupsManager != null && groupsStore != null) groupsStore.save(groupsManager.snapshot());
+        if (groupsManager != null) groupsManager.clear();
+        groupsManager = null;
+        groupsStore = null;
+        groupsMessages = null;
+        voicePlayers.setGroupRoutes(speaker -> null);
+        voicePlayers.setGroupRoutesBySource(sourceId -> null);
+        voicePlayers.setVoiceConnected(playerId -> { });
+        if (udpServer != null) udpServer.setGroups(null, speaker -> null);
+    }
+
+    private void applyGroupsRouting() {
+        GroupsManager manager = groupsManager;
+        if (manager == null) {
+            udpServer.setGroups(null, speaker -> null);
+        } else {
+            udpServer.setGroups(serverConfig.getGroupsActivation(), manager::route);
+        }
+    }
+
+    public static GroupProfile groupProfile(EntityPlayerMP player) {
+        return new GroupProfile(player.getUniqueID(), player.getCommandSenderName());
     }
 
     /** Upstream VoiceReconnectCommand: drop the UDP session and ask for the player info again. */
@@ -446,6 +532,7 @@ public final class PlasmoVoiceMod {
         }
         udpServer = UdpServer.create(LOGGER, settings, minecraftPort);
         udpServer.setProximityActivation(serverConfig.getProximityActivation());
+        applyGroupsRouting();
         udpServer.start();
     }
 

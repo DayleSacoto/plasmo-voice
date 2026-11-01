@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -15,10 +17,13 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
+import su.plo.slib.api.entity.player.McGameProfile;
 import su.plo.voice.platform.forge.server.ServerLanguages;
+import su.plo.voice.platform.forge.server.groups.GroupRoute;
 import su.plo.voice.platform.forge.network.VoiceChannel;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.audio.codec.opus.OpusDecoderInfo;
+import su.plo.voice.proto.data.audio.source.DirectSourceInfo;
 import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
 import su.plo.voice.proto.data.audio.source.SelfSourceInfo;
 import su.plo.voice.proto.data.player.VoicePlayerInfo;
@@ -37,6 +42,8 @@ import su.plo.voice.proto.packets.tcp.serverbound.PlayerAudioEndPacket;
 public final class ServerVoicePlayers {
     private static final Logger LOGGER = LogManager.getLogger("Plasmo Voice");
     private static final long LANGUAGE_RESPONSE_INTERVAL_MS = 1_000L;
+    /** Upstream sources carry the id of the addon that created them. */
+    static final String GROUPS_ADDON_ID = "pv-addon-groups";
 
     private final VoiceChannel channel;
     private final Map<UUID, ServerConnection> connections = new HashMap<>();
@@ -45,6 +52,14 @@ public final class ServerVoicePlayers {
     /** Upstream voice.max_extra_audio_broadcast_distance, for the TCP packets of a source. */
     @Setter
     private int maxExtraDistance = 16;
+    /** Groups routing snapshots by speaker and by source id (GroupsManager). */
+    @Setter
+    private Function<UUID, GroupRoute> groupRoutes = speaker -> null;
+    @Setter
+    private Function<UUID, GroupRoute> groupRoutesBySource = sourceId -> null;
+    /** A player's UDP connection is authenticated: the groups source infos are resent to it. */
+    @Setter
+    private Consumer<UUID> voiceConnected = playerId -> { };
 
     public Collection<ServerConnection> all() {
         return Collections.unmodifiableCollection(connections.values());
@@ -118,6 +133,7 @@ public final class ServerVoicePlayers {
                 case VOICE_CONNECTED:
                     channel.sendToPlayer(connection.getPlayer(), new PlayerListPacket(voicePlayers()));
                     broadcast(new PlayerInfoUpdatePacket(connection.createPlayerInfo()));
+                    voiceConnected.accept(connection.getPlayer().getUniqueID());
                     break;
                 case VOICE_DISCONNECTED:
                     // Upstream also tells the player itself, which makes its client drop the dead UDP client.
@@ -167,6 +183,39 @@ public final class ServerVoicePlayers {
             }
             return;
         }
+        // A group source is described only to the members it is routed to.
+        GroupRoute route = groupRoutesBySource.apply(sourceId);
+        if (route == null || !route.getRecipients().contains(requester.getPlayer().getUniqueID())) return;
+        SourceInfoPacket info = groupSourceInfo(route, config);
+        if (info != null) channel.sendToPlayer(requester.getPlayer(), info);
+    }
+
+    /**
+     * pv-addon-groups broadcast sources are announced to their listeners before the audio: every voice member of
+     * a changed group learns the sources of the other members.
+     */
+    public void sendGroupSources(Collection<GroupRoute> routes, ServerConfig config) {
+        for (GroupRoute route : routes) {
+            SourceInfoPacket info = groupSourceInfo(route, config);
+            if (info == null) continue;
+            for (UUID recipient : route.getRecipients()) {
+                ServerConnection listener = connections.get(recipient);
+                if (listener != null && listener.isVoiceConnected() && !listener.isVoiceDisabled()) {
+                    channel.sendToPlayer(listener.getPlayer(), info);
+                }
+            }
+        }
+    }
+
+    /** The speaker as the source's sender; null while the speaker has no voice connection. */
+    private SourceInfoPacket groupSourceInfo(GroupRoute route, ServerConfig config) {
+        ServerConnection speaker = connections.get(route.getSpeaker());
+        if (speaker == null || config.getGroupsLine() == null) return null;
+        McGameProfile sender = new McGameProfile(route.getSpeaker(), speaker.getPlayer().getCommandSenderName(),
+                Collections.emptyList());
+        return new SourceInfoPacket(new DirectSourceInfo(GROUPS_ADDON_ID, route.getSourceId(),
+                config.getGroupsLine().getId(), null, route.getSourceState(), new OpusDecoderInfo(), false, true, 0,
+                sender, null, null, true));
     }
 
     /**
@@ -175,6 +224,11 @@ public final class ServerVoicePlayers {
      */
     public void handleAudioEnd(ServerConnection speaker, PlayerAudioEndPacket packet, ServerConfig config) {
         UdpServer.Session session = speaker.getUdpSession();
+        VoiceActivation groups = config.getGroupsActivation();
+        if (groups != null && groups.getId().equals(packet.getActivationId())) {
+            handleGroupAudioEnd(speaker, session, packet);
+            return;
+        }
         VoiceActivation activation = config.getProximityActivation();
         if (session == null || !speaker.isVoiceConnected() || speaker.isServerMuted() || speaker.isMicrophoneMuted()
                 || !activation.getId().equals(packet.getActivationId())) return;
@@ -185,6 +239,21 @@ public final class ServerVoicePlayers {
                     speaker.getPlayer().getCommandSenderName(), session.getGeneration(), packet.getSequenceNumber(), distance);
         }
         sendToListeners(session, distance, new SourceAudioEndPacket(session.getSourceId(), packet.getSequenceNumber()));
+    }
+
+    /** pv-addon-groups ActivationListener.onActivationEnd: the end of the speaker's group source, to its members. */
+    private void handleGroupAudioEnd(ServerConnection speaker, UdpServer.Session session, PlayerAudioEndPacket packet) {
+        if (session == null || !speaker.isVoiceConnected() || speaker.isServerMuted() || speaker.isMicrophoneMuted()
+                || !session.endGroupsActivation(packet.getSequenceNumber())) return;
+        GroupRoute route = groupRoutes.apply(speaker.getPlayer().getUniqueID());
+        if (route == null) return;
+        SourceAudioEndPacket end = new SourceAudioEndPacket(route.getSourceId(), packet.getSequenceNumber());
+        for (UUID recipient : route.getRecipients()) {
+            ServerConnection listener = connections.get(recipient);
+            if (listener != null && listener.isVoiceConnected() && !listener.isVoiceDisabled()) {
+                channel.sendToPlayer(listener.getPlayer(), end);
+            }
+        }
     }
 
     private void sendToListeners(UdpServer.Session speaker, short distance, Packet<?> packet) {

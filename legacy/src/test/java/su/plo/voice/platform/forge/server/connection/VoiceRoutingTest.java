@@ -3,7 +3,9 @@ package su.plo.voice.platform.forge.server.connection;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -20,6 +22,7 @@ import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.connection.UdpClient;
 import su.plo.voice.platform.forge.debug.VoiceDebug;
+import su.plo.voice.platform.forge.server.groups.GroupRoute;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.audio.codec.opus.OpusDecoderInfo;
 import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
@@ -143,6 +146,81 @@ public class VoiceRoutingTest {
         }
     }
 
+    /**
+     * pv-addon-groups: the speaker's group source reaches the other online members at any distance and in any world,
+     * never the speaker, a non-member or a member with voice disabled; proximity routing is unchanged.
+     */
+    @Test
+    public void groupVoiceReachesOnlyGroupMembersAtAnyDistance() throws Exception {
+        ServerConfig config = new ServerConfig();
+        UUID groups = config.getGroupsActivation().getId();
+        try (UdpServer server = new UdpServer(LOGGER, "127.0.0.1", 0, "127.0.0.1", 0, 15_000)) {
+            server.start();
+            server.setProximityActivation(config.getProximityActivation());
+
+            Peer speaker = new Peer(server, config, presence(false, false, 0, 0));
+            Peer member = new Peer(server, config, presence(false, false, -1, 100_000));
+            Peer outsider = new Peer(server, config, presence(false, false, 0, 5));
+            Peer deafened = new Peer(server, config, presence(true, false, 0, 100_000));
+            GroupRoute route = new GroupRoute(speaker.session.getPlayerId(), UUID.randomUUID(), (byte) 1,
+                    new HashSet<>(Arrays.asList(speaker.session.getPlayerId(), member.session.getPlayerId(),
+                            deafened.session.getPlayerId())));
+            server.setGroups(config.getGroupsActivation(),
+                    playerId -> playerId.equals(speaker.session.getPlayerId()) ? route : null);
+
+            try (AudioEncoder encoder = OpusCodec.createEncoder(
+                    config.getCaptureInfo().getEncoderInfo(), SAMPLE_RATE, false, 1024)) {
+                for (int frame = 0; frame < 60; frame++) {
+                    speaker.send(frame, speaker.config.getEncryption().encrypt(encoder.encode(tone(frame))), groups, (short) 0);
+                    Thread.sleep(5L);
+                }
+            }
+            await(() -> member.audio.size() >= 55);
+            assertTrue(member.audio.stream().allMatch(packet -> packet instanceof SourceAudioPacket
+                    && ((SourceAudioPacket) packet).getSourceId().equals(route.getSourceId())
+                    && ((SourceAudioPacket) packet).getDistance() == 0));
+            assertToneHeard(decode(member));
+            assertTrue(outsider.audio.isEmpty());
+            assertTrue(deafened.audio.isEmpty());
+            assertTrue(speaker.audio.isEmpty());
+            assertTrue(speaker.session.isGroupsActivationActive());
+            assertFalse(speaker.session.isActivationActive());
+            assertTrue(speaker.session.endGroupsActivation(59));
+            assertFalse(speaker.session.endGroupsActivation(59));
+
+            // Proximity voice of the same speaker still goes by distance only.
+            int groupFrames = member.audio.size();
+            speaker.send(100, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}));
+            await(() -> !outsider.audio.isEmpty());
+            assertEquals(speaker.session.getSourceId(), ((SourceAudioPacket) outsider.audio.get(0)).getSourceId());
+            Thread.sleep(200L);
+            assertEquals(groupFrames, member.audio.size());
+
+            // A player outside any group is ignored on the groups activation.
+            outsider.send(1, outsider.config.getEncryption().encrypt(new byte[] {1, 2, 3}), groups, (short) 0);
+            Thread.sleep(200L);
+            assertEquals(groupFrames, member.audio.size());
+            assertTrue(speaker.audio.stream().noneMatch(packet -> packet instanceof SourceAudioPacket));
+
+            // Disabling groups drops the activation entirely.
+            server.setGroups(null, playerId -> route);
+            speaker.send(200, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}), groups, (short) 0);
+            Thread.sleep(200L);
+            assertEquals(groupFrames, member.audio.size());
+        }
+    }
+
+    @Test
+    public void groupListenerIsNeverTheSpeaker() {
+        UdpServer.Session speaker = new UdpServer.Session(UUID.randomUUID(), UUID.randomUUID());
+        UdpServer.Session listener = new UdpServer.Session(UUID.randomUUID(), UUID.randomUUID());
+        speaker.setPresence(presence(false, false, 0, 0));
+        listener.setPresence(presence(false, false, 0, 0));
+        assertFalse(UdpServer.isGroupListener(speaker, speaker));
+        assertFalse(UdpServer.isGroupListener(speaker, null));
+        assertFalse(UdpServer.isGroupListener(speaker, listener)); // not authenticated
+    }
+
     @Test
     public void listenerRangeFollowsUpstreamFormula() {
         UdpServer.Session speaker = new UdpServer.Session(UUID.randomUUID(), UUID.randomUUID());
@@ -180,7 +258,11 @@ public class VoiceRoutingTest {
         }
 
         void send(long sequenceNumber, byte[] data) {
-            client.send(new PlayerAudioPacket(sequenceNumber, data, VoiceActivation.PROXIMITY_ID, (short) 16, false));
+            send(sequenceNumber, data, VoiceActivation.PROXIMITY_ID, (short) 16);
+        }
+
+        void send(long sequenceNumber, byte[] data, UUID activationId, short distance) {
+            client.send(new PlayerAudioPacket(sequenceNumber, data, activationId, distance, false));
         }
     }
 

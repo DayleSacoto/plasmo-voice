@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 import com.google.common.io.ByteStreams;
 import lombok.Getter;
@@ -26,6 +27,7 @@ import su.plo.voice.platform.forge.debug.UdpStats;
 import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.platform.forge.debug.WorkerWatch;
+import su.plo.voice.platform.forge.server.groups.GroupRoute;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.PacketDirection;
@@ -61,6 +63,10 @@ public final class UdpServer implements AutoCloseable {
     private volatile DatagramSocket socket;
     private volatile InetSocketAddress boundAddress;
     private volatile VoiceActivation proximityActivation;
+    /** pv-addon-groups activation; null while groups are disabled. */
+    private volatile VoiceActivation groupsActivation;
+    /** Groups routing snapshot by speaker, published by the server thread. */
+    private volatile Function<UUID, GroupRoute> groupRoutes = speaker -> null;
     /** Upstream voice.max_extra_audio_broadcast_distance. */
     @Setter
     private volatile int maxExtraBroadcastDistance = 16;
@@ -280,12 +286,23 @@ public final class UdpServer implements AutoCloseable {
         this.proximityActivation = activation;
     }
 
+    /** {@code activation} null disables group routing. */
+    public void setGroups(VoiceActivation activation, Function<UUID, GroupRoute> routes) {
+        this.groupRoutes = routes;
+        this.groupsActivation = activation;
+    }
+
     /**
      * Upstream NettyUdpServerConnection (server mute, microphone mute), VoiceServerActivationManager.onPlayerSpeak
      * and ProximityServerActivationHelper, run on the UDP worker.
      */
     private void routeAudio(DatagramSocket endpoint, Session speaker, PlayerAudioPacket audio) {
         Presence presence = speaker.presence;
+        VoiceActivation groups = groupsActivation;
+        if (groups != null && groups.getId().equals(audio.getActivationId())) {
+            routeGroupAudio(endpoint, speaker, presence, groups, audio);
+            return;
+        }
         VoiceActivation activation = proximityActivation;
         if (presence == null || !presence.isVoiceConnected() || presence.isServerMuted() || presence.isMicrophoneMuted()
                 || activation == null || !activation.getId().equals(audio.getActivationId())) {
@@ -322,6 +339,36 @@ public final class UdpServer implements AutoCloseable {
                         speaker.name(), speaker.generation, sequenceNumber, distance, recipients);
             }
         }
+    }
+
+    /**
+     * pv-addon-groups ActivationListener.onActivation: the speaker's group broadcast source reaches the other online
+     * members whatever their distance or world; a speaker outside any group is ignored.
+     */
+    private void routeGroupAudio(DatagramSocket endpoint, Session speaker, Presence presence, VoiceActivation activation,
+                                 PlayerAudioPacket audio) {
+        GroupRoute route = groupRoutes.apply(speaker.playerId);
+        if (presence == null || !presence.isVoiceConnected() || presence.isServerMuted() || presence.isMicrophoneMuted()
+                || route == null) {
+            if (DEBUG.enabled()) speaker.rejected(presence, activation, audio);
+            return;
+        }
+        long sequenceNumber = audio.getSequenceNumber();
+        long lastEnd = speaker.groupsActivationEnd;
+        if (sequenceNumber > lastEnd || Math.abs(sequenceNumber - lastEnd) > 10) speaker.groupsActivationActive = true;
+        SourceAudioPacket packet = new SourceAudioPacket(sequenceNumber, route.getSourceState(), audio.getData(),
+                route.getSourceId(), (short) 0);
+        for (UUID recipient : route.getRecipients()) {
+            Session listener = byPlayer.get(recipient);
+            if (isGroupListener(speaker, listener)) send(endpoint, packet, listener);
+        }
+    }
+
+    /** pv-addon-groups source filter: an online member with voice enabled, never the speaker. */
+    static boolean isGroupListener(Session speaker, Session listener) {
+        if (listener == null || listener == speaker || !listener.active || !listener.authenticated) return false;
+        Presence to = listener.presence;
+        return to != null && to.isVoiceConnected() && !to.isVoiceDisabled();
     }
 
     /** Upstream VoiceServerProximitySource listeners: not the speaker, voice enabled, same world, in range. */
@@ -468,6 +515,9 @@ public final class UdpServer implements AutoCloseable {
         private volatile boolean activationActive;
         /** Upstream lastActivationSequenceNumber. */
         private volatile long lastActivationEnd;
+        /** The same pair for the groups activation. */
+        private volatile boolean groupsActivationActive;
+        private volatile long groupsActivationEnd;
 
         // Diagnostics only, updated while debug logging is enabled; the routing counters belong to the UDP worker.
         /** Local session number for correlating logs; never sent. */
@@ -512,7 +562,9 @@ public final class UdpServer implements AutoCloseable {
                 String reason = presence == null || !presence.isVoiceConnected() ? "voice not connected"
                         : presence.isServerMuted() ? "server muted"
                         : presence.isMicrophoneMuted() ? "microphone muted"
-                        : activation == null ? "no proximity activation" : "unknown activation " + audio.getActivationId();
+                        : activation == null ? "no proximity activation"
+                        : activation.getId().equals(audio.getActivationId()) ? "not in a group"
+                        : "unknown activation " + audio.getActivationId();
                 DEBUG.log(Category.AUDIO, "audio rejected: player={}, generation={}, reason={}, rejected={}",
                         name(), generation, reason, rejected);
             }
@@ -532,6 +584,14 @@ public final class UdpServer implements AutoCloseable {
             if (!activationActive) return false;
             activationActive = false;
             lastActivationEnd = sequenceNumber;
+            return true;
+        }
+
+        /** Server thread: ends the groups activation once; false when it was not active. */
+        boolean endGroupsActivation(long sequenceNumber) {
+            if (!groupsActivationActive) return false;
+            groupsActivationActive = false;
+            groupsActivationEnd = sequenceNumber;
             return true;
         }
     }
