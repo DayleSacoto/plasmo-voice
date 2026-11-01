@@ -20,6 +20,7 @@ import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
+import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
 import su.plo.voice.proto.data.audio.source.SourceInfo;
@@ -104,6 +105,16 @@ public final class ClientState {
     @Getter
     @Setter
     private volatile HudOptions.OverlayStyle overlayStyle = HudOptions.OverlayStyle.NAME_SKIN;
+    /** Legacy extension: the Group HUD (group name and online members); position in scaled GUI pixels, see GroupHudPosition. */
+    @Getter
+    @Setter
+    private volatile boolean groupHudEnabled = true;
+    @Getter
+    private volatile GroupHudPosition.Anchor groupHudAnchor = GroupHudPosition.DEFAULT_ANCHOR;
+    @Getter
+    private volatile int groupHudOffsetX = GroupHudPosition.DEFAULT_OFFSET_X;
+    @Getter
+    private volatile int groupHudOffsetY = GroupHudPosition.DEFAULT_OFFSET_Y;
     /** Upstream overlay.source_states by source line name; lines without players default to OFF. */
     private final Map<String, HudOptions.OverlaySourceState> overlaySourceStates = new ConcurrentHashMap<>();
 
@@ -212,6 +223,26 @@ public final class ClientState {
         if (this.microphoneMuted == microphoneMuted) return;
         this.microphoneMuted = microphoneMuted;
         syncState();
+    }
+
+    /** Stores the Group HUD position; a missing anchor and huge offsets are repaired, see GroupHudPosition.sanitize. */
+    public void setGroupHudPlacement(GroupHudPosition.Anchor anchor, int offsetX, int offsetY) {
+        GroupHudPosition.Placement placement = GroupHudPosition.sanitize(anchor, offsetX, offsetY);
+        this.groupHudAnchor = placement.anchor;
+        this.groupHudOffsetX = placement.offsetX;
+        this.groupHudOffsetY = placement.offsetY;
+    }
+
+    public void setGroupHudPlacement(GroupHudPosition.Placement placement) {
+        setGroupHudPlacement(placement.anchor, placement.offsetX, placement.offsetY);
+    }
+
+    public GroupHudPosition.Placement getGroupHudPlacement() {
+        return new GroupHudPosition.Placement(groupHudAnchor, groupHudOffsetX, groupHudOffsetY);
+    }
+
+    public void resetGroupHudPlacement() {
+        setGroupHudPlacement(GroupHudPosition.DEFAULT);
     }
 
     public void setDirectionalSourcesAngle(int angle) {

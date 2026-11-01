@@ -32,6 +32,7 @@ import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.platform.forge.client.gui.VoiceSettingsScreen;
 import su.plo.voice.platform.forge.client.hud.DistanceVisualizer;
 import su.plo.voice.platform.forge.client.hud.PlayerIcons;
+import su.plo.voice.platform.forge.client.hud.GroupHud;
 import su.plo.voice.platform.forge.client.hud.VoiceHud;
 import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
@@ -63,6 +64,7 @@ public final class VoiceControls {
         FMLCommonHandler.instance().bus().register(new VoiceControls(state, volumeAction));
         MinecraftForge.EVENT_BUS.register(volumeAction);
         MinecraftForge.EVENT_BUS.register(new VoiceHud(state));
+        MinecraftForge.EVENT_BUS.register(new GroupHud(state));
         MinecraftForge.EVENT_BUS.register(new PlayerIcons(state, volumeAction));
         MinecraftForge.EVENT_BUS.register(new DistanceVisualizer(state));
         UpdateNotification.register(state);

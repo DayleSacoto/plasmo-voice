@@ -10,6 +10,7 @@ import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.ResourceLocation;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
+import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
 
@@ -63,7 +64,22 @@ final class OverlayTab extends SettingsTab {
                 () -> state.setOverlayStyle(HudOptions.OverlayStyle.NAME_SKIN));
 
         ClientConfig config = state.getConnection() == null ? null : state.getConnection().getConfig();
-        if (config == null) return;
+        if (config != null) buildSources(config);
+        addCategory("gui.plasmovoice.overlay.group_category");
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.group_show"), "gui.plasmovoice.overlay.group_show.tooltip",
+                new ToggleWidget(ELEMENT_WIDTH, state::isGroupHudEnabled, state::setGroupHudEnabled),
+                state::isGroupHudEnabled, () -> state.setGroupHudEnabled(true));
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.group_position"), null,
+                new ButtonWidget(ELEMENT_WIDTH, () -> VoiceLang.format("gui.plasmovoice.overlay.group_position.edit"),
+                        () -> Minecraft.getMinecraft().displayGuiScreen(new GroupHudEditScreen(screen, state))),
+                () -> GroupHudPosition.DEFAULT.equals(state.getGroupHudPlacement()), state::resetGroupHudPlacement);
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.group_position_reset"), null,
+                new ButtonWidget(ELEMENT_WIDTH, () -> VoiceLang.format("gui.plasmovoice.overlay.group_reset"),
+                        state::resetGroupHudPlacement),
+                () -> GroupHudPosition.DEFAULT.equals(state.getGroupHudPlacement()), state::resetGroupHudPlacement);
+    }
+
+    private void buildSources(ClientConfig config) {
         addCategory("gui.plasmovoice.overlay.sources");
         List<VoiceSourceLine> lines = new ArrayList<>(config.getPacket().getSourceLines());
         lines.sort((a, b) -> Integer.compare(a.getWeight(), b.getWeight()));

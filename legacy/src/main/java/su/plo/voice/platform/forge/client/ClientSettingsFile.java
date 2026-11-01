@@ -17,6 +17,7 @@ import org.apache.logging.log4j.Logger;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
+import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 
 /**
@@ -32,6 +33,7 @@ public final class ClientSettingsFile {
     private static final String SERVERS = "servers";
     private static final String KEY_BINDINGS = "key_bindings";
     private static final String OVERLAY = "overlay";
+    private static final String GROUP_HUD = "group_hud";
     private static final String ADVANCED = "advanced";
     private static final String DEBUG = "debug";
     private static final String DEBUG_COMMENT =
@@ -103,6 +105,11 @@ public final class ClientSettingsFile {
             state.setOverlaySourceState(line.getKey(), enumValue(line.getValue(), HudOptions.OverlaySourceState.OFF, file));
         }
         state.setShowSourceIcons(Math.max(0, Math.min(2, config.get(OVERLAY, "show_source_icons", 0).getInt(0))));
+        state.setGroupHudEnabled(config.get(GROUP_HUD, "enabled", true).getBoolean(true));
+        state.setGroupHudPlacement(enumValue(config.get(GROUP_HUD, "anchor", GroupHudPosition.DEFAULT_ANCHOR.name()),
+                GroupHudPosition.DEFAULT_ANCHOR, file),
+                config.get(GROUP_HUD, "offset_x", GroupHudPosition.DEFAULT_OFFSET_X).getInt(GroupHudPosition.DEFAULT_OFFSET_X),
+                config.get(GROUP_HUD, "offset_y", GroupHudPosition.DEFAULT_OFFSET_Y).getInt(GroupHudPosition.DEFAULT_OFFSET_Y));
         state.setVisualizeVoiceDistance(config.get(ADVANCED, "visualize_voice_distance", true).getBoolean(true));
         state.setVisualizeVoiceDistanceOnJoin(config.get(ADVANCED, "visualize_voice_distance_on_join", false).getBoolean(false));
         state.setPanning(config.get(ADVANCED, "panning", true).getBoolean(true));
@@ -189,6 +196,10 @@ public final class ClientSettingsFile {
         config.get(OVERLAY, "overlay_style", "").set(state.getOverlayStyle().name());
         state.overlaySourceStates().forEach((line, sourceState) -> config.get(SOURCE_STATES, line, "").set(sourceState.name()));
         config.get(OVERLAY, "show_source_icons", 0).set(state.getShowSourceIcons());
+        config.get(GROUP_HUD, "enabled", true).set(state.isGroupHudEnabled());
+        config.get(GROUP_HUD, "anchor", GroupHudPosition.DEFAULT_ANCHOR.name()).set(state.getGroupHudAnchor().name());
+        config.get(GROUP_HUD, "offset_x", GroupHudPosition.DEFAULT_OFFSET_X).set(state.getGroupHudOffsetX());
+        config.get(GROUP_HUD, "offset_y", GroupHudPosition.DEFAULT_OFFSET_Y).set(state.getGroupHudOffsetY());
         config.get(ADVANCED, "visualize_voice_distance", true).set(state.isVisualizeVoiceDistance());
         config.get(ADVANCED, "visualize_voice_distance_on_join", false).set(state.isVisualizeVoiceDistanceOnJoin());
         config.get(ADVANCED, "panning", true).set(state.isPanning());

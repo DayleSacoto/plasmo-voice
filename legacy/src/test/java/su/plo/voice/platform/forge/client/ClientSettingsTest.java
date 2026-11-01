@@ -16,6 +16,7 @@ import org.junit.rules.TemporaryFolder;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
+import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
@@ -244,6 +245,61 @@ public class ClientSettingsTest {
         assertEquals(1D, state.getMicrophoneVolume(), 0D);
         assertEquals(CaptureActivation.Type.PUSH_TO_TALK, state.getActivationType());
         assertEquals("", state.getInputDevice());
+    }
+
+    @Test
+    public void groupHudDefaultsMatchTheHudMargins() {
+        ClientState state = new ClientState();
+        assertTrue(state.isGroupHudEnabled());
+        assertEquals(GroupHudPosition.Anchor.TOP_RIGHT, state.getGroupHudAnchor());
+        assertEquals(-4, state.getGroupHudOffsetX());
+        assertEquals(4, state.getGroupHudOffsetY());
+        assertEquals(GroupHudPosition.DEFAULT, state.getGroupHudPlacement());
+    }
+
+    @Test
+    public void groupHudSettingsSurviveARestart() {
+        File file = new File(folder.getRoot(), "client.cfg");
+        ClientState before = new ClientState();
+        before.setGroupHudEnabled(false);
+        before.setGroupHudPlacement(GroupHudPosition.Anchor.BOTTOM_LEFT, 12, -34);
+        ClientSettingsFile.save(file, before);
+
+        ClientState after = new ClientState();
+        ClientSettingsFile.load(file, after);
+        assertFalse(after.isGroupHudEnabled());
+        assertEquals(GroupHudPosition.Anchor.BOTTOM_LEFT, after.getGroupHudAnchor());
+        assertEquals(12, after.getGroupHudOffsetX());
+        assertEquals(-34, after.getGroupHudOffsetY());
+
+        after.resetGroupHudPlacement();
+        ClientSettingsFile.save(file, after);
+        ClientState reset = new ClientState();
+        ClientSettingsFile.load(file, reset);
+        assertEquals(GroupHudPosition.DEFAULT, reset.getGroupHudPlacement());
+    }
+
+    @Test
+    public void groupHudInvalidStoredValuesAreRepaired() throws Exception {
+        File file = new File(folder.getRoot(), "client.cfg");
+        String content = "group_hud {\n    S:anchor=MIDDLE\n    I:offset_x=900000\n    I:offset_y=-900000\n}\n";
+        Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
+        ClientState state = new ClientState();
+        ClientSettingsFile.load(file, state);
+        assertEquals(GroupHudPosition.Anchor.TOP_RIGHT, state.getGroupHudAnchor());
+        assertEquals(4096, state.getGroupHudOffsetX());
+        assertEquals(-4096, state.getGroupHudOffsetY());
+        state.setGroupHudPlacement(null, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        assertEquals(GroupHudPosition.Anchor.TOP_RIGHT, state.getGroupHudAnchor());
+        assertEquals(-4096, state.getGroupHudOffsetX());
+        assertEquals(4096, state.getGroupHudOffsetY());
+
+        String garbage = "group_hud {\n    I:offset_x=abc\n    B:enabled=maybe\n}\n";
+        Files.write(file.toPath(), garbage.getBytes(StandardCharsets.UTF_8));
+        ClientState other = new ClientState();
+        ClientSettingsFile.load(file, other);
+        assertEquals(-4, other.getGroupHudOffsetX());
+        assertEquals(4, other.getGroupHudOffsetY());
     }
 
     @Test
