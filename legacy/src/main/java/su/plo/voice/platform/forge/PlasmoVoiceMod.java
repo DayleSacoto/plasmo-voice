@@ -55,6 +55,10 @@ import su.plo.voice.platform.forge.server.groups.GroupProfile;
 import su.plo.voice.platform.forge.server.groups.GroupsListener;
 import su.plo.voice.platform.forge.server.groups.GroupsManager;
 import su.plo.voice.platform.forge.server.groups.GroupsStore;
+import su.plo.voice.platform.forge.server.groups.command.ForgeGroupsPlatform;
+import su.plo.voice.platform.forge.server.groups.command.GroupsCommand;
+import su.plo.voice.platform.forge.server.groups.command.GroupsNotifier;
+import su.plo.voice.platform.forge.server.groups.command.GroupsPlatform;
 import su.plo.voice.platform.forge.update.UpdateChecker;
 
 @Getter
@@ -252,6 +256,12 @@ public final class PlasmoVoiceMod {
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         VoiceCommands.register(event, this);
+        // pv-addon-groups ServerGroupsAddon: /groups and the chat side of the group notifications.
+        if (groupsManager != null) {
+            GroupsPlatform platform = new ForgeGroupsPlatform(this, () -> serverConfig.getSettings().getGroups());
+            groupsMessages = new GroupsNotifier(platform);
+            event.registerServerCommand(new GroupsCommand(groupsManager, platform));
+        }
     }
 
     @SubscribeEvent
