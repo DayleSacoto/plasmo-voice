@@ -38,6 +38,7 @@ import su.plo.voice.platform.forge.client.VoiceControls;
 import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.platform.forge.network.VoiceChannel;
+import su.plo.voice.platform.forge.network.groups.GroupsChannel;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.LanguageRequestPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerActivationDistancesPacket;
@@ -52,6 +53,8 @@ import su.plo.voice.platform.forge.server.connection.ServerSettings;
 import su.plo.voice.platform.forge.server.connection.ServerVoicePlayers;
 import su.plo.voice.platform.forge.server.groups.Group;
 import su.plo.voice.platform.forge.server.groups.GroupProfile;
+import su.plo.voice.platform.forge.server.groups.GroupActor;
+import su.plo.voice.platform.forge.server.groups.GroupsGuiService;
 import su.plo.voice.platform.forge.server.groups.GroupsListener;
 import su.plo.voice.platform.forge.server.groups.GroupsManager;
 import su.plo.voice.platform.forge.server.groups.GroupsStore;
@@ -93,6 +96,7 @@ public final class PlasmoVoiceMod {
     private static final VoiceDebug DEBUG = VoiceDebug.SERVER;
 
     private VoiceChannel voiceChannel;
+    private GroupsChannel groupsChannel;
     private UdpServer udpServer;
     private ServerConfig serverConfig;
     private ServerLanguages languages;
@@ -108,6 +112,9 @@ public final class PlasmoVoiceMod {
     /** Chat side of the groups notifications, available once the server has started. */
     @Getter(AccessLevel.NONE)
     private GroupsListener groupsMessages;
+    /** Server side of the Groups GUI (actions in, snapshots out); null while groups are disabled or not started. */
+    @Getter(AccessLevel.NONE)
+    private GroupsGuiService groupsGui;
     /** Players that have not sent a voice packet yet (upstream PlayerInfoRequestScheduler and ModRequiredKickHandler). */
     @Getter(AccessLevel.NONE)
     private final Map<UUID, PendingPlayer> pendingPlayers = new HashMap<>();
@@ -121,6 +128,7 @@ public final class PlasmoVoiceMod {
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
         voiceChannel = new VoiceChannel(LOGGER);
+        groupsChannel = new GroupsChannel(LOGGER);
         voicePlayers = new ServerVoicePlayers(voiceChannel);
 
         voiceChannel.setClientListener((connection, packet) -> {
@@ -228,6 +236,7 @@ public final class PlasmoVoiceMod {
         }
         pendingPlayers.remove(event.player.getUniqueID());
         if (groupsManager != null) groupsManager.playerOffline(event.player.getUniqueID());
+        if (groupsGui != null) groupsGui.disconnected(event.player.getUniqueID());
         voicePlayers.remove(event.player.getUniqueID());
         if (udpServer != null) udpServer.removeSession(event.player.getUniqueID());
     }
@@ -261,6 +270,7 @@ public final class PlasmoVoiceMod {
             GroupsPlatform platform = new ForgeGroupsPlatform(this, () -> serverConfig.getSettings().getGroups());
             groupsMessages = new GroupsNotifier(platform);
             event.registerServerCommand(new GroupsCommand(groupsManager, platform));
+            groupsGui = new GroupsGuiService(groupsManager, platform, groupsMessages, new GuiPlayers(), System::currentTimeMillis, LOGGER);
         }
     }
 
@@ -270,6 +280,7 @@ public final class PlasmoVoiceMod {
         long now = System.currentTimeMillis();
         if (DEBUG.enabled()) udpServer.checkWorker(now);
         voicePlayers.tick(udpServer, serverConfig, now);
+        if (groupsGui != null) groupsGui.tick();
         tickPendingPlayers(now);
         if (now - lastMuteExpiryCheck >= MUTE_EXPIRY_CHECK_MS) {
             lastMuteExpiryCheck = now;
@@ -318,6 +329,7 @@ public final class PlasmoVoiceMod {
         if (voiceChannel != null) {
             voiceChannel.clearServer();
         }
+        if (groupsChannel != null) groupsChannel.clearServer();
     }
 
     /**
@@ -377,17 +389,27 @@ public final class PlasmoVoiceMod {
         });
         groupsManager.setNameFallback(net.minecraftforge.common.UsernameCache::getLastKnownUsername);
         groupsManager.restore(groupsStore.load());
+        if (groupsChannel != null) {
+            groupsChannel.setServerListener((player, action) -> {
+                if (groupsGui != null) groupsGui.handle(player.getUniqueID(), action);
+            });
+        }
         voicePlayers.setGroupRoutes(groupsManager::route);
         voicePlayers.setGroupRoutesBySource(groupsManager::routeBySource);
         voicePlayers.setVoiceConnected(playerId -> {
             // A (re)connected client has no group sources yet.
             Group group = groupsManager == null ? null : groupsManager.groupOf(playerId);
             if (group != null && serverConfig != null) voicePlayers.sendGroupSources(groupsManager.routes(group), serverConfig);
+            // The Groups GUI needs the state as soon as the client can use the channel.
+            if (groupsGui != null) groupsGui.connected(playerId);
         });
     }
 
     /** pv-addon-groups onAddonShutdown: the persistent groups are saved, the runtime state is dropped. */
     private void stopGroups() {
+        if (groupsChannel != null) groupsChannel.setServerListener((player, action) -> { });
+        if (groupsGui != null) groupsGui.clear();
+        groupsGui = null;
         if (groupsManager != null && groupsStore != null) groupsStore.save(groupsManager.snapshot());
         if (groupsManager != null) groupsManager.clear();
         groupsManager = null;
@@ -397,6 +419,48 @@ public final class PlasmoVoiceMod {
         voicePlayers.setGroupRoutesBySource(sourceId -> null);
         voicePlayers.setVoiceConnected(playerId -> { });
         if (udpServer != null) udpServer.setGroups(null, speaker -> null);
+    }
+
+    /** The Groups GUI's view of the running server: voice-connected players, their permissions and language. */
+    private final class GuiPlayers implements GroupsGuiService.Players {
+        @Override
+        public java.util.Collection<UUID> connected() {
+            java.util.List<UUID> result = new java.util.ArrayList<>();
+            for (ServerConnection connection : voicePlayers.all()) {
+                if (connection.isVoiceConnected()) result.add(connection.getPlayer().getUniqueID());
+            }
+            return result;
+        }
+
+        @Override
+        public boolean isConnected(UUID player) {
+            ServerConnection connection = voicePlayers.get(player);
+            return connection != null && connection.isVoiceConnected();
+        }
+
+        @Override
+        public GroupActor actor(UUID player) {
+            ServerConnection connection = voicePlayers.get(player);
+            return connection == null ? null : ForgeGroupsPlatform.wrap(PlasmoVoiceMod.this, connection.getPlayer());
+        }
+
+        @Override
+        public String translate(UUID player, String key, Object... args) {
+            ServerConnection connection = voicePlayers.get(player);
+            return PlasmoVoiceMod.this.translate(connection == null ? null : connection.getPlayer(), key, args);
+        }
+
+        @Override
+        public void sendState(UUID player, byte[] encodedState) {
+            ServerConnection connection = voicePlayers.get(player);
+            if (connection != null && groupsChannel != null) groupsChannel.sendState(connection.getPlayer(), encodedState);
+        }
+
+        @Override
+        public void sendResult(UUID player, su.plo.voice.platform.forge.network.groups.GroupsResult result) {
+            ServerConnection connection = voicePlayers.get(player);
+            if (connection != null && groupsChannel != null) groupsChannel.sendResult(connection.getPlayer(), result);
+        }
     }
 
     private void applyGroupsRouting() {
