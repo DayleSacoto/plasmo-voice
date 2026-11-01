@@ -19,6 +19,8 @@ import org.lwjgl.opengl.GL11;
 import su.plo.voice.platform.forge.PlasmoVoiceMod;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.VoiceControls;
+import su.plo.voice.platform.forge.client.connection.ClientConfig;
+import su.plo.voice.platform.forge.client.groups.ClientGroups;
 
 /** Legacy port of the upstream settings screen and VoiceSettingsNavigation: header, tabs and the voice toggles. */
 @SideOnly(Side.CLIENT)
@@ -32,6 +34,10 @@ public final class VoiceSettingsScreen extends GuiScreen {
     private final ClientState state;
     private final List<TabButton> tabButtons = new ArrayList<>();
     private final List<SettingsTab> tabs = new ArrayList<>();
+    /** Name keys of the tabs in the same order; the open tab is remembered by key because the tab count can change. */
+    private final List<String> tabKeys = new ArrayList<>();
+    private String activeKey = "gui.plasmovoice.devices";
+    private boolean groupsShown;
     private int active;
     private int navigationHeight = HEADER_HEIGHT;
     private IconButton microphoneButton;
@@ -52,21 +58,39 @@ public final class VoiceSettingsScreen extends GuiScreen {
         buttonList.add(microphoneButton);
         buttonList.add(voiceButton);
 
+        buildTabs();
+    }
+
+    /** (Re)creates every tab; the tab that was open stays open when it still exists. */
+    private void buildTabs() {
+        for (SettingsTab tab : tabs) tab.removed();
         tabs.clear();
         tabButtons.clear();
+        tabKeys.clear();
+        groupsShown = groupsAvailable();
         addTab("gui.plasmovoice.devices", "devices", new DevicesTab(this, state));
         addTab("gui.plasmovoice.volume", "volume", new VolumeTab(this, state));
         addTab("gui.plasmovoice.activation", "activation", new ActivationTab(this, state));
+        if (groupsShown) addTab("gui.plasmovoice.groups", "groups", new GroupsTab(this, state));
         addTab("gui.plasmovoice.overlay", "overlay", new OverlayTab(this, state));
         addTab("gui.plasmovoice.advanced", "advanced", new AdvancedTab(this, state));
         addTab("gui.plasmovoice.hotkeys", "hotkeys", new HotKeysTab(this, state));
+        active = Math.max(0, Math.min(tabs.size() - 1, tabKeys.indexOf(activeKey)));
+        activeKey = tabKeys.get(active);
         layoutTabs();
         activeTab().init(navigationHeight, height);
+    }
+
+    /** The Groups tab exists only while the connected server advertises the groups activation. */
+    private boolean groupsAvailable() {
+        ClientConfig config = state.getConnection() == null ? null : state.getConnection().getConfig();
+        return config != null && ClientGroups.available(config.getPacket().getActivations());
     }
 
     private void addTab(String nameKey, String icon, SettingsTab tab) {
         tabButtons.add(new TabButton(fontRendererObj, VoiceLang.format(nameKey), icon));
         tabs.add(tab);
+        tabKeys.add(nameKey);
     }
 
     private SettingsTab activeTab() {
@@ -76,6 +100,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
     private void openTab(int index) {
         activeTab().removed();
         active = index;
+        activeKey = tabKeys.get(index);
         activeTab().init(navigationHeight, height);
     }
 
@@ -118,6 +143,7 @@ public final class VoiceSettingsScreen extends GuiScreen {
             mc.displayGuiScreen(new VoiceNotAvailableScreen(state));
             return;
         }
+        if (groupsAvailable() != groupsShown) buildTabs();
         activeTab().tick();
     }
 

@@ -123,6 +123,16 @@ abstract class SettingsTab {
         rows.add(new FullWidthRow(widget, height));
     }
 
+    /** A custom row, for tabs whose layout is not the label-and-element grid. */
+    void addRow(Row row) {
+        rows.add(row);
+    }
+
+    /** Width available to a custom row's text. */
+    static int contentWidth() {
+        return CONTAINER_WIDTH;
+    }
+
     void render(Minecraft mc, int mouseX, int mouseY) {
         tooltip = null;
         int left = screen.width / 2 - CONTAINER_WIDTH / 2;
@@ -156,6 +166,11 @@ abstract class SettingsTab {
 
     List<String> getTooltip() {
         return tooltip;
+    }
+
+    /** For content drawn over the list (a pinned status line); call after {@link #render}. */
+    void setTooltip(List<String> tooltip) {
+        this.tooltip = tooltip;
     }
 
     boolean mouseClicked(int mouseX, int mouseY, int button) {

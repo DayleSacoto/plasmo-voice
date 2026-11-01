@@ -10,6 +10,7 @@ import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.InputEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
+import cpw.mods.fml.common.network.FMLNetworkEvent;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
@@ -24,6 +25,8 @@ import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
+import su.plo.voice.platform.forge.client.groups.ClientGroups;
+import su.plo.voice.platform.forge.network.groups.GroupsChannel;
 import su.plo.voice.platform.forge.client.gui.VoiceNotAvailableScreen;
 import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.platform.forge.client.gui.VoiceSettingsScreen;
@@ -63,6 +66,23 @@ public final class VoiceControls {
         MinecraftForge.EVENT_BUS.register(new PlayerIcons(state, volumeAction));
         MinecraftForge.EVENT_BUS.register(new DistanceVisualizer(state));
         UpdateNotification.register(state);
+
+        GroupsChannel groupsChannel = GroupsChannel.get();
+        if (groupsChannel != null) {
+            groupsChannel.setClientListener(ClientGroups.get()::accept);
+            ClientGroups.get().setSender(groupsChannel::sendToServer);
+        }
+    }
+
+    /** Netty thread: groups state belongs to one server connection. */
+    @SubscribeEvent
+    public void onDisconnect(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
+        Minecraft.getMinecraft().func_152344_a(ClientGroups.get()::reset);
+    }
+
+    @SubscribeEvent
+    public void onConnect(FMLNetworkEvent.ClientConnectedToServerEvent event) {
+        Minecraft.getMinecraft().func_152344_a(ClientGroups.get()::reset);
     }
 
     /** Screens receive keys directly, so they close themselves on the settings key like upstream. */

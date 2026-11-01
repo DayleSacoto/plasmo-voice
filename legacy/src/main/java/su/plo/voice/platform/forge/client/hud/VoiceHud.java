@@ -11,11 +11,9 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.renderer.OpenGlHelper;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import org.lwjgl.opengl.GL11;
@@ -159,22 +157,7 @@ public final class VoiceHud extends Gui {
      * needs distant sources.
      */
     public static void drawHead(Minecraft mc, UUID playerId, int x, int y, int size) {
-        EntityPlayer player = mc.theWorld.func_152378_a(playerId);
-        ResourceLocation skin = player instanceof AbstractClientPlayer
-                ? ((AbstractClientPlayer) player).getLocationSkin()
-                : AbstractClientPlayer.locationStevePng;
-        mc.getTextureManager().bindTexture(skin);
-        // GTNH SimpleSkinBackport turns every player skin into a 64x64 texture, vanilla 1.7.10 skins are 64x32:
-        // the head sits at the same pixels in both, so its UVs come from the bound texture's real size.
-        float height = skinTextureHeight(GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH),
-                GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT));
-        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_CURRENT_BIT);
-        GL11.glEnable(GL11.GL_BLEND);
-        OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
-        GL11.glColor4f(1F, 1F, 1F, 1F);
-        func_152125_a(x, y, 8F, 8F, 8, 8, size, size, 64F, height);
-        func_152125_a(x, y, 40F, 8F, 8, 8, size, size, 64F, height);
-        GL11.glPopAttrib();
+        PlayerHeads.draw(mc, playerId, x, y, size, false, false);
     }
 
     /** Skin height in 64 pixel wide texture units: 32 for a legacy skin, 64 for a modern one (also in HD). */
