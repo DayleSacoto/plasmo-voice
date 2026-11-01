@@ -59,6 +59,7 @@ gui.plasmovoice.activation=Активация
 gui.plasmovoice.activation.type=Тип активации
 gui.plasmovoice.activation.type_ptt=Режим рации
 gui.plasmovoice.activation.type_voice=Активация по голосу
+gui.plasmovoice.activation.type_inherit=Наследовать
 gui.plasmovoice.activation.toggle=Переключить «%s»\n%s
 gui.plasmovoice.activation.distance=%s: дальность
 gui.plasmovoice.activation.ptt_button=Кнопка режима рации

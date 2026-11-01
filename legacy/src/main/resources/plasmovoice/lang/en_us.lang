@@ -59,6 +59,7 @@ gui.plasmovoice.activation=Activation
 gui.plasmovoice.activation.type=Activation Type
 gui.plasmovoice.activation.type_ptt=Push-to-Talk
 gui.plasmovoice.activation.type_voice=Voice Activation
+gui.plasmovoice.activation.type_inherit=Inherit
 gui.plasmovoice.activation.toggle=Toggle "%s"\n%s
 gui.plasmovoice.activation.distance=%s Distance
 gui.plasmovoice.activation.ptt_button=Push-to-Talk Button

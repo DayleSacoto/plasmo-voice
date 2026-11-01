@@ -2,8 +2,12 @@ package su.plo.voice.platform.forge.client.connection;
 
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -43,6 +47,25 @@ public final class ClientConfig {
             distances.put(activation.getId(), allowedDistance(activation, stored.apply(activation.getId())));
         }
         return distances;
+    }
+
+    /** Upstream VoiceClientActivationManager order: heaviest first, equal weights by name ignoring case. */
+    public static final Comparator<VoiceActivation> ACTIVATION_ORDER =
+            Comparator.comparingInt(VoiceActivation::getWeight).reversed()
+                    .thenComparing(VoiceActivation::getName, String.CASE_INSENSITIVE_ORDER);
+
+    /** Every activation but the proximity one (the parent), in {@link #ACTIVATION_ORDER}. */
+    public List<VoiceActivation> otherActivations() {
+        return otherActivations(packet.getActivations());
+    }
+
+    public static List<VoiceActivation> otherActivations(Collection<VoiceActivation> activations) {
+        List<VoiceActivation> others = new ArrayList<>();
+        for (VoiceActivation activation : activations) {
+            if (!activation.getId().equals(VoiceActivation.PROXIMITY_ID)) others.add(activation);
+        }
+        others.sort(ACTIVATION_ORDER);
+        return others;
     }
 
     public VoiceActivation activation(UUID activationId) {

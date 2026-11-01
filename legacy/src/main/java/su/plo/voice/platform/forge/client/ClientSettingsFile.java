@@ -76,6 +76,20 @@ public final class ClientSettingsFile {
             LOGGER.warn("Unknown activation type {} in {}; using push-to-talk", type, file.getName());
         }
         state.setActivationToggled(config.get(proximity, "toggle", false).getBoolean(false));
+        // Every other activation, by name (the proximity one is above under its id, which no name can equal).
+        for (ConfigCategory activation : config.getCategory(ACTIVATIONS).getChildren()) {
+            String name = activation.getName();
+            if (name.equals(VoiceActivation.PROXIMITY_ID.toString()) || name.equals(VoiceActivation.PROXIMITY_NAME)) continue;
+            if (activation.containsKey("type")) {
+                String activationType = activation.get("type").getString();
+                try {
+                    state.setActivationType(name, CaptureActivation.Type.valueOf(activationType));
+                } catch (IllegalArgumentException e) {
+                    LOGGER.warn("Unknown activation type {} for {} in {}; using push-to-talk", activationType, name, file.getName());
+                }
+            }
+            if (activation.containsKey("toggle")) state.setActivationToggled(name, activation.get("toggle").getBoolean(false));
+        }
 
         state.setShowActivationIcon(config.get(OVERLAY, "show_activation_icon", true).getBoolean(true));
         state.setActivationIconPosition(enumValue(config.get(OVERLAY, "activation_icon_position",
@@ -117,6 +131,15 @@ public final class ClientSettingsFile {
                 hotkeys.reset(name);
             }
         }
+        // Activation hotkeys register when a server config arrives, so their bindings wait here until then.
+        for (Map.Entry<String, Property> binding : config.getCategory(KEY_BINDINGS).getValues().entrySet()) {
+            if (hotkeys.isRegistered(binding.getKey())) continue;
+            try {
+                hotkeys.restore(binding.getKey(), parseCodes(binding.getValue().getString()));
+            } catch (NumberFormatException e) {
+                LOGGER.warn("Invalid key binding {}={} in {}; ignoring it", binding.getKey(), binding.getValue().getString(), file.getName());
+            }
+        }
 
         for (ConfigCategory server : config.getCategory(SERVERS).getChildren()) {
             UUID serverId = uuid(server.getName());
@@ -153,6 +176,11 @@ public final class ClientSettingsFile {
         String proximity = ACTIVATIONS + "." + VoiceActivation.PROXIMITY_ID;
         config.get(proximity, "type", CaptureActivation.Type.PUSH_TO_TALK.name()).set(state.getActivationType().name());
         config.get(proximity, "toggle", false).set(state.isActivationToggled());
+        for (String name : state.activationSettingNames()) {
+            String activation = ACTIVATIONS + "." + name;
+            config.get(activation, "type", CaptureActivation.Type.PUSH_TO_TALK.name()).set(state.getActivationType(name).name());
+            config.get(activation, "toggle", false).set(state.isActivationToggled(name));
+        }
 
         config.get(OVERLAY, "show_activation_icon", true).set(state.isShowActivationIcon());
         config.get(OVERLAY, "activation_icon_position", "").set(state.getActivationIconPosition().name());
@@ -182,6 +210,7 @@ public final class ClientSettingsFile {
         for (String name : hotkeys.names()) {
             config.get(KEY_BINDINGS, name, "").set(codes(hotkeys.getKeys(name)));
         }
+        hotkeys.unregisteredBindings().forEach((name, keys) -> config.get(KEY_BINDINGS, name, "").set(codes(keys)));
         config.getCategory(KEY_BINDINGS).setComment("Keyboard key codes and mouse buttons (button - 100), comma separated; empty is unbound");
 
         config.removeCategory(config.getCategory(SERVERS));

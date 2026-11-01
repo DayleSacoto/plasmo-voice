@@ -1,6 +1,7 @@
 package su.plo.voice.platform.forge.client;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
 
 import cpw.mods.fml.client.registry.ClientRegistry;
@@ -88,6 +89,10 @@ public final class VoiceControls {
         // Upstream handlePTT ignores the key while typing in chat or on a sign.
         boolean typing = screen instanceof GuiChat || screen instanceof GuiEditSign;
         state.setPushToTalkPressed(hotkeys.isPressed(VoiceHotkeys.PROXIMITY_PTT) && !typing && !capturing);
+        for (VoiceActivation activation : otherActivations()) {
+            state.setPushToTalkPressed(activation.getName(),
+                    hotkeys.isPressed(VoiceHotkeys.pushToTalkKey(activation.getName())) && !typing && !capturing);
+        }
         volumeAction.update(hotkeys.isPressed(VoiceHotkeys.ACTION));
     }
 
@@ -105,7 +110,7 @@ public final class VoiceControls {
                 volumeAction.onPress();
                 break;
             case VoiceHotkeys.PROXIMITY_TOGGLE:
-                toggleActivation();
+                toggleActivation(VoiceActivation.PROXIMITY_NAME, proximityTranslation());
                 break;
             case VoiceHotkeys.OCCLUSION_TOGGLE:
                 // Upstream HotkeyActions: toggles voice.sound_occlusion and reports it in the action bar.
@@ -121,17 +126,29 @@ public final class VoiceControls {
                 stepDistance(-1);
                 break;
             default:
+                for (VoiceActivation activation : otherActivations()) {
+                    if (name.equals(VoiceHotkeys.toggleKey(activation.getName()))) {
+                        toggleActivation(activation.getName(), activation.getTranslation());
+                        break;
+                    }
+                }
                 break;
         }
     }
 
-    /** Upstream VoiceClientActivation.onToggle: only voice activation can be toggled. */
-    private void toggleActivation() {
-        if (state.getActivationType() == CaptureActivation.Type.PUSH_TO_TALK) return;
-        state.setActivationToggled(!state.isActivationToggled());
+    /** The activations of the connected server but the proximity one, whose hotkeys are the activation hotkeys. */
+    private List<VoiceActivation> otherActivations() {
+        ClientConfig config = state.getConnection() == null ? null : state.getConnection().getConfig();
+        return config == null ? Collections.<VoiceActivation>emptyList() : config.otherActivations();
+    }
+
+    /** Upstream VoiceClientActivation.onToggle: only voice and inherit activations can be toggled. */
+    private void toggleActivation(String name, String translation) {
+        if (state.getActivationType(name) == CaptureActivation.Type.PUSH_TO_TALK) return;
+        state.setActivationToggled(name, !state.isActivationToggled(name));
         state.save();
-        actionBar(I18n.format("message.plasmovoice.activation.toggle", state.translate(proximityTranslation()),
-                I18n.format(state.isActivationToggled() ? "message.plasmovoice.off" : "message.plasmovoice.on")));
+        actionBar(I18n.format("message.plasmovoice.activation.toggle", state.translate(translation),
+                I18n.format(state.isActivationToggled(name) ? "message.plasmovoice.off" : "message.plasmovoice.on")));
     }
 
     /** Upstream onDistanceIncrease / onDistanceDecrease: cycles through the server distances. */

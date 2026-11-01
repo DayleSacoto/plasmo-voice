@@ -14,7 +14,10 @@ import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 
-/** Upstream ActivationTabWidget for the proximity activation, the only one this backport captures for. */
+/**
+ * Upstream ActivationTabWidget: the proximity activation first, then one section for each other activation of the
+ * server. Only those can inherit; the conflict warning icons are left out.
+ */
 @SideOnly(Side.CLIENT)
 final class ActivationTab extends SettingsTab {
     private static final ResourceLocation ENABLED_ICON = new ResourceLocation("plasmovoice", "textures/icons/microphone_menu.png");
@@ -27,32 +30,44 @@ final class ActivationTab extends SettingsTab {
     @Override
     void build() {
         ClientConfig config = state.getConnection() == null ? null : state.getConnection().getConfig();
-        VoiceActivation proximity = config == null ? null : config.activation(VoiceActivation.PROXIMITY_ID);
-        if (proximity == null) return;
-
-        addCategoryText(state.translate(proximity.getTranslation()));
-        addType(state.translate(proximity.getTranslation()));
-        // Upstream createActivationButton: the push-to-talk key, or the toggle key for voice activation.
-        if (state.getActivationType() == CaptureActivation.Type.PUSH_TO_TALK) {
-            addHotkey("gui.plasmovoice.activation.ptt_button", VoiceHotkeys.PROXIMITY_PTT);
-        } else {
-            addHotkey("gui.plasmovoice.activation.toggle_button", VoiceHotkeys.PROXIMITY_TOGGLE);
+        if (config == null) return;
+        VoiceActivation proximity = config.activation(VoiceActivation.PROXIMITY_ID);
+        if (proximity != null) addActivation(config, proximity, false);
+        for (VoiceActivation activation : config.otherActivations()) {
+            state.getHotkeys().registerActivation(activation.getName());
+            addActivation(config, activation, true);
         }
-        addDistance(config, proximity);
     }
 
-    private void addType(String activationName) {
-        List<String> types = Arrays.asList(
-                VoiceLang.format("gui.plasmovoice.activation.type_ptt"),
-                VoiceLang.format("gui.plasmovoice.activation.type_voice"));
-        boolean pushToTalk = state.getActivationType() == CaptureActivation.Type.PUSH_TO_TALK;
+    private void addActivation(ClientConfig config, VoiceActivation activation, boolean canInherit) {
+        String name = activation.getName();
+        String translated = state.translate(activation.getTranslation());
+        addCategoryText(translated);
+        addType(name, translated, canInherit);
+        // Upstream createActivationButton: the push-to-talk key, or the toggle key for voice activation.
+        if (state.getActivationType(name) == CaptureActivation.Type.PUSH_TO_TALK) {
+            addHotkey("gui.plasmovoice.activation.ptt_button", VoiceHotkeys.pushToTalkKey(name));
+        } else {
+            addHotkey("gui.plasmovoice.activation.toggle_button", VoiceHotkeys.toggleKey(name));
+        }
+        addDistance(config, activation);
+    }
+
+    private void addType(String name, String activationName, boolean canInherit) {
+        List<String> types = canInherit
+                ? Arrays.asList(VoiceLang.format("gui.plasmovoice.activation.type_ptt"),
+                        VoiceLang.format("gui.plasmovoice.activation.type_voice"),
+                        VoiceLang.format("gui.plasmovoice.activation.type_inherit"))
+                : Arrays.asList(VoiceLang.format("gui.plasmovoice.activation.type_ptt"),
+                        VoiceLang.format("gui.plasmovoice.activation.type_voice"));
+        boolean pushToTalk = state.getActivationType(name) == CaptureActivation.Type.PUSH_TO_TALK;
         DropDownWidget dropDown = new DropDownWidget(pushToTalk ? ELEMENT_WIDTH : ELEMENT_WIDTH - 24,
-                () -> types.get(state.getActivationType().ordinal()), types, index -> {
-                    state.setActivationType(CaptureActivation.Type.values()[index]);
+                () -> types.get(state.getActivationType(name).ordinal()), types, index -> {
+                    state.setActivationType(name, CaptureActivation.Type.values()[index]);
                     rebuild();
                 });
         Runnable reset = () -> {
-            state.setActivationType(CaptureActivation.Type.PUSH_TO_TALK);
+            state.setActivationType(name, CaptureActivation.Type.PUSH_TO_TALK);
             rebuild();
         };
         String label = VoiceLang.format("gui.plasmovoice.activation.type");
@@ -60,13 +75,13 @@ final class ActivationTab extends SettingsTab {
             addOption(label, null, dropDown, () -> true, reset);
             return;
         }
-        // Upstream ActivationToggleStateEntry: switches voice activation on and off.
+        // Upstream ActivationToggleStateEntry: switches voice and inherit activations on and off.
         IconWidget toggle = new IconWidget(
-                () -> state.isActivationToggled() ? DISABLED_ICON : ENABLED_ICON,
-                () -> state.setActivationToggled(!state.isActivationToggled()),
+                () -> state.isActivationToggled(name) ? DISABLED_ICON : ENABLED_ICON,
+                () -> state.setActivationToggled(name, !state.isActivationToggled(name)),
                 () -> true,
                 () -> VoiceLang.format("gui.plasmovoice.activation.toggle", activationName,
-                        EnumChatFormatting.GRAY + VoiceLang.format("gui.plasmovoice.toggle.currently", state.isActivationToggled()
+                        EnumChatFormatting.GRAY + VoiceLang.format("gui.plasmovoice.toggle.currently", state.isActivationToggled(name)
                                 ? EnumChatFormatting.RED + VoiceLang.format("gui.plasmovoice.toggle.disabled")
                                 : EnumChatFormatting.GREEN + VoiceLang.format("gui.plasmovoice.toggle.enabled"))));
         addOption(label, null, dropDown, () -> false, reset, toggle);

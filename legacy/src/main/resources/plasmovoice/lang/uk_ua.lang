@@ -59,6 +59,7 @@ gui.plasmovoice.activation=Активація
 gui.plasmovoice.activation.type=Тип активації
 gui.plasmovoice.activation.type_ptt=Натисни й говори
 gui.plasmovoice.activation.type_voice=Активація голосом
+gui.plasmovoice.activation.type_inherit=Успадковувати
 gui.plasmovoice.activation.toggle=Перемкнути «%s»\n%s
 gui.plasmovoice.activation.distance=%s: дальність
 gui.plasmovoice.activation.ptt_button=Кнопка для розмови

@@ -2,8 +2,10 @@ package su.plo.voice.platform.forge.client.audio;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
@@ -51,11 +53,17 @@ public final class ClientVoiceSources {
         if (VoiceDebug.CLIENT.enabled()) {
             VoiceDebug.CLIENT.log(Category.SOURCE, "source info {}: source={}, player={}, state={}, line={}, stereo={}",
                     sources.containsKey(info.getId()) ? "updated" : "created", info.getId(),
-                    info instanceof PlayerSourceInfo ? ((PlayerSourceInfo) info).getPlayerInfo().getPlayerNick() : "-",
+                    playerName(info),
                     info.getState(), info.getLineId(), info.isStereo());
         }
         sources.computeIfAbsent(info.getId(), id -> new VoiceSource(info, adaptiveJitterBuffer.getAsBoolean(),
                 jitterPacketDelay.getAsInt(), System.currentTimeMillis())).info = info;
+    }
+
+    /** Debug only: the speaking player of a player source or of a direct source with a sender (group voice). */
+    private static String playerName(SourceInfo info) {
+        String name = SourcePlayer.name(info);
+        return name == null ? "-" : name;
     }
 
     public void onAudio(SourceAudioPacket packet) {
@@ -89,6 +97,21 @@ public final class ClientVoiceSources {
             if (source.canHear) audible.add(source.info);
         }
         return audible;
+    }
+
+    /**
+     * Players whose sources on {@code lineId} are activated right now (receiving audio), for example group speakers on
+     * the groups line. Proximity sources of the same player on other lines are ignored; client thread.
+     */
+    public Set<UUID> speakingOn(UUID lineId) {
+        Set<UUID> speaking = new HashSet<>();
+        for (VoiceSource source : sources.values()) {
+            SourceInfo info = source.info;
+            if (!source.activated || !lineId.equals(info.getLineId())) continue;
+            UUID player = SourcePlayer.id(info);
+            if (player != null) speaking.add(player);
+        }
+        return speaking;
     }
 
     /** Upstream getPlayerSources filtered by isActivated and isIconVisible; client thread (player icons). */

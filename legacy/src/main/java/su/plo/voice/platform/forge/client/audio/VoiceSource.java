@@ -321,7 +321,7 @@ final class VoiceSource {
 
     private String describe() {
         SourceInfo current = info;
-        String player = current instanceof PlayerSourceInfo ? ((PlayerSourceInfo) current).getPlayerInfo().getPlayerNick() : "-";
+        String player = SourcePlayer.name(current) != null ? SourcePlayer.name(current) : "-";
         return "source=" + current.getId() + ", player=" + player + ", state=" + current.getState() + ", stereo=" + current.isStereo();
     }
 

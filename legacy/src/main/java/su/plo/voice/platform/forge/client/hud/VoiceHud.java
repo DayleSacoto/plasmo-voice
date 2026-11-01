@@ -1,8 +1,10 @@
 package su.plo.voice.platform.forge.client.hud;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -19,10 +21,11 @@ import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import org.lwjgl.opengl.GL11;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.audio.ClientVoiceSources;
+import su.plo.voice.platform.forge.client.audio.SourcePlayer;
+import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
-import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
 import su.plo.voice.proto.data.audio.source.SourceInfo;
 import su.plo.voice.proto.data.player.VoicePlayerInfo;
 
@@ -83,9 +86,18 @@ public final class VoiceHud extends Gui {
             if (player.getPlayerId().equals(selfId) && player.isMuted()) return MICROPHONE_MUTED_ICON;
         }
         if (state.isMicrophoneMuted()) return MICROPHONE_DISABLED_ICON;
-        if (!state.isActivationActive()) return null;
-        VoiceActivation proximity = connection.getConfig().activation(VoiceActivation.PROXIMITY_ID);
-        return proximity == null ? null : new ResourceLocation(proximity.getIcon());
+        VoiceActivation talking = highestActive(connection.getConfig().getPacket().getActivations(), state.getActiveActivations());
+        return talking == null ? null : new ResourceLocation(talking.getIcon());
+    }
+
+    /** The heaviest of the sending activations (the groups one while talking in a group), null when none is. */
+    static VoiceActivation highestActive(Collection<VoiceActivation> activations, Set<UUID> active) {
+        VoiceActivation highest = null;
+        for (VoiceActivation activation : activations) {
+            if (!active.contains(activation.getId())) continue;
+            if (highest == null || ClientConfig.ACTIVATION_ORDER.compare(activation, highest) < 0) highest = activation;
+        }
+        return highest;
     }
 
     private void renderOverlay(Minecraft mc, ClientConnectionState connection, int width, int height) {
@@ -116,9 +128,11 @@ public final class VoiceHud extends Gui {
         int y = position.startY(height);
         y += position.isBottom() ? -(ENTRY_HEIGHT + 1) * (index + 1) : (ENTRY_HEIGHT + 1) * index;
 
-        if (style.hasSkin() && source instanceof PlayerSourceInfo) {
+        // A player source, or a direct source sent by a player (group voice), shows the player's head.
+        UUID speaker = SourcePlayer.id(source);
+        if (style.hasSkin() && speaker != null) {
             if (position.isRight()) x -= 16;
-            drawHead(mc, ((PlayerSourceInfo) source).getPlayerInfo().getPlayerId(), x, y, 16);
+            drawHead(mc, speaker, x, y, 16);
             if (!position.isRight()) x += 16 + 1;
         }
 
@@ -174,12 +188,12 @@ public final class VoiceHud extends Gui {
             String name = source.getName();
             return name.length() > MAX_NAME_LENGTH ? name.substring(0, MAX_NAME_LENGTH) + "..." : name;
         }
-        if (source instanceof PlayerSourceInfo) {
-            UUID playerId = ((PlayerSourceInfo) source).getPlayerInfo().getPlayerId();
+        UUID playerId = SourcePlayer.id(source);
+        if (playerId != null) {
             for (VoicePlayerInfo player : connection.getPlayers()) {
                 if (player.getPlayerId().equals(playerId)) return player.getPlayerNick();
             }
-            return ((PlayerSourceInfo) source).getPlayerInfo().getPlayerNick();
+            return SourcePlayer.name(source);
         }
         return connection.translate(line.getTranslation());
     }

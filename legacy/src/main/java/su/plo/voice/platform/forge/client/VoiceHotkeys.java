@@ -3,16 +3,18 @@ package su.plo.voice.platform.forge.client;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 
 /**
  * Upstream ConfigHotkeys + VoiceHotkey: named key combinations (up to three keyboard keys or mouse buttons).
  * Codes follow 1.7.10 KeyBinding: LWJGL keyboard codes, mouse buttons as {@code button - 100}.
- * Polled on the client thread every frame, which also filters key repeat.
+ * Polled on the client thread every frame, which also filters key repeat. Activation hotkeys are registered at
+ * runtime when a server config arrives (upstream "hidden" hotkeys: configured in the activation tab only).
  */
 public final class VoiceHotkeys {
     public static final String PROXIMITY_PTT = "key.plasmovoice.proximity.ptt";
@@ -28,7 +30,11 @@ public final class VoiceHotkeys {
     private static final int KEY_M = 50;
     private static final int MOUSE_RIGHT = 1 - 100;
 
-    private final Map<String, Hotkey> hotkeys = new LinkedHashMap<>();
+    /** Registration order, which is the order of {@link #names()} and of the polling. */
+    private final List<String> order = new CopyOnWriteArrayList<>();
+    private final Map<String, Hotkey> hotkeys = new ConcurrentHashMap<>();
+    /** Bindings loaded for names nothing registered (yet), e.g. the activations of a server not joined this session. */
+    private final Map<String, List<Integer>> unregistered = new ConcurrentHashMap<>();
 
     public VoiceHotkeys() {
         // Upstream: push-to-talk works in any context, the others only without an open screen.
@@ -42,12 +48,64 @@ public final class VoiceHotkeys {
         register(OCCLUSION_TOGGLE, false);
     }
 
+    /** Upstream VoiceClientActivation.createHotKey: {@code key.plasmovoice.<activation>.ptt}, any context. */
+    public static String pushToTalkKey(String activationName) {
+        return "key.plasmovoice." + activationName + ".ptt";
+    }
+
+    /** Upstream VoiceClientActivation.createHotKey: {@code key.plasmovoice.<activation>.toggle}, not in a screen. */
+    public static String toggleKey(String activationName) {
+        return "key.plasmovoice." + activationName + ".toggle";
+    }
+
+    /**
+     * Registers the push-to-talk and toggle hotkeys of a server activation, unbound unless a binding was loaded for
+     * them. A no-op for names that already exist, so the proximity hotkeys and repeated configs stay as they are.
+     */
+    public void registerActivation(String activationName) {
+        registerRuntime(pushToTalkKey(activationName), true);
+        registerRuntime(toggleKey(activationName), false);
+    }
+
+    private void registerRuntime(String name, boolean anyContext) {
+        synchronized (order) {
+            if (hotkeys.containsKey(name)) return;
+            register(name, anyContext);
+            List<Integer> loaded = unregistered.remove(name);
+            if (loaded != null) setKeys(name, loaded);
+        }
+    }
+
     private void register(String name, boolean anyContext, Integer... defaultKeys) {
         hotkeys.put(name, new Hotkey(anyContext, Arrays.asList(defaultKeys)));
+        order.add(name);
+    }
+
+    public boolean isRegistered(String name) {
+        return hotkeys.containsKey(name);
     }
 
     public List<String> names() {
-        return new ArrayList<>(hotkeys.keySet());
+        return new ArrayList<>(order);
+    }
+
+    /**
+     * Applies a binding from the settings file. A name that is not registered yet keeps it until it is, and
+     * {@link #unregisteredBindings()} still reports it, so saving the settings does not drop it.
+     */
+    public void restore(String name, List<Integer> keys) {
+        synchronized (order) {
+            if (hotkeys.containsKey(name)) {
+                setKeys(name, keys);
+            } else {
+                unregistered.put(name, Collections.unmodifiableList(new ArrayList<>(keys)));
+            }
+        }
+    }
+
+    /** Bindings waiting for their hotkey to be registered; saved with the others. */
+    public Map<String, List<Integer>> unregisteredBindings() {
+        return Collections.unmodifiableMap(unregistered);
     }
 
     public List<Integer> getKeys(String name) {
@@ -75,7 +133,8 @@ public final class VoiceHotkeys {
     }
 
     public boolean isPressed(String name) {
-        return hotkeys.get(name).pressed;
+        Hotkey hotkey = hotkeys.get(name);
+        return hotkey != null && hotkey.pressed;
     }
 
     /**
@@ -84,12 +143,12 @@ public final class VoiceHotkeys {
      * closes does not fire, and focus loss releases everything.
      */
     public void update(IntPredicate isDown, boolean windowActive, boolean screenOpen, boolean suspended, Consumer<String> onPress) {
-        for (Map.Entry<String, Hotkey> entry : hotkeys.entrySet()) {
-            Hotkey hotkey = entry.getValue();
+        for (String name : order) {
+            Hotkey hotkey = hotkeys.get(name);
             boolean down = windowActive && !hotkey.keys.isEmpty();
             for (int key : hotkey.keys) down &= isDown.test(key);
             boolean allowed = !suspended && (hotkey.anyContext || !screenOpen);
-            if (down && !hotkey.pressed && allowed) onPress.accept(entry.getKey());
+            if (down && !hotkey.pressed && allowed) onPress.accept(name);
             hotkey.pressed = down;
         }
     }
@@ -98,7 +157,7 @@ public final class VoiceHotkeys {
         final boolean anyContext;
         final List<Integer> defaultKeys;
         volatile List<Integer> keys;
-        boolean pressed;
+        volatile boolean pressed;
 
         Hotkey(boolean anyContext, List<Integer> defaultKeys) {
             this.anyContext = anyContext;

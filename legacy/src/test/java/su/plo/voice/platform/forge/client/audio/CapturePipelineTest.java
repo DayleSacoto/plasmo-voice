@@ -2,6 +2,7 @@ package su.plo.voice.platform.forge.client.audio;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.Test;
@@ -20,7 +21,28 @@ public class CapturePipelineTest {
     private final ClientState state = new ClientState();
     private final List<short[]> sent = new ArrayList<>();
     private int ends;
-    private final CapturePipeline pipeline = new CapturePipeline(state, new NoiseSuppression(state), sent::add, () -> ends++);
+    private final CaptureActivations activations =
+            new CaptureActivations(CaptureActivations.Slot.proximityFallback(), Collections.<CaptureActivations.Slot>emptyList());
+    private final CapturePipeline pipeline = new CapturePipeline(state, new NoiseSuppression(state), activations,
+            new CapturePipeline.Output() {
+                private short[] lastEncoded;
+
+                @Override
+                public byte[] encode(short[] mono) {
+                    lastEncoded = mono;
+                    return new byte[] {1};
+                }
+
+                @Override
+                public void audio(CaptureActivations.Slot slot, long sequenceNumber, byte[] data) {
+                    sent.add(lastEncoded);
+                }
+
+                @Override
+                public void end(CaptureActivations.Slot slot, long sequenceNumber, boolean lastStream) {
+                    ends++;
+                }
+            });
 
     {
         state.setNoiseSuppression(false);
@@ -117,7 +139,7 @@ public class CapturePipelineTest {
         assertEquals(CaptureActivation.Result.ACTIVATED, pipeline.process(constant(FRAME, 16_000), 1, false, NOW));
         assertNull(pipeline.process(constant(FRAME, 16_000), 1, true, NOW + 20));
         assertEquals(1, ends);
-        assertFalse(pipeline.activation.isActive());
+        assertFalse(activations.parent.isActive());
         assertFalse(state.isActivationActive());
         assertEquals(1, sent.size());
     }

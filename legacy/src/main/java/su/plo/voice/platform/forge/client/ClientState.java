@@ -1,7 +1,9 @@
 package su.plo.voice.platform.forge.client;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -13,13 +15,13 @@ import lombok.Setter;
 import net.minecraft.client.resources.I18n;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.audio.MicrophoneTest;
+import su.plo.voice.platform.forge.client.audio.SourcePlayer;
 import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
-import su.plo.voice.proto.data.audio.source.PlayerSourceInfo;
 import su.plo.voice.proto.data.audio.source.SourceInfo;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerInfoPacket;
 import su.plo.voice.proto.packets.tcp.serverbound.PlayerStatePacket;
@@ -78,6 +80,11 @@ public final class ClientState {
     /** Upstream ConfigClientActivation.configToggle: true turns voice activation off. */
     @Getter
     private volatile boolean activationToggled;
+    /**
+     * Upstream ConfigClientActivation of every other activation, by activation name (not the id: the activation
+     * need not be in the current config to keep its settings). Absent means push-to-talk, not toggled.
+     */
+    private final Map<String, ActivationSettings> activationSettings = new ConcurrentHashMap<>();
     /** Upstream Servers: chosen activation distance per server id and activation id. */
     private final Map<UUID, Map<UUID, Integer>> distancesByServer = new ConcurrentHashMap<>();
 
@@ -180,15 +187,16 @@ public final class ClientState {
     @Getter
     private final VoiceHotkeys hotkeys = new VoiceHotkeys();
 
-    /** Runtime: the capture activation is sending, which the HUD shows with the activation icon. */
+    /** Runtime: the ids of the capture activations that are sending, which the HUD shows with an activation icon. */
     @Getter
-    @Setter
-    private volatile boolean activationActive;
+    private volatile Set<UUID> activeActivations = Collections.emptySet();
 
-    /** Runtime push-to-talk state from {@link VoiceControls}; read by the capture thread. */
+    /** Runtime push-to-talk state of the proximity activation from {@link VoiceControls}; read by the capture thread. */
     @Getter
     @Setter
     private volatile boolean pushToTalkPressed;
+    /** Runtime push-to-talk state of the other activations, by name. */
+    private final Set<String> pushToTalkPressedActivations = ConcurrentHashMap.newKeySet();
     @Getter
     private ClientConnectionState connection;
     @Setter
@@ -242,12 +250,76 @@ public final class ClientState {
         this.voiceLevelingTarget = clamp(target, VoiceLeveler.MIN_TARGET_DB, VoiceLeveler.MAX_TARGET_DB);
     }
 
+    /** The proximity activation can never inherit (upstream VoiceClientActivationManager.register falls back to push-to-talk). */
     public void setActivationType(CaptureActivation.Type activationType) {
-        this.activationType = activationType;
+        this.activationType = activationType == CaptureActivation.Type.INHERIT
+                ? CaptureActivation.Type.PUSH_TO_TALK : activationType;
     }
 
     public void setActivationToggled(boolean activationToggled) {
         this.activationToggled = activationToggled;
+    }
+
+    /** Upstream ConfigClientActivation.configType of any activation; the proximity name is the proximity fields. */
+    public CaptureActivation.Type getActivationType(String activationName) {
+        if (VoiceActivation.PROXIMITY_NAME.equals(activationName)) return activationType;
+        ActivationSettings settings = activationSettings.get(activationName);
+        return settings == null ? CaptureActivation.Type.PUSH_TO_TALK : settings.type;
+    }
+
+    public void setActivationType(String activationName, CaptureActivation.Type type) {
+        if (VoiceActivation.PROXIMITY_NAME.equals(activationName)) {
+            setActivationType(type);
+            return;
+        }
+        activationSettings.compute(activationName, (name, current) ->
+                new ActivationSettings(type, current != null && current.toggled));
+    }
+
+    /** Upstream ConfigClientActivation.configToggle of any activation. */
+    public boolean isActivationToggled(String activationName) {
+        if (VoiceActivation.PROXIMITY_NAME.equals(activationName)) return activationToggled;
+        ActivationSettings settings = activationSettings.get(activationName);
+        return settings != null && settings.toggled;
+    }
+
+    public void setActivationToggled(String activationName, boolean toggled) {
+        if (VoiceActivation.PROXIMITY_NAME.equals(activationName)) {
+            setActivationToggled(toggled);
+            return;
+        }
+        activationSettings.compute(activationName, (name, current) ->
+                new ActivationSettings(current == null ? CaptureActivation.Type.PUSH_TO_TALK : current.type, toggled));
+    }
+
+    /** The names of the other activations with a stored type or toggle, for the settings file. */
+    Set<String> activationSettingNames() {
+        return activationSettings.keySet();
+    }
+
+    /** Runtime push-to-talk state of any activation. */
+    public boolean isPushToTalkPressed(String activationName) {
+        return VoiceActivation.PROXIMITY_NAME.equals(activationName)
+                ? pushToTalkPressed : pushToTalkPressedActivations.contains(activationName);
+    }
+
+    public void setPushToTalkPressed(String activationName, boolean pressed) {
+        if (VoiceActivation.PROXIMITY_NAME.equals(activationName)) {
+            pushToTalkPressed = pressed;
+        } else if (pressed) {
+            pushToTalkPressedActivations.add(activationName);
+        } else {
+            pushToTalkPressedActivations.remove(activationName);
+        }
+    }
+
+    public void setActiveActivations(Set<UUID> activeActivations) {
+        this.activeActivations = activeActivations;
+    }
+
+    /** Some capture activation is sending. */
+    public boolean isActivationActive() {
+        return !activeActivations.isEmpty();
     }
 
     /** Null when the player never changed the distance on this server. */
@@ -331,13 +403,13 @@ public final class ClientState {
     public boolean isMuted(ClientConfig config, SourceInfo info) {
         VoiceSourceLine line = config.sourceLine(info.getLineId());
         if (line != null && isSourceMuted(line.getName())) return true;
-        return info instanceof PlayerSourceInfo && isSourceMuted(sourceKey(info));
+        return SourcePlayer.id(info) != null && isSourceMuted(sourceKey(info));
     }
 
+    /** The player of a player source or of a direct source with a sender (group voice), else the source itself. */
     private static String sourceKey(SourceInfo info) {
-        return info instanceof PlayerSourceInfo
-                ? playerVolumeKey(((PlayerSourceInfo) info).getPlayerInfo().getPlayerId())
-                : "source_" + info.getId();
+        UUID playerId = SourcePlayer.id(info);
+        return playerId != null ? playerVolumeKey(playerId) : "source_" + info.getId();
     }
 
     Map<String, Double> volumes() {
@@ -387,6 +459,17 @@ public final class ClientState {
     public PlayerInfoPacket createPlayerInfo(String minecraftVersion, String modVersion, byte[] publicKey) {
         if (connection != null) connection.stateReported(voiceDisabled, microphoneMuted);
         return new PlayerInfoPacket(minecraftVersion, modVersion, publicKey, voiceDisabled, microphoneMuted);
+    }
+
+    /** Immutable, so the capture thread reads a consistent pair. */
+    private static final class ActivationSettings {
+        final CaptureActivation.Type type;
+        final boolean toggled;
+
+        ActivationSettings(CaptureActivation.Type type, boolean toggled) {
+            this.type = type;
+            this.toggled = toggled;
+        }
     }
 
     private static double clamp(double value, double min, double max) {

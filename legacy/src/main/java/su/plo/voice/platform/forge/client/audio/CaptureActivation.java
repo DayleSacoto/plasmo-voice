@@ -1,13 +1,18 @@
 package su.plo.voice.platform.forge.client.audio;
 
-/** Upstream VoiceClientActivation for the proximity activation: push-to-talk or voice detection. */
+/**
+ * Upstream VoiceClientActivation.process: push-to-talk, voice detection or, for non-proximity activations, inheriting
+ * the result of the parent (proximity) activation.
+ */
 public final class CaptureActivation {
     static final long PUSH_TO_TALK_RELEASE_MS = 350L;
     static final long VOICE_HOLD_MS = 500L;
 
+    /** Upstream ClientActivation.Type; the proximity activation can never be {@link #INHERIT}. */
     public enum Type {
         PUSH_TO_TALK,
-        VOICE
+        VOICE,
+        INHERIT
     }
 
     public enum Result {
@@ -19,9 +24,18 @@ public final class CaptureActivation {
     private boolean active;
     private long lastActivation;
 
-    /** {@code toggled} is upstream ConfigClientActivation.configToggle: it switches voice activation off. */
+    /** The proximity activation, which has no parent result. {@code toggled} is upstream configToggle. */
     public Result process(short[] samples, Type type, boolean toggled, boolean pushToTalkPressed, double thresholdDb, long now) {
-        if (type == Type.VOICE && toggled) {
+        return process(samples, null, type, toggled, pushToTalkPressed, thresholdDb, now);
+    }
+
+    /**
+     * Upstream VoiceClientActivation.process(samples, parentResult). {@code toggled} switches a voice or inherit
+     * activation off (upstream isDisabled); push-to-talk ignores it.
+     */
+    public Result process(short[] samples, Result parentResult, Type type, boolean toggled, boolean pushToTalkPressed,
+                          double thresholdDb, long now) {
+        if (isDisabled(type, toggled)) {
             if (!active) return Result.NOT_ACTIVATED;
             active = false;
             return Result.END;
@@ -36,7 +50,22 @@ public final class CaptureActivation {
             }
             return active ? Result.ACTIVATED : Result.NOT_ACTIVATED;
         }
+        if (type == Type.INHERIT) {
+            if (parentResult == null) return Result.NOT_ACTIVATED;
+            active = parentResult == Result.ACTIVATED;
+            if (active) lastActivation = now;
+            return parentResult;
+        }
 
+        // Voice: the parent's start or end decides first, then the activation's own detection.
+        if (parentResult == Result.ACTIVATED) {
+            active = true;
+            lastActivation = now;
+            return parentResult;
+        } else if (parentResult == Result.END) {
+            active = false;
+            return parentResult;
+        }
         boolean lastActivated = now - lastActivation <= VOICE_HOLD_MS;
         boolean voiceDetected = containsMinAudioLevel(samples, thresholdDb);
         if (lastActivated || voiceDetected) {
@@ -49,6 +78,11 @@ public final class CaptureActivation {
             return Result.END;
         }
         return Result.NOT_ACTIVATED;
+    }
+
+    /** Upstream VoiceClientActivation.isDisabled: the toggle switches voice and inherit activations off. */
+    public static boolean isDisabled(Type type, boolean toggled) {
+        return toggled && type != Type.PUSH_TO_TALK;
     }
 
     public boolean isActive() {

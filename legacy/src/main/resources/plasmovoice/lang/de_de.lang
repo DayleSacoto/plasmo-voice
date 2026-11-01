@@ -59,6 +59,7 @@ gui.plasmovoice.activation=Aktivierung
 gui.plasmovoice.activation.type=Aktivierungsart
 gui.plasmovoice.activation.type_ptt=Push-to-Talk
 gui.plasmovoice.activation.type_voice=Sprachaktivierung
+gui.plasmovoice.activation.type_inherit=Übernehmen
 gui.plasmovoice.activation.toggle=„%s“ umschalten\n%s
 gui.plasmovoice.activation.distance=Reichweite (%s)
 gui.plasmovoice.activation.ptt_button=Push-to-Talk-Taste

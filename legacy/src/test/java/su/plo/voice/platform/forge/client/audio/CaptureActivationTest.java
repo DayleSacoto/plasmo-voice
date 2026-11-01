@@ -54,6 +54,77 @@ public class CaptureActivationTest {
     }
 
     @Test
+    public void toggledInheritAndVoiceAreDisabledButPushToTalkIsNot() {
+        assertTrue(CaptureActivation.isDisabled(Type.VOICE, true));
+        assertTrue(CaptureActivation.isDisabled(Type.INHERIT, true));
+        assertFalse(CaptureActivation.isDisabled(Type.PUSH_TO_TALK, true));
+        assertFalse(CaptureActivation.isDisabled(Type.VOICE, false));
+        assertFalse(CaptureActivation.isDisabled(Type.INHERIT, false));
+    }
+
+    @Test
+    public void voiceFollowsTheParentResultBeforeItsOwnDetection() {
+        CaptureActivation activation = new CaptureActivation();
+        // Silence, but the parent started: this one starts too and holds for 500 ms after the parent's last frame.
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Result.ACTIVATED, Type.VOICE, false, false, THRESHOLD, T));
+        assertTrue(activation.isActive());
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Result.NOT_ACTIVATED, Type.VOICE, false, false, THRESHOLD, T + 500));
+        assertEquals(Result.END, activation.process(SILENCE, Result.NOT_ACTIVATED, Type.VOICE, false, false, THRESHOLD, T + 501));
+        // The parent's END ends it at once, loud or not.
+        activation.process(SILENCE, Result.ACTIVATED, Type.VOICE, false, false, THRESHOLD, T + 600);
+        assertEquals(Result.END, activation.process(LOUD, Result.END, Type.VOICE, false, false, THRESHOLD, T + 620));
+        assertFalse(activation.isActive());
+    }
+
+    @Test
+    public void voiceDetectsItsOwnVoiceWhenTheParentIsQuiet() {
+        CaptureActivation activation = new CaptureActivation();
+        assertEquals(Result.NOT_ACTIVATED, activation.process(QUIET, Result.NOT_ACTIVATED, Type.VOICE, false, false, THRESHOLD, T));
+        assertEquals(Result.ACTIVATED, activation.process(LOUD, Result.NOT_ACTIVATED, Type.VOICE, false, false, THRESHOLD, T + 20));
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, null, Type.VOICE, false, false, THRESHOLD, T + 520));
+        assertEquals(Result.END, activation.process(SILENCE, null, Type.VOICE, false, false, THRESHOLD, T + 521));
+    }
+
+    @Test
+    public void inheritMirrorsTheParentResult() {
+        CaptureActivation activation = new CaptureActivation();
+        // Whatever the samples are: no parent result means nothing to inherit.
+        assertEquals(Result.NOT_ACTIVATED, activation.process(LOUD, null, Type.INHERIT, false, false, THRESHOLD, T));
+        assertFalse(activation.isActive());
+        assertEquals(Result.NOT_ACTIVATED, activation.process(LOUD, Result.NOT_ACTIVATED, Type.INHERIT, false, false, THRESHOLD, T + 20));
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Result.ACTIVATED, Type.INHERIT, false, false, THRESHOLD, T + 40));
+        assertTrue(activation.isActive());
+        assertEquals(Result.END, activation.process(SILENCE, Result.END, Type.INHERIT, false, false, THRESHOLD, T + 60));
+        assertFalse(activation.isActive());
+    }
+
+    @Test
+    public void toggledInheritEndsOnceAndStaysOff() {
+        CaptureActivation activation = new CaptureActivation();
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Result.ACTIVATED, Type.INHERIT, false, false, THRESHOLD, T));
+        assertEquals(Result.END, activation.process(SILENCE, Result.ACTIVATED, Type.INHERIT, true, false, THRESHOLD, T + 20));
+        assertEquals(Result.NOT_ACTIVATED, activation.process(SILENCE, Result.ACTIVATED, Type.INHERIT, true, false, THRESHOLD, T + 40));
+        assertFalse(activation.isActive());
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Result.ACTIVATED, Type.INHERIT, false, false, THRESHOLD, T + 60));
+    }
+
+    @Test
+    public void toggledVoiceIgnoresTheParent() {
+        CaptureActivation activation = new CaptureActivation();
+        assertEquals(Result.NOT_ACTIVATED, activation.process(LOUD, Result.ACTIVATED, Type.VOICE, true, false, THRESHOLD, T));
+        assertFalse(activation.isActive());
+    }
+
+    @Test
+    public void pushToTalkIgnoresTheParentResult() {
+        CaptureActivation activation = new CaptureActivation();
+        assertEquals(Result.NOT_ACTIVATED, activation.process(LOUD, Result.ACTIVATED, Type.PUSH_TO_TALK, false, false, THRESHOLD, T));
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Result.NOT_ACTIVATED, Type.PUSH_TO_TALK, false, true, THRESHOLD, T + 20));
+        assertEquals(Result.ACTIVATED, activation.process(SILENCE, Result.END, Type.PUSH_TO_TALK, false, false, THRESHOLD, T + 370));
+        assertEquals(Result.END, activation.process(SILENCE, null, Type.PUSH_TO_TALK, false, false, THRESHOLD, T + 371));
+    }
+
+    @Test
     public void microphoneGainNeverClips() {
         short[] quiet = tone(1000);
         short[] boosted = new MicrophoneGain().process(quiet.clone(), 2F);

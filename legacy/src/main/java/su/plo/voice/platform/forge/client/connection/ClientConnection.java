@@ -266,6 +266,10 @@ public final class ClientConnection implements AutoCloseable {
             // A server reload sends the config again: the previous capture and playback stop first.
             clearConfig();
             state.acceptConfig(accepted);
+            // Upstream VoiceClientActivation registers its hidden push-to-talk and toggle hotkeys with the activation.
+            for (VoiceActivation activation : accepted.otherActivations()) {
+                clientState.getHotkeys().registerActivation(activation.getName());
+            }
             ClientVoiceSources created = new ClientVoiceSources(clientState::isVoiceDisabled,
                     info -> clientState.isMuted(accepted, info),
                     sourceId -> requestSourceInfo(this.sources, sourceId),
@@ -276,7 +280,7 @@ public final class ClientConnection implements AutoCloseable {
             playback = startedPlayback;
             startedPlayback.start();
             VoiceCapture startedCapture = new VoiceCapture(accepted, clientState, udpClient,
-                    () -> proximityDistance(accepted),
+                    activationId -> activationDistance(accepted, activationId),
                     end -> sendFromClientThread(end), () -> serverMuted);
             capture = startedCapture;
             startedCapture.start();
@@ -308,9 +312,17 @@ public final class ClientConnection implements AutoCloseable {
 
     /** Capture thread: the player's current proximity distance for this server. */
     private int proximityDistance(ClientConfig config) {
-        VoiceActivation proximity = config.activation(VoiceActivation.PROXIMITY_ID);
-        return proximity == null ? 0 : ClientConfig.allowedDistance(proximity,
-                clientState.getActivationDistance(config.getPacket().getServerId(), VoiceActivation.PROXIMITY_ID));
+        return activationDistance(config, VoiceActivation.PROXIMITY_ID);
+    }
+
+    /**
+     * Capture thread: the player's current distance of an activation on this server; 0 for an unknown activation and
+     * for one without distances (upstream VoiceClientActivation.getDistance of a server activation like groups).
+     */
+    private int activationDistance(ClientConfig config, UUID activationId) {
+        VoiceActivation activation = config.activation(activationId);
+        return activation == null || activation.getDistances().isEmpty() ? 0 : ClientConfig.allowedDistance(activation,
+                clientState.getActivationDistance(config.getPacket().getServerId(), activationId));
     }
 
     private void clearConfig() {

@@ -59,6 +59,7 @@ gui.plasmovoice.activation=Activation
 gui.plasmovoice.activation.type=Type d'activation
 gui.plasmovoice.activation.type_ptt=Appuyer pour parler
 gui.plasmovoice.activation.type_voice=Détection de la voix
+gui.plasmovoice.activation.type_inherit=Hériter
 gui.plasmovoice.activation.toggle=Activer/désactiver « %s »\n%s
 gui.plasmovoice.activation.distance=Portée (%s)
 gui.plasmovoice.activation.ptt_button=Touche pour parler

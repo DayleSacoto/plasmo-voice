@@ -6,10 +6,13 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.security.GeneralSecurityException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.IntSupplier;
+import java.util.function.ToIntFunction;
 
 import javax.sound.sampled.LineUnavailableException;
 
@@ -51,7 +54,8 @@ public final class VoiceCapture implements AutoCloseable {
     private final ClientConfig config;
     private final ClientState state;
     private final UdpClient udpClient;
-    private final IntSupplier distance;
+    /** The player's current distance of an activation (0 for one without distances), by activation id. */
+    private final ToIntFunction<UUID> distance;
     private final Consumer<PlayerAudioEndPacket> endSender;
     /** Upstream isServerMuted: the local player's VoicePlayerInfo says the server muted it. */
     private final BooleanSupplier serverMuted;
@@ -62,7 +66,7 @@ public final class VoiceCapture implements AutoCloseable {
 
     // Capture thread only.
     private final CapturePipeline pipeline;
-    private final CaptureActivation activation;
+    private final CaptureActivations activations;
     private String openedDevice;
     private final IntBuffer intBuffer = BufferUtils.createIntBuffer(1);
     private ALCdevice device;
@@ -73,8 +77,8 @@ public final class VoiceCapture implements AutoCloseable {
     private boolean monoCaptureBroken;
     private boolean wasDisabled;
     private ByteBuffer buffer;
+    /** One shared mono encoder: a frame is encoded once and every activation sending in it reuses the bytes. */
     private AudioEncoder encoder;
-    private long sequenceNumber;
     private long nextOpenAttempt;
     private boolean openFailureLogged;
     // Capture thread diagnostics, counted only while debug logging is enabled; never the audio itself.
@@ -89,7 +93,7 @@ public final class VoiceCapture implements AutoCloseable {
     /** Loudest raw and processed frame levels since the last summary; computed only while debug logging is enabled. */
     private double rawLevel = -127D;
 
-    public VoiceCapture(ClientConfig config, ClientState state, UdpClient udpClient, IntSupplier distance,
+    public VoiceCapture(ClientConfig config, ClientState state, UdpClient udpClient, ToIntFunction<UUID> distance,
                         Consumer<PlayerAudioEndPacket> endSender, BooleanSupplier serverMuted) {
         this.config = config;
         this.state = state;
@@ -99,8 +103,8 @@ public final class VoiceCapture implements AutoCloseable {
         this.serverMuted = serverMuted;
         this.sampleRate = config.getPacket().getCaptureInfo().getSampleRate();
         this.frameSize = sampleRate / 1000 * 20;
-        this.pipeline = new CapturePipeline(state, new NoiseSuppression(state), this::sendFrame, this::sendEnd);
-        this.activation = pipeline.activation;
+        this.activations = CaptureActivations.create(config.getPacket().getActivations());
+        this.pipeline = new CapturePipeline(state, new NoiseSuppression(state), activations, new Sender());
         this.thread = new Thread(this::run, "plasmo-voice-capture");
         thread.setDaemon(true);
     }
@@ -135,7 +139,7 @@ public final class VoiceCapture implements AutoCloseable {
                     framesRead++;
                     rawLevel = Math.max(rawLevel, CaptureActivation.highestAudioLevel(samples));
                 }
-                boolean wasActive = activation.isActive();
+                Set<UUID> wasActive = DEBUG.enabled() ? activations.activeIds() : null;
                 CaptureActivation.Result result = pipeline.process(samples, rawChannels(), serverMuted.getAsBoolean(),
                         System.currentTimeMillis());
                 if (DEBUG.enabled()) activationDiagnostics(wasActive, result);
@@ -148,7 +152,7 @@ public final class VoiceCapture implements AutoCloseable {
             DEBUG.error(Category.THREAD, "capture thread failed", e);
             throw e;
         } finally {
-            state.setActivationActive(false);
+            state.setActiveActivations(Collections.<UUID>emptySet());
             closeDevice();
             pipeline.close();
             if (encoder != null) encoder.close();
@@ -157,20 +161,29 @@ public final class VoiceCapture implements AutoCloseable {
         }
     }
 
-    /** Capture thread: activation start/end transitions, logged once each. */
-    private void activationDiagnostics(boolean wasActive, CaptureActivation.Result result) {
+    /**
+     * Capture thread: activation start/end transitions, logged once each. The frame counters follow the proximity
+     * activation, as they did while it was the only one; the others are logged by name.
+     */
+    private void activationDiagnostics(Set<UUID> wasActive, CaptureActivation.Result result) {
         if (result == CaptureActivation.Result.ACTIVATED) {
             framesActive++;
             activationFrames++;
         }
-        boolean active = activation.isActive();
-        if (!wasActive && active) {
-            activationFrames = result == CaptureActivation.Result.ACTIVATED ? 1 : 0;
-            DEBUG.log(Category.AUDIO, "activation started: type={}, toggled={}, pushToTalk={}, threshold={}dB, distance={}, sequence={}",
-                    state.getActivationType(), state.isActivationToggled(), state.isPushToTalkPressed(),
-                    state.getActivationThreshold(), distance.getAsInt(), sequenceNumber);
-        } else if (wasActive && !active) {
-            DEBUG.log(Category.AUDIO, "activation ended: result={}, frames={}, sequence={}", result, activationFrames, sequenceNumber);
+        for (CaptureActivations.Slot slot : activations.all()) {
+            boolean was = wasActive.contains(slot.id);
+            boolean active = slot.isActive();
+            boolean parent = slot == activations.parent;
+            if (!was && active) {
+                if (parent) activationFrames = result == CaptureActivation.Result.ACTIVATED ? 1 : 0;
+                DEBUG.log(Category.AUDIO, "activation started: activation={}, type={}, toggled={}, pushToTalk={}, threshold={}dB, "
+                                + "distance={}, sequence={}", slot.name, state.getActivationType(slot.name),
+                        state.isActivationToggled(slot.name), state.isPushToTalkPressed(slot.name),
+                        state.getActivationThreshold(), distance.applyAsInt(slot.id), slot.sequence());
+            } else if (was && !active) {
+                DEBUG.log(Category.AUDIO, "activation ended: activation={}, result={}, frames={}, sequence={}", slot.name,
+                        parent ? result : "-", parent ? activationFrames : 0, slot.sequence());
+            }
         }
     }
 
@@ -182,8 +195,9 @@ public final class VoiceCapture implements AutoCloseable {
                         + "noiseSuppression={}, muted={}, serverMuted={}, voiceDisabled={}, inputDisabled={}, microphoneTest={}",
                 device != null || javaxInput != null ? describe(openedDevice) : "none", openedBackend, captureChannels,
                 state.isStereoCapture(), framesRead, framesActive, framesEncoded, packetsSubmitted, frameFailures,
-                state.getActivationType(), activation.isActive(), state.getActivationThreshold(),
-                String.format("%.1f", rawLevel), String.format("%.1f", pipeline.processedLevel), distance.getAsInt(),
+                state.getActivationType(), activations.activeIds().contains(VoiceActivation.PROXIMITY_ID),
+                state.getActivationThreshold(), String.format("%.1f", rawLevel), String.format("%.1f", pipeline.processedLevel),
+                distance.applyAsInt(VoiceActivation.PROXIMITY_ID),
                 state.getMicrophoneVolume(), state.isNoiseSuppression(), state.isMicrophoneMuted(), serverMuted.getAsBoolean(),
                 state.isVoiceDisabled(), state.isInputDeviceDisabled(), state.getMicrophoneTest().isActive());
         rawLevel = -127D;
@@ -344,28 +358,42 @@ public final class VoiceCapture implements AutoCloseable {
         return mono;
     }
 
-    private void sendFrame(short[] samples) {
-        try {
-            if (encoder == null) {
-                encoder = OpusCodec.createEncoder(config.getPacket().getCaptureInfo().getEncoderInfo(), sampleRate,
-                        false, config.getPacket().getCaptureInfo().getMtuSize());
+    /** Sends what {@link CaptureActivations} decides: voice over UDP, END over TCP, both with the activation's own sequence. */
+    private final class Sender implements CapturePipeline.Output {
+        /** Upstream encode: once per frame, then encrypted; the same bytes go out for every activation. */
+        @Override
+        public byte[] encode(short[] mono) {
+            try {
+                if (encoder == null) {
+                    encoder = OpusCodec.createEncoder(config.getPacket().getCaptureInfo().getEncoderInfo(), sampleRate,
+                            false, config.getPacket().getCaptureInfo().getMtuSize());
+                }
+                byte[] data = encoder.encode(mono);
+                if (DEBUG.enabled()) framesEncoded++;
+                AesEncryption encryption = config.getEncryption();
+                return encryption == null ? data : encryption.encrypt(data);
+            } catch (IOException | GeneralSecurityException e) {
+                LOGGER.debug("Dropped a microphone frame", e);
+                if (DEBUG.enabled() && ++frameFailures == 1) DEBUG.error(Category.CODEC, "microphone frame dropped (first failure)", e);
+                return null;
             }
-            byte[] data = encoder.encode(samples);
-            if (DEBUG.enabled()) framesEncoded++;
-            AesEncryption encryption = config.getEncryption();
-            if (encryption != null) data = encryption.encrypt(data);
-            udpClient.send(new PlayerAudioPacket(++sequenceNumber, data, VoiceActivation.PROXIMITY_ID,
-                    (short) distance.getAsInt(), false));
-            if (DEBUG.enabled()) packetsSubmitted++;
-        } catch (IOException | GeneralSecurityException e) {
-            LOGGER.debug("Dropped a microphone frame", e);
-            if (DEBUG.enabled() && ++frameFailures == 1) DEBUG.error(Category.CODEC, "microphone frame dropped (first failure)", e);
         }
-    }
 
-    private void sendEnd() {
-        if (encoder != null) encoder.reset();
-        endSender.accept(new PlayerAudioEndPacket(++sequenceNumber, VoiceActivation.PROXIMITY_ID, (short) distance.getAsInt()));
+        @Override
+        public void audio(CaptureActivations.Slot slot, long sequenceNumber, byte[] data) {
+            udpClient.send(new PlayerAudioPacket(sequenceNumber, data, slot.id, (short) distance.applyAsInt(slot.id), false));
+            if (DEBUG.enabled()) packetsSubmitted++;
+        }
+
+        /**
+         * Upstream resets the encoder on every END, which corrupts the Opus state of another activation that is still
+         * sending from the same encoder; it is reset only when the last stream ends.
+         */
+        @Override
+        public void end(CaptureActivations.Slot slot, long sequenceNumber, boolean lastStream) {
+            if (lastStream && encoder != null) encoder.reset();
+            endSender.accept(new PlayerAudioEndPacket(sequenceNumber, slot.id, (short) distance.applyAsInt(slot.id)));
+        }
     }
 
     private int getInteger(int parameter) {
