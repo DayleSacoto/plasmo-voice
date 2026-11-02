@@ -209,7 +209,6 @@ gui.plasmovoice.overlay.group_style=Стиль оверлею
 gui.plasmovoice.overlay.group_opacity=Непрозорість фону
 gui.plasmovoice.overlay.group_position=Розташування оверлея
 gui.plasmovoice.overlay.group_position.edit=Змінити розташування
-gui.plasmovoice.overlay.group_position_reset=Скинути розташування
 gui.plasmovoice.overlay.group_reset=Скинути
 gui.plasmovoice.overlay.group_done=Готово
 gui.plasmovoice.overlay.group_edit.title=Розташування оверлея групи

@@ -209,7 +209,6 @@ gui.plasmovoice.overlay.group_style=Overlay-Stil
 gui.plasmovoice.overlay.group_opacity=Hintergrund-Deckkraft
 gui.plasmovoice.overlay.group_position=Overlay-Position
 gui.plasmovoice.overlay.group_position.edit=Position ändern
-gui.plasmovoice.overlay.group_position_reset=Position zurücksetzen
 gui.plasmovoice.overlay.group_reset=Zurücksetzen
 gui.plasmovoice.overlay.group_done=Fertig
 gui.plasmovoice.overlay.group_edit.title=Position des Gruppen-Overlays

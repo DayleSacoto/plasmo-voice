@@ -89,10 +89,6 @@ final class OverlayTab extends SettingsTab {
                 new ButtonWidget(ELEMENT_WIDTH, () -> VoiceLang.format("gui.plasmovoice.overlay.group_position.edit"),
                         () -> Minecraft.getMinecraft().displayGuiScreen(new GroupHudEditScreen(screen, state))),
                 () -> GroupHudPosition.DEFAULT.equals(state.getGroupHudPlacement()), state::resetGroupHudPlacement);
-        addOption(VoiceLang.format("gui.plasmovoice.overlay.group_position_reset"), null,
-                new ButtonWidget(ELEMENT_WIDTH, () -> VoiceLang.format("gui.plasmovoice.overlay.group_reset"),
-                        state::resetGroupHudPlacement),
-                () -> GroupHudPosition.DEFAULT.equals(state.getGroupHudPlacement()), state::resetGroupHudPlacement);
     }
 
     private void buildSources(ClientConfig config) {
