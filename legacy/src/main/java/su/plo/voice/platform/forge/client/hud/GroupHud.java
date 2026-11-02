@@ -22,15 +22,14 @@ import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import su.plo.voice.platform.forge.network.groups.GroupsState;
 
 /**
- * The Group HUD: a panel with the online members of the current group as [head] name; a member speaking through
- * group voice gets a white outline around the head. Drawn after the vanilla HUD like {@link VoiceHud}; the box
- * measures and draws through
- * {@link GroupHudModel}, which the position editor shares.
+ * The Group HUD: a panel with the online members of the current group in the Group Overlay style ([head] name, head
+ * or name); a member speaking through group voice gets a white outline around the head, or a white underline under
+ * the name in the name style. Drawn after the vanilla HUD like {@link VoiceHud}; the box measures and draws through
+ * {@link GroupHudModel}, which the position editor shares. Style and background opacity are the Group Overlay's own
+ * settings, independent of the generic overlay.
  */
 @SideOnly(Side.CLIENT)
 public final class GroupHud {
-    static final int BACKGROUND_COLOR = 0x40000000;
-
     private final ClientState state;
 
     public GroupHud(ClientState state) {
@@ -52,7 +51,7 @@ public final class GroupHud {
         List<GroupHudModel.Entry> entries = liveEntries(mc, state, group);
 
         GroupHudPosition.Anchor anchor = state.getGroupHudAnchor();
-        GroupHudModel.Layout layout = layout(mc.fontRenderer, entries, anchor);
+        GroupHudModel.Layout layout = layout(mc.fontRenderer, entries, anchor, state.getGroupHudStyle());
         if (layout.rows.isEmpty()) return;
         int width = event.resolution.getScaledWidth();
         int height = event.resolution.getScaledHeight();
@@ -63,7 +62,7 @@ public final class GroupHud {
         GL11.glEnable(GL11.GL_BLEND);
         OpenGlHelper.glBlendFunc(770, 771, 1, 0);
         GL11.glColor4f(1F, 1F, 1F, 1F);
-        draw(mc, layout, origin.x, origin.y);
+        draw(mc, layout, origin.x, origin.y, state.getGroupHudBackgroundOpacity());
         GL11.glColor4f(1F, 1F, 1F, 1F);
         GL11.glPopMatrix();
     }
@@ -84,25 +83,40 @@ public final class GroupHud {
 
     /** The shared measurement: the box of this group for an anchor (right anchors mirror, bottom ones reverse). */
     public static GroupHudModel.Layout layout(FontRenderer font, List<GroupHudModel.Entry> entries,
-                                       GroupHudPosition.Anchor anchor) {
-        return GroupHudModel.layout(entries, anchor.isRight(), anchor.isBottom(), font::getStringWidth,
+                                              GroupHudPosition.Anchor anchor, HudOptions.OverlayStyle style) {
+        return GroupHudModel.layout(entries, anchor.isRight(), anchor.isBottom(), style, font::getStringWidth,
                 count -> VoiceLang.format("gui.plasmovoice.overlay.group_more", count));
     }
 
     /**
-     * Draws a layout with its top left corner at (x, y): the background panel, then per row the head (white outline
-     * while speaking through group voice) and the name. Also used by the position editor.
+     * Draws a layout with its top left corner at (x, y): the background panel at {@code opacityPercent} (none at 0),
+     * then per row the head (white outline while speaking through group voice) and/or the name (white underline while
+     * speaking when there is no head). Heads, names and speaking marks are always fully opaque. Also used by the
+     * position editor.
      */
-    public static void draw(Minecraft mc, GroupHudModel.Layout layout, int x, int y) {
+    public static void draw(Minecraft mc, GroupHudModel.Layout layout, int x, int y, int opacityPercent) {
         if (layout.rows.isEmpty()) return;
         FontRenderer font = mc.fontRenderer;
-        Gui.drawRect(x, y, x + layout.width, y + layout.height, BACKGROUND_COLOR);
+        if (GroupHudModel.clampOpacity(opacityPercent) > 0) {
+            Gui.drawRect(x, y, x + layout.width, y + layout.height, GroupHudModel.backgroundColor(opacityPercent));
+        }
+        boolean heads = layout.style.hasSkin();
+        boolean names = layout.style.hasName();
         for (GroupHudModel.Row row : layout.rows) {
-            if (row.kind == GroupHudModel.Kind.MEMBER) {
+            if (row.kind == GroupHudModel.Kind.MORE) {
+                font.drawString(row.text, x + row.textX, y + row.textY, 0xFFFFFF);
+                continue;
+            }
+            if (heads) {
                 PlayerHeads.draw(mc, row.memberId, x + row.headX, y + row.headY, GroupHudModel.HEAD_SIZE,
                         PlayerHeads.Style.of(true, row.speaking));
             }
-            font.drawString(row.text, x + row.textX, y + row.textY, 0xFFFFFF);
+            if (names) font.drawString(row.text, x + row.textX, y + row.textY, 0xFFFFFF);
+            if (row.underlineY >= 0) {
+                int left = x + row.textX;
+                Gui.drawRect(left, y + row.underlineY, left + font.getStringWidth(row.text), y + row.underlineY + 1,
+                        PlayerHeads.OUTLINE_COLOR);
+            }
         }
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }

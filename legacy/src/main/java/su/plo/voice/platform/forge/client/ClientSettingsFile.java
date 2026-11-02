@@ -17,6 +17,7 @@ import org.apache.logging.log4j.Logger;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
+import su.plo.voice.platform.forge.client.hud.GroupHudModel;
 import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 
@@ -110,6 +111,10 @@ public final class ClientSettingsFile {
                 GroupHudPosition.DEFAULT_ANCHOR, file),
                 config.get(GROUP_HUD, "offset_x", GroupHudPosition.DEFAULT_OFFSET_X).getInt(GroupHudPosition.DEFAULT_OFFSET_X),
                 config.get(GROUP_HUD, "offset_y", GroupHudPosition.DEFAULT_OFFSET_Y).getInt(GroupHudPosition.DEFAULT_OFFSET_Y));
+        state.setGroupHudStyle(enumValue(config.get(GROUP_HUD, "style", HudOptions.OverlayStyle.NAME_SKIN.name()),
+                HudOptions.OverlayStyle.NAME_SKIN, file));
+        state.setGroupHudBackgroundOpacity(config.get(GROUP_HUD, "background_opacity", GroupHudModel.DEFAULT_OPACITY)
+                .getInt(GroupHudModel.DEFAULT_OPACITY));
         state.setVisualizeVoiceDistance(config.get(ADVANCED, "visualize_voice_distance", true).getBoolean(true));
         state.setVisualizeVoiceDistanceOnJoin(config.get(ADVANCED, "visualize_voice_distance_on_join", false).getBoolean(false));
         state.setPanning(config.get(ADVANCED, "panning", true).getBoolean(true));
@@ -200,6 +205,8 @@ public final class ClientSettingsFile {
         config.get(GROUP_HUD, "anchor", GroupHudPosition.DEFAULT_ANCHOR.name()).set(state.getGroupHudAnchor().name());
         config.get(GROUP_HUD, "offset_x", GroupHudPosition.DEFAULT_OFFSET_X).set(state.getGroupHudOffsetX());
         config.get(GROUP_HUD, "offset_y", GroupHudPosition.DEFAULT_OFFSET_Y).set(state.getGroupHudOffsetY());
+        config.get(GROUP_HUD, "style", HudOptions.OverlayStyle.NAME_SKIN.name()).set(state.getGroupHudStyle().name());
+        config.get(GROUP_HUD, "background_opacity", GroupHudModel.DEFAULT_OPACITY).set(state.getGroupHudBackgroundOpacity());
         config.get(ADVANCED, "visualize_voice_distance", true).set(state.isVisualizeVoiceDistance());
         config.get(ADVANCED, "visualize_voice_distance_on_join", false).set(state.isVisualizeVoiceDistanceOnJoin());
         config.get(ADVANCED, "panning", true).set(state.isPanning());

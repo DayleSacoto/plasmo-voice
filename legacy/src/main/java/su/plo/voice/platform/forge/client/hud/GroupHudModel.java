@@ -14,11 +14,13 @@ import su.plo.voice.platform.forge.network.groups.GroupsState;
  * Layout and data of the Group HUD without any Minecraft type: the in-game renderer and the position editor both
  * draw {@link Layout}, so the box they measure is identical. Coordinates are scaled GUI pixels relative to the box.
  *
- * <p>The box is one background panel holding a row per online member, {@code [head] Name}, and a "+K" row when more
- * than {@link #MAX_VISIBLE} members are online. There is no title and no icon: a member speaking through group voice
- * gets a white outline around the head. Each head sits in a slot one {@link #OUTLINE} wider on every side, so the
- * outline never covers the skin or touches the next row. Bottom anchors reverse the rows so the first member stays
- * nearest the screen edge; right anchors put the head on the right with the name next to it.
+ * <p>The box is one background panel holding a row per online member and a "+K" row when more than
+ * {@link #MAX_VISIBLE} members are online. The style picks what a row shows: {@code [head] Name}, the head alone or
+ * the name alone. There is no title and no icon: a member speaking through group voice gets a white outline around
+ * the head, or a thin white underline under the name when no head is shown. Each head sits in a slot one
+ * {@link #OUTLINE} wider on every side, so the outline never covers the skin or touches the next row. Bottom anchors
+ * reverse the rows so the first member stays nearest the screen edge; right anchors put the head on the right with
+ * the name next to it.
  */
 public final class GroupHudModel {
     /** Panel padding around the rows. */
@@ -32,8 +34,14 @@ public final class GroupHudModel {
     /** Gap between the head slot and the name. */
     public static final int TEXT_GAP = 3;
     public static final int FONT_HEIGHT = 8;
+    /** Name style row: one pixel above the text, the text, a gap and the one pixel speaking underline. */
+    public static final int NAME_ROW_HEIGHT = FONT_HEIGHT + 3;
+    /** Speaking underline of the name style, below the text top. */
+    public static final int UNDERLINE_OFFSET = FONT_HEIGHT + 1;
     public static final int MAX_VISIBLE = 10;
     public static final int MAX_TEXT_WIDTH = 120;
+    /** Background opacity in percent; 25 is the 0x40 alpha the panel always had. */
+    public static final int DEFAULT_OPACITY = 25;
     private static final String ELLIPSIS = "...";
 
     private GroupHudModel() {
@@ -64,14 +72,16 @@ public final class GroupHudModel {
         public final boolean speaking;
         /** Row top, relative to the box. */
         public final int y;
-        /** Head top left (inside its outline slot), relative to the box; -1 for the overflow row. */
+        /** Head top left (inside its outline slot), relative to the box; -1 for the overflow row and the name style. */
         public final int headX;
         public final int headY;
         public final int textX;
         public final int textY;
+        /** Top of the name underline while speaking in the name style; -1 otherwise. */
+        public final int underlineY;
 
         Row(Kind kind, String text, UUID memberId, boolean speaking, int y, int headX, int headY, int textX,
-            int textY) {
+            int textY, int underlineY) {
             this.kind = kind;
             this.text = text;
             this.memberId = memberId;
@@ -81,6 +91,7 @@ public final class GroupHudModel {
             this.headY = headY;
             this.textX = textX;
             this.textY = textY;
+            this.underlineY = underlineY;
         }
     }
 
@@ -88,12 +99,24 @@ public final class GroupHudModel {
         public final List<Row> rows;
         public final int width;
         public final int height;
+        public final HudOptions.OverlayStyle style;
 
-        Layout(List<Row> rows, int width, int height) {
+        Layout(List<Row> rows, int width, int height, HudOptions.OverlayStyle style) {
             this.rows = Collections.unmodifiableList(rows);
             this.width = width;
             this.height = height;
+            this.style = style;
         }
+    }
+
+    /** ARGB of the panel for an opacity in percent (clamped to 0..100); 0 is fully transparent. */
+    public static int backgroundColor(int opacityPercent) {
+        int percent = clampOpacity(opacityPercent);
+        return Math.round(percent * 255F / 100F) << 24;
+    }
+
+    public static int clampOpacity(int opacityPercent) {
+        return Math.max(0, Math.min(100, opacityPercent));
     }
 
     /**
@@ -112,14 +135,26 @@ public final class GroupHudModel {
         return entries;
     }
 
+    /** The {@code [head] Name} style, see {@link #layout(List, boolean, boolean, HudOptions.OverlayStyle, ToIntFunction, IntFunction)}. */
+    public static Layout layout(List<Entry> members, boolean right, boolean bottom,
+                                ToIntFunction<String> textWidth, IntFunction<String> moreText) {
+        return layout(members, right, bottom, HudOptions.OverlayStyle.NAME_SKIN, textWidth, moreText);
+    }
+
     /**
+     * @param style     what a member row shows; head rows keep the head slot height, name-only rows are
+     *                  {@link #NAME_ROW_HEIGHT} high with room for the speaking underline
      * @param textWidth pixel width of a string in the HUD font
      * @param moreText  text of the overflow row for K hidden members, e.g. "+3 more"
      * @return an empty 0x0 layout when nobody is online
      */
-    public static Layout layout(List<Entry> members, boolean right, boolean bottom,
+    public static Layout layout(List<Entry> members, boolean right, boolean bottom, HudOptions.OverlayStyle style,
                                 ToIntFunction<String> textWidth, IntFunction<String> moreText) {
-        if (members.isEmpty()) return new Layout(new ArrayList<Row>(), 0, 0);
+        if (style == null) style = HudOptions.OverlayStyle.NAME_SKIN;
+        if (members.isEmpty()) return new Layout(new ArrayList<Row>(), 0, 0, style);
+        boolean head = style.hasSkin();
+        boolean named = style.hasName();
+        int rowHeight = head ? ROW_HEIGHT : NAME_ROW_HEIGHT;
         int visible = Math.min(members.size(), MAX_VISIBLE);
         List<Entry> shown = members.subList(0, visible);
         String more = members.size() > visible ? moreText.apply(members.size() - visible) : null;
@@ -129,7 +164,9 @@ public final class GroupHudModel {
         for (Entry entry : shown) {
             String name = fit(entry.name, textWidth);
             names.add(name);
-            contentWidth = Math.max(contentWidth, HEAD_SLOT + TEXT_GAP + textWidth.applyAsInt(name));
+            int rowWidth = (head ? HEAD_SLOT : 0) + (head && named ? TEXT_GAP : 0)
+                    + (named ? textWidth.applyAsInt(name) : 0);
+            contentWidth = Math.max(contentWidth, rowWidth);
         }
         if (more != null) contentWidth = Math.max(contentWidth, textWidth.applyAsInt(more));
         int width = 2 * PADDING + contentWidth;
@@ -138,25 +175,32 @@ public final class GroupHudModel {
         for (int i = 0; i < shown.size(); i++) {
             Entry entry = shown.get(i);
             String name = names.get(i);
+            int nameWidth = textWidth.applyAsInt(name);
             int slotX = right ? width - PADDING - HEAD_SLOT : PADDING;
-            int textX = right ? slotX - TEXT_GAP - textWidth.applyAsInt(name) : slotX + HEAD_SLOT + TEXT_GAP;
-            logical.add(new Row(Kind.MEMBER, name, entry.id, entry.speaking, 0, slotX + OUTLINE, 0, textX, 0));
+            int textX;
+            if (!head) textX = right ? width - PADDING - nameWidth : PADDING;
+            else textX = right ? slotX - TEXT_GAP - nameWidth : slotX + HEAD_SLOT + TEXT_GAP;
+            logical.add(new Row(Kind.MEMBER, name, entry.id, entry.speaking, 0, head ? slotX + OUTLINE : -1, 0,
+                    textX, 0, -1));
         }
         if (more != null) {
             int textX = right ? width - PADDING - textWidth.applyAsInt(more) : PADDING;
-            logical.add(new Row(Kind.MORE, more, null, false, 0, -1, -1, textX, 0));
+            logical.add(new Row(Kind.MORE, more, null, false, 0, -1, -1, textX, 0, -1));
         }
         if (bottom) Collections.reverse(logical);
 
         List<Row> rows = new ArrayList<>();
         int y = PADDING;
         for (Row row : logical) {
-            int headY = row.kind == Kind.MEMBER ? y + OUTLINE : -1;
-            rows.add(new Row(row.kind, row.text, row.memberId, row.speaking, y, row.headX, headY, row.textX,
-                    y + (ROW_HEIGHT - FONT_HEIGHT) / 2));
-            y += ROW_HEIGHT + ROW_GAP;
+            boolean member = row.kind == Kind.MEMBER;
+            int headY = member && head ? y + OUTLINE : -1;
+            int textY = y + (rowHeight - FONT_HEIGHT) / 2;
+            int underlineY = member && !head && row.speaking ? textY + UNDERLINE_OFFSET : -1;
+            rows.add(new Row(row.kind, row.text, row.memberId, row.speaking, y, row.headX, headY, row.textX, textY,
+                    underlineY));
+            y += rowHeight + ROW_GAP;
         }
-        return new Layout(rows, width, y - ROW_GAP + PADDING);
+        return new Layout(rows, width, y - ROW_GAP + PADDING, style);
     }
 
     /** The text cut with "..." so it is at most {@link #MAX_TEXT_WIDTH} pixels wide. */

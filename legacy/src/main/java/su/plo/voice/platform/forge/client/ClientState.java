@@ -20,6 +20,7 @@ import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
+import su.plo.voice.platform.forge.client.hud.GroupHudModel;
 import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
@@ -115,6 +116,12 @@ public final class ClientState {
     private volatile int groupHudOffsetX = GroupHudPosition.DEFAULT_OFFSET_X;
     @Getter
     private volatile int groupHudOffsetY = GroupHudPosition.DEFAULT_OFFSET_Y;
+    /** Group Overlay style, independent of the generic overlay style. */
+    @Getter
+    private volatile HudOptions.OverlayStyle groupHudStyle = HudOptions.OverlayStyle.NAME_SKIN;
+    /** Group Overlay panel opacity in percent, 0..100. */
+    @Getter
+    private volatile int groupHudBackgroundOpacity = GroupHudModel.DEFAULT_OPACITY;
     /** Upstream overlay.source_states by source line name; lines without players default to OFF. */
     private final Map<String, HudOptions.OverlaySourceState> overlaySourceStates = new ConcurrentHashMap<>();
 
@@ -243,6 +250,14 @@ public final class ClientState {
 
     public void resetGroupHudPlacement() {
         setGroupHudPlacement(GroupHudPosition.DEFAULT);
+    }
+
+    public void setGroupHudStyle(HudOptions.OverlayStyle style) {
+        this.groupHudStyle = style == null ? HudOptions.OverlayStyle.NAME_SKIN : style;
+    }
+
+    public void setGroupHudBackgroundOpacity(int opacityPercent) {
+        this.groupHudBackgroundOpacity = GroupHudModel.clampOpacity(opacityPercent);
     }
 
     public void setDirectionalSourcesAngle(int angle) {

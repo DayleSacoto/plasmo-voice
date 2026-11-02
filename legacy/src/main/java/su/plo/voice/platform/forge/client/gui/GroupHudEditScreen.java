@@ -18,7 +18,7 @@ import su.plo.voice.platform.forge.client.lang.VoiceLang;
 
 /**
  * Drag and drop editor of the Group HUD position. Always shows the same three preview members drawn exactly like the
- * HUD, one of them with the group speaking outline. The position is edited in the screen and committed by Done;
+ * HUD, in the selected Group Overlay style and background opacity, one of them speaking (outline or underline). The position is edited in the screen and committed by Done;
  * Escape leaves the stored position as it was when the screen opened. Everything is in scaled GUI pixels, like the HUD.
  */
 @SideOnly(Side.CLIENT)
@@ -130,7 +130,7 @@ public final class GroupHudEditScreen extends GuiScreen {
 
         GroupHudModel.Layout layout = layout(dragging ? dragLayoutAnchor : placement.anchor);
         GroupHudPosition.Point origin = origin(layout);
-        GroupHud.draw(mc, layout, origin.x, origin.y);
+        GroupHud.draw(mc, layout, origin.x, origin.y, state.getGroupHudBackgroundOpacity());
         boolean hovered = mouseX >= origin.x && mouseX < origin.x + layout.width
                 && mouseY >= origin.y && mouseY < origin.y + layout.height;
         if (dragging || hovered) drawOutline(origin.x, origin.y, layout.width, layout.height, dragging ? 0xFFFFFFFF : 0x80FFFFFF);
@@ -141,9 +141,9 @@ public final class GroupHudEditScreen extends GuiScreen {
         return GroupHudPosition.origin(placement, layout.width, layout.height, width, height);
     }
 
-    /** The preview members laid out like the HUD for an anchor. */
+    /** The preview members laid out like the HUD for an anchor, in the selected Group Overlay style. */
     private GroupHudModel.Layout layout(GroupHudPosition.Anchor anchor) {
-        return GroupHud.layout(fontRendererObj, FAKE_MEMBERS, anchor);
+        return GroupHud.layout(fontRendererObj, FAKE_MEMBERS, anchor, state.getGroupHudStyle());
     }
 
     private void drawOutline(int x, int y, int w, int h, int color) {

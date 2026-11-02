@@ -16,6 +16,7 @@ import org.junit.rules.TemporaryFolder;
 import su.plo.voice.platform.forge.client.audio.CaptureActivation;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
+import su.plo.voice.platform.forge.client.hud.GroupHudModel;
 import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.platform.forge.server.connection.ServerConfig;
@@ -277,6 +278,51 @@ public class ClientSettingsTest {
         ClientState reset = new ClientState();
         ClientSettingsFile.load(file, reset);
         assertEquals(GroupHudPosition.DEFAULT, reset.getGroupHudPlacement());
+    }
+
+    @Test
+    public void groupHudStyleAndOpacityDefaultToTheCurrentLookAndSurviveARestart() throws Exception {
+        File file = new File(folder.getRoot(), "client.cfg");
+        // An existing config without the new keys keeps [head] Name on the 0x40 panel.
+        Files.write(file.toPath(), "group_hud {\n    B:enabled=true\n}\n".getBytes(StandardCharsets.UTF_8));
+        ClientState old = new ClientState();
+        ClientSettingsFile.load(file, old);
+        assertEquals(HudOptions.OverlayStyle.NAME_SKIN, old.getGroupHudStyle());
+        assertEquals(25, old.getGroupHudBackgroundOpacity());
+        assertEquals(0x40000000, GroupHudModel.backgroundColor(old.getGroupHudBackgroundOpacity()));
+
+        // Independent of the generic overlay style.
+        ClientState before = new ClientState();
+        before.setOverlayStyle(HudOptions.OverlayStyle.SKIN);
+        before.setGroupHudStyle(HudOptions.OverlayStyle.NAME);
+        before.setGroupHudBackgroundOpacity(0);
+        ClientSettingsFile.save(file, before);
+        ClientState after = new ClientState();
+        ClientSettingsFile.load(file, after);
+        assertEquals(HudOptions.OverlayStyle.NAME, after.getGroupHudStyle());
+        assertEquals(HudOptions.OverlayStyle.SKIN, after.getOverlayStyle());
+        assertEquals(0, after.getGroupHudBackgroundOpacity());
+
+        after.setGroupHudBackgroundOpacity(100);
+        ClientSettingsFile.save(file, after);
+        ClientState full = new ClientState();
+        ClientSettingsFile.load(file, full);
+        assertEquals(100, full.getGroupHudBackgroundOpacity());
+    }
+
+    @Test
+    public void groupHudInvalidStyleAndOpacityAreRepaired() throws Exception {
+        File file = new File(folder.getRoot(), "client.cfg");
+        String content = "group_hud {\n    S:style=FANCY\n    I:background_opacity=250\n}\n";
+        Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
+        ClientState state = new ClientState();
+        ClientSettingsFile.load(file, state);
+        assertEquals(HudOptions.OverlayStyle.NAME_SKIN, state.getGroupHudStyle());
+        assertEquals(100, state.getGroupHudBackgroundOpacity());
+        state.setGroupHudBackgroundOpacity(-3);
+        assertEquals(0, state.getGroupHudBackgroundOpacity());
+        state.setGroupHudStyle(null);
+        assertEquals(HudOptions.OverlayStyle.NAME_SKIN, state.getGroupHudStyle());
     }
 
     @Test

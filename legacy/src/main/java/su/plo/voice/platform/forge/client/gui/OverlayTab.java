@@ -12,6 +12,7 @@ import net.minecraft.util.ResourceLocation;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.groups.ClientGroups;
+import su.plo.voice.platform.forge.client.hud.GroupHudModel;
 import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
@@ -71,6 +72,19 @@ final class OverlayTab extends SettingsTab {
         addOption(VoiceLang.format("gui.plasmovoice.overlay.group_show"), "gui.plasmovoice.overlay.group_show.tooltip",
                 new ToggleWidget(ELEMENT_WIDTH, state::isGroupHudEnabled, state::setGroupHudEnabled),
                 state::isGroupHudEnabled, () -> state.setGroupHudEnabled(true));
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.group_style"), null,
+                new DropDownWidget(ELEMENT_WIDTH, () -> styles.get(state.getGroupHudStyle().ordinal()), styles,
+                        index -> state.setGroupHudStyle(HudOptions.OverlayStyle.values()[index])),
+                () -> state.getGroupHudStyle() == HudOptions.OverlayStyle.NAME_SKIN,
+                () -> state.setGroupHudStyle(HudOptions.OverlayStyle.NAME_SKIN));
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.group_opacity"), null,
+                new SliderWidget(ELEMENT_WIDTH,
+                        () -> state.getGroupHudBackgroundOpacity() / 100D,
+                        value -> state.setGroupHudBackgroundOpacity((int) Math.round(value * 100D)),
+                        value -> Math.round(value * 100D) / 100D,
+                        () -> state.getGroupHudBackgroundOpacity() + "%"),
+                () -> state.getGroupHudBackgroundOpacity() == GroupHudModel.DEFAULT_OPACITY,
+                () -> state.setGroupHudBackgroundOpacity(GroupHudModel.DEFAULT_OPACITY));
         addOption(VoiceLang.format("gui.plasmovoice.overlay.group_position"), null,
                 new ButtonWidget(ELEMENT_WIDTH, () -> VoiceLang.format("gui.plasmovoice.overlay.group_position.edit"),
                         () -> Minecraft.getMinecraft().displayGuiScreen(new GroupHudEditScreen(screen, state))),
