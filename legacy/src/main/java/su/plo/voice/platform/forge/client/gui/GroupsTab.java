@@ -466,7 +466,7 @@ final class GroupsTab extends SettingsTab {
         GroupsRows.Marker marker = (mc, x, centerY) -> {
             boolean speaking = GroupsPresenter.isSpeaking(member.online, member.self, member.id, speakingNow,
                     selfSpeakingNow);
-            PlayerHeads.draw(mc, member.id, x + PlayerHeads.OUTLINE, centerY - HEAD_SIZE / 2, HEAD_SIZE,
+            PlayerHeads.draw(mc, member.id, member.name, x + PlayerHeads.OUTLINE, centerY - HEAD_SIZE / 2, HEAD_SIZE,
                     PlayerHeads.Style.of(member.online, speaking));
             return HEAD_SIZE + 2 * PlayerHeads.OUTLINE + 4;
         };

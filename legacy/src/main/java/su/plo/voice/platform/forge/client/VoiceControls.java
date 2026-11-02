@@ -32,6 +32,7 @@ import su.plo.voice.platform.forge.debug.VoiceDebug;
 import su.plo.voice.platform.forge.client.gui.VoiceSettingsScreen;
 import su.plo.voice.platform.forge.client.hud.DistanceVisualizer;
 import su.plo.voice.platform.forge.client.hud.PlayerIcons;
+import su.plo.voice.platform.forge.client.hud.PlayerSkins;
 import su.plo.voice.platform.forge.client.hud.GroupHud;
 import su.plo.voice.platform.forge.client.hud.VoiceHud;
 import su.plo.voice.platform.forge.client.lang.VoiceLang;
@@ -79,12 +80,18 @@ public final class VoiceControls {
     /** Netty thread: groups state belongs to one server connection. */
     @SubscribeEvent
     public void onDisconnect(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
-        Minecraft.getMinecraft().func_152344_a(ClientGroups.get()::reset);
+        Minecraft.getMinecraft().func_152344_a(VoiceControls::resetSession);
     }
 
     @SubscribeEvent
     public void onConnect(FMLNetworkEvent.ClientConnectedToServerEvent event) {
-        Minecraft.getMinecraft().func_152344_a(ClientGroups.get()::reset);
+        Minecraft.getMinecraft().func_152344_a(VoiceControls::resetSession);
+    }
+
+    /** Client thread: groups state and the remembered member skins belong to one server connection. */
+    private static void resetSession() {
+        ClientGroups.get().reset();
+        PlayerSkins.clear();
     }
 
     /** Screens receive keys directly, so they close themselves on the settings key like upstream. */

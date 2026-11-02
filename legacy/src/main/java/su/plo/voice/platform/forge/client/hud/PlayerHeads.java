@@ -6,7 +6,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.renderer.OpenGlHelper;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 
@@ -44,16 +43,21 @@ public final class PlayerHeads {
         }
     }
 
-    public static void draw(Minecraft mc, UUID playerId, int x, int y, int size, Style style) {
-        draw(mc, playerId, x, y, size, style.dimmed, style.outlined);
+    /**
+     * A Groups member head: the skin is remembered by {@code nickname} for the session, so it stays after the player
+     * unloads, leaves the range or goes offline (see {@link PlayerSkins}); a null nickname draws the default head.
+     */
+    public static void draw(Minecraft mc, UUID playerId, String nickname, int x, int y, int size, Style style) {
+        draw(mc, PlayerSkins.skin(mc, playerId, nickname), x, y, size, style.dimmed, style.outlined);
     }
 
-    /** Draws a {@code size} x {@code size} head with its top left corner at (x, y). */
+    /** Draws a {@code size} x {@code size} head of a loaded player (Steve otherwise) with its top left at (x, y). */
     public static void draw(Minecraft mc, UUID playerId, int x, int y, int size, boolean dimmed, boolean outlined) {
-        EntityPlayer player = mc.theWorld == null || playerId == null ? null : mc.theWorld.func_152378_a(playerId);
-        ResourceLocation skin = player instanceof AbstractClientPlayer
-                ? ((AbstractClientPlayer) player).getLocationSkin()
-                : AbstractClientPlayer.locationStevePng;
+        draw(mc, PlayerSkins.skin(mc, playerId, null), x, y, size, dimmed, outlined);
+    }
+
+    private static void draw(Minecraft mc, ResourceLocation skin, int x, int y, int size, boolean dimmed,
+                             boolean outlined) {
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_CURRENT_BIT);
         mc.getTextureManager().bindTexture(skin);
         // GTNH SimpleSkinBackport turns every player skin into a 64x64 texture, vanilla 1.7.10 skins are 64x32:

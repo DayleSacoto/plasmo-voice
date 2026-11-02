@@ -57,11 +57,18 @@ public final class GroupHudModel {
         public final String name;
         /** Speaking through group voice right now: the head gets the white outline. */
         public final boolean speaking;
+        /** Real player name the head skin is looked up by; null draws the default head (editor preview). */
+        public final String skinName;
 
         public Entry(UUID id, String name, boolean speaking) {
+            this(id, name, speaking, name);
+        }
+
+        public Entry(UUID id, String name, boolean speaking, String skinName) {
             this.id = id;
             this.name = name;
             this.speaking = speaking;
+            this.skinName = skinName;
         }
     }
 
@@ -69,6 +76,8 @@ public final class GroupHudModel {
         public final Kind kind;
         public final String text;
         public final UUID memberId;
+        /** The member's real name for the head skin, never the cut display text; null for the default head. */
+        public final String skinName;
         public final boolean speaking;
         /** Row top, relative to the box. */
         public final int y;
@@ -80,11 +89,12 @@ public final class GroupHudModel {
         /** Top of the name underline while speaking in the name style; -1 otherwise. */
         public final int underlineY;
 
-        Row(Kind kind, String text, UUID memberId, boolean speaking, int y, int headX, int headY, int textX,
-            int textY, int underlineY) {
+        Row(Kind kind, String text, UUID memberId, String skinName, boolean speaking, int y, int headX, int headY,
+            int textX, int textY, int underlineY) {
             this.kind = kind;
             this.text = text;
             this.memberId = memberId;
+            this.skinName = skinName;
             this.speaking = speaking;
             this.y = y;
             this.headX = headX;
@@ -180,12 +190,12 @@ public final class GroupHudModel {
             int textX;
             if (!head) textX = right ? width - PADDING - nameWidth : PADDING;
             else textX = right ? slotX - TEXT_GAP - nameWidth : slotX + HEAD_SLOT + TEXT_GAP;
-            logical.add(new Row(Kind.MEMBER, name, entry.id, entry.speaking, 0, head ? slotX + OUTLINE : -1, 0,
-                    textX, 0, -1));
+            logical.add(new Row(Kind.MEMBER, name, entry.id, entry.skinName, entry.speaking, 0,
+                    head ? slotX + OUTLINE : -1, 0, textX, 0, -1));
         }
         if (more != null) {
             int textX = right ? width - PADDING - textWidth.applyAsInt(more) : PADDING;
-            logical.add(new Row(Kind.MORE, more, null, false, 0, -1, -1, textX, 0, -1));
+            logical.add(new Row(Kind.MORE, more, null, null, false, 0, -1, -1, textX, 0, -1));
         }
         if (bottom) Collections.reverse(logical);
 
@@ -196,8 +206,8 @@ public final class GroupHudModel {
             int headY = member && head ? y + OUTLINE : -1;
             int textY = y + (rowHeight - FONT_HEIGHT) / 2;
             int underlineY = member && !head && row.speaking ? textY + UNDERLINE_OFFSET : -1;
-            rows.add(new Row(row.kind, row.text, row.memberId, row.speaking, y, row.headX, headY, row.textX, textY,
-                    underlineY));
+            rows.add(new Row(row.kind, row.text, row.memberId, row.skinName, row.speaking, y, row.headX, headY,
+                    row.textX, textY, underlineY));
             y += rowHeight + ROW_GAP;
         }
         return new Layout(rows, width, y - ROW_GAP + PADDING, style);

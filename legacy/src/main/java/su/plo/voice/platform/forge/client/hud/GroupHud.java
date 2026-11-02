@@ -108,7 +108,7 @@ public final class GroupHud {
                 continue;
             }
             if (heads) {
-                PlayerHeads.draw(mc, row.memberId, x + row.headX, y + row.headY, GroupHudModel.HEAD_SIZE,
+                PlayerHeads.draw(mc, row.memberId, row.skinName, x + row.headX, y + row.headY, GroupHudModel.HEAD_SIZE,
                         PlayerHeads.Style.of(true, row.speaking));
             }
             if (names) font.drawString(row.text, x + row.textX, y + row.textY, 0xFFFFFF);

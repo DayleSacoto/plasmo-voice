@@ -163,6 +163,7 @@ public final class GroupHudEditScreen extends GuiScreen {
 
     private static GroupHudModel.Entry fake(String name, boolean speaking) {
         UUID id = UUID.nameUUIDFromBytes(("preview:" + name).getBytes(StandardCharsets.UTF_8));
-        return new GroupHudModel.Entry(id, name, speaking);
+        // No skin name: the preview always shows the default head and never downloads skins of real accounts.
+        return new GroupHudModel.Entry(id, name, speaking, null);
     }
 }
