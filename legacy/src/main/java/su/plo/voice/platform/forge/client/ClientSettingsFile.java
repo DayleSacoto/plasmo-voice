@@ -35,6 +35,8 @@ public final class ClientSettingsFile {
     private static final String KEY_BINDINGS = "key_bindings";
     private static final String OVERLAY = "overlay";
     private static final String GROUP_HUD = "group_hud";
+    /** The old on/off switch, migrated into group_hud.visibility. */
+    private static final String LEGACY_GROUP_HUD_ENABLED = "enabled";
     private static final String ADVANCED = "advanced";
     private static final String DEBUG = "debug";
     private static final String DEBUG_COMMENT =
@@ -106,7 +108,7 @@ public final class ClientSettingsFile {
             state.setOverlaySourceState(line.getKey(), enumValue(line.getValue(), HudOptions.OverlaySourceState.OFF, file));
         }
         state.setShowSourceIcons(Math.max(0, Math.min(2, config.get(OVERLAY, "show_source_icons", 0).getInt(0))));
-        state.setGroupHudEnabled(config.get(GROUP_HUD, "enabled", true).getBoolean(true));
+        state.setGroupHudVisibility(groupHudVisibility(config, file));
         state.setGroupHudPlacement(enumValue(config.get(GROUP_HUD, "anchor", GroupHudPosition.DEFAULT_ANCHOR.name()),
                 GroupHudPosition.DEFAULT_ANCHOR, file),
                 config.get(GROUP_HUD, "offset_x", GroupHudPosition.DEFAULT_OFFSET_X).getInt(GroupHudPosition.DEFAULT_OFFSET_X),
@@ -201,7 +203,10 @@ public final class ClientSettingsFile {
         config.get(OVERLAY, "overlay_style", "").set(state.getOverlayStyle().name());
         state.overlaySourceStates().forEach((line, sourceState) -> config.get(SOURCE_STATES, line, "").set(sourceState.name()));
         config.get(OVERLAY, "show_source_icons", 0).set(state.getShowSourceIcons());
-        config.get(GROUP_HUD, "enabled", true).set(state.isGroupHudEnabled());
+        ConfigCategory groupHud = config.getCategory(GROUP_HUD);
+        if (groupHud.containsKey(LEGACY_GROUP_HUD_ENABLED)) groupHud.remove(LEGACY_GROUP_HUD_ENABLED);
+        config.get(GROUP_HUD, "visibility", HudOptions.GroupOverlayVisibility.ALWAYS.name())
+                .set(state.getGroupHudVisibility().name());
         config.get(GROUP_HUD, "anchor", GroupHudPosition.DEFAULT_ANCHOR.name()).set(state.getGroupHudAnchor().name());
         config.get(GROUP_HUD, "offset_x", GroupHudPosition.DEFAULT_OFFSET_X).set(state.getGroupHudOffsetX());
         config.get(GROUP_HUD, "offset_y", GroupHudPosition.DEFAULT_OFFSET_Y).set(state.getGroupHudOffsetY());
@@ -235,6 +240,20 @@ public final class ClientSettingsFile {
         state.distancesByServer().forEach((serverId, distances) -> distances.forEach((activationId, distance) ->
                 config.get(SERVERS + "." + serverId, activationId.toString(), 0).set(distance)));
         config.save();
+    }
+
+    /**
+     * {@code group_hud.visibility}; a config from before it only has the {@code enabled} boolean, which becomes
+     * ALWAYS (true, also when unreadable) or OFF (false) and is then removed so only one setting stays.
+     */
+    private static HudOptions.GroupOverlayVisibility groupHudVisibility(Configuration config, File file) {
+        ConfigCategory category = config.getCategory(GROUP_HUD);
+        HudOptions.GroupOverlayVisibility fallback = HudOptions.GroupOverlayVisibility.ALWAYS;
+        if (!category.containsKey("visibility") && category.containsKey(LEGACY_GROUP_HUD_ENABLED)) {
+            fallback = HudOptions.GroupOverlayVisibility.fromEnabled(category.get(LEGACY_GROUP_HUD_ENABLED).getBoolean(true));
+        }
+        if (category.containsKey(LEGACY_GROUP_HUD_ENABLED)) category.remove(LEGACY_GROUP_HUD_ENABLED);
+        return enumValue(config.get(GROUP_HUD, "visibility", fallback.name()), fallback, file);
     }
 
     private static <E extends Enum<E>> E enumValue(Property property, E fallback, File file) {

@@ -251,7 +251,7 @@ public class ClientSettingsTest {
     @Test
     public void groupHudDefaultsMatchTheHudMargins() {
         ClientState state = new ClientState();
-        assertTrue(state.isGroupHudEnabled());
+        assertEquals(HudOptions.GroupOverlayVisibility.ALWAYS, state.getGroupHudVisibility());
         assertEquals(GroupHudPosition.Anchor.TOP_RIGHT, state.getGroupHudAnchor());
         assertEquals(-4, state.getGroupHudOffsetX());
         assertEquals(4, state.getGroupHudOffsetY());
@@ -262,13 +262,13 @@ public class ClientSettingsTest {
     public void groupHudSettingsSurviveARestart() {
         File file = new File(folder.getRoot(), "client.cfg");
         ClientState before = new ClientState();
-        before.setGroupHudEnabled(false);
+        before.setGroupHudVisibility(HudOptions.GroupOverlayVisibility.WHEN_OTHERS_ONLINE);
         before.setGroupHudPlacement(GroupHudPosition.Anchor.BOTTOM_LEFT, 12, -34);
         ClientSettingsFile.save(file, before);
 
         ClientState after = new ClientState();
         ClientSettingsFile.load(file, after);
-        assertFalse(after.isGroupHudEnabled());
+        assertEquals(HudOptions.GroupOverlayVisibility.WHEN_OTHERS_ONLINE, after.getGroupHudVisibility());
         assertEquals(GroupHudPosition.Anchor.BOTTOM_LEFT, after.getGroupHudAnchor());
         assertEquals(12, after.getGroupHudOffsetX());
         assertEquals(-34, after.getGroupHudOffsetY());
@@ -308,6 +308,50 @@ public class ClientSettingsTest {
         ClientState full = new ClientState();
         ClientSettingsFile.load(file, full);
         assertEquals(100, full.getGroupHudBackgroundOpacity());
+    }
+
+    @Test
+    public void theOldGroupOverlaySwitchMigratesToTheVisibilityMode() throws Exception {
+        File file = new File(folder.getRoot(), "client.cfg");
+        assertEquals(HudOptions.GroupOverlayVisibility.ALWAYS, migrate(file, "    B:enabled=true\n"));
+        assertEquals(HudOptions.GroupOverlayVisibility.OFF, migrate(file, "    B:enabled=false\n"));
+        // an unreadable old value keeps the HUD shown, like the old default
+        assertEquals(HudOptions.GroupOverlayVisibility.ALWAYS, migrate(file, "    B:enabled=maybe\n"));
+        // no group_hud settings at all: the default
+        assertEquals(HudOptions.GroupOverlayVisibility.ALWAYS, migrate(file, ""));
+        // the new key wins over a leftover old one
+        assertEquals(HudOptions.GroupOverlayVisibility.WHEN_OTHERS_ONLINE,
+                migrate(file, "    B:enabled=false\n    S:visibility=WHEN_OTHERS_ONLINE\n"));
+        // an unknown mode is repaired to the default
+        assertEquals(HudOptions.GroupOverlayVisibility.ALWAYS, migrate(file, "    S:visibility=SOMETIMES\n"));
+
+        // only the new setting is left in the file, and it survives the next restart
+        migrate(file, "    B:enabled=false\n");
+        String content = groupHudBlock(file);
+        assertFalse(content, content.contains("enabled="));
+        assertTrue(content, content.contains("S:visibility=OFF"));
+        ClientState again = new ClientState();
+        ClientSettingsFile.load(file, again);
+        assertEquals(HudOptions.GroupOverlayVisibility.OFF, again.getGroupHudVisibility());
+        ClientSettingsFile.save(file, again);
+        content = groupHudBlock(file);
+        assertFalse(content, content.contains("enabled="));
+        assertTrue(content, content.contains("S:visibility=OFF"));
+    }
+
+    /** The group_hud category as saved. */
+    private static String groupHudBlock(File file) throws Exception {
+        String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        int start = content.indexOf("group_hud {");
+        return content.substring(start, content.indexOf("}", start));
+    }
+
+    /** Loads a config whose group_hud category holds {@code body}. */
+    private static HudOptions.GroupOverlayVisibility migrate(File file, String body) throws Exception {
+        Files.write(file.toPath(), ("group_hud {\n" + body + "}\n").getBytes(StandardCharsets.UTF_8));
+        ClientState state = new ClientState();
+        ClientSettingsFile.load(file, state);
+        return state.getGroupHudVisibility();
     }
 
     @Test

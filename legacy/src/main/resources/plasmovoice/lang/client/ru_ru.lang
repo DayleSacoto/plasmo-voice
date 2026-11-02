@@ -203,8 +203,11 @@ gui.plasmovoice.groups.delete.confirm=Нажмите ещё раз
 
 # Group overlay (Overlay tab)
 gui.plasmovoice.overlay.group_category=Оверлей группы
-gui.plasmovoice.overlay.group_show=Показывать оверлей группы
-gui.plasmovoice.overlay.group_show.tooltip=Показывает на экране вашу текущую группу и участников, которые сейчас в сети.
+gui.plasmovoice.overlay.group_visibility=Видимость оверлея группы
+gui.plasmovoice.overlay.group_visibility.tooltip=Когда показывать на экране вашу текущую группу и участников в сети.
+gui.plasmovoice.overlay.group_visibility.off=Выкл.
+gui.plasmovoice.overlay.group_visibility.always=Всегда
+gui.plasmovoice.overlay.group_visibility.others_online=Когда в сети другие участники
 gui.plasmovoice.overlay.group_style=Стиль оверлея
 gui.plasmovoice.overlay.group_opacity=Непрозрачность фона
 gui.plasmovoice.overlay.group_position=Положение оверлея

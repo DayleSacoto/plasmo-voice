@@ -69,9 +69,17 @@ final class OverlayTab extends SettingsTab {
         ClientConfig config = state.getConnection() == null ? null : state.getConnection().getConfig();
         if (config != null) buildSources(config);
         addCategory("gui.plasmovoice.overlay.group_category");
-        addOption(VoiceLang.format("gui.plasmovoice.overlay.group_show"), "gui.plasmovoice.overlay.group_show.tooltip",
-                new ToggleWidget(ELEMENT_WIDTH, state::isGroupHudEnabled, state::setGroupHudEnabled),
-                state::isGroupHudEnabled, () -> state.setGroupHudEnabled(true));
+        List<String> visibilities = new ArrayList<>();
+        for (HudOptions.GroupOverlayVisibility visibility : HudOptions.GroupOverlayVisibility.values()) {
+            visibilities.add(VoiceLang.format(visibility.translation));
+        }
+        addOption(VoiceLang.format("gui.plasmovoice.overlay.group_visibility"),
+                "gui.plasmovoice.overlay.group_visibility.tooltip",
+                new DropDownWidget(ELEMENT_WIDTH, () -> visibilities.get(state.getGroupHudVisibility().ordinal()),
+                        visibilities,
+                        index -> state.setGroupHudVisibility(HudOptions.GroupOverlayVisibility.values()[index])),
+                () -> state.getGroupHudVisibility() == HudOptions.GroupOverlayVisibility.ALWAYS,
+                () -> state.setGroupHudVisibility(HudOptions.GroupOverlayVisibility.ALWAYS));
         addOption(VoiceLang.format("gui.plasmovoice.overlay.group_style"), null,
                 new DropDownWidget(ELEMENT_WIDTH, () -> styles.get(state.getGroupHudStyle().ordinal()), styles,
                         index -> state.setGroupHudStyle(HudOptions.OverlayStyle.values()[index])),

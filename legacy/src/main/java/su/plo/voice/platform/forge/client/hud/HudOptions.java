@@ -89,6 +89,25 @@ public final class HudOptions {
         }
     }
 
+    /** When the Group Overlay is shown; independent of the generic overlay settings. */
+    public enum GroupOverlayVisibility {
+        OFF("off"),
+        ALWAYS("always"),
+        /** Only while at least one other group member is online. */
+        WHEN_OTHERS_ONLINE("others_online");
+
+        public final String translation;
+
+        GroupOverlayVisibility(String name) {
+            this.translation = "gui.plasmovoice.overlay.group_visibility." + name;
+        }
+
+        /** The old {@code group_hud.enabled} boolean: true was always shown. */
+        public static GroupOverlayVisibility fromEnabled(boolean enabled) {
+            return enabled ? ALWAYS : OFF;
+        }
+    }
+
     /** Per source line; lines without a player list only use OFF and ON, which is what this backport's server sends. */
     public enum OverlaySourceState {
         OFF,

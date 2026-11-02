@@ -38,7 +38,9 @@ public final class GroupHud {
 
     @SubscribeEvent
     public void onOverlay(RenderGameOverlayEvent.Post event) {
-        if (event.type != RenderGameOverlayEvent.ElementType.ALL || !state.isGroupHudEnabled()) return;
+        HudOptions.GroupOverlayVisibility visibility = state.getGroupHudVisibility();
+        if (event.type != RenderGameOverlayEvent.ElementType.ALL
+                || visibility == HudOptions.GroupOverlayVisibility.OFF) return;
         Minecraft mc = Minecraft.getMinecraft();
         ClientConnectionState connection = state.getConnection();
         if (mc.thePlayer == null || mc.gameSettings.hideGUI || connection == null || !connection.isConnected()
@@ -47,6 +49,7 @@ public final class GroupHud {
         GroupsState.CurrentGroup group = ClientGroups.get().current();
         if (group == null) return;
         if (mc.currentScreen instanceof GroupHudEditScreen) return;
+        if (!GroupHudModel.visible(visibility, group.members, selfId(mc, state))) return;
 
         List<GroupHudModel.Entry> entries = liveEntries(mc, state, group);
 
@@ -70,15 +73,20 @@ public final class GroupHud {
     /** The online members of the real group with the speaking state of the voice connection; client thread. */
     public static List<GroupHudModel.Entry> liveEntries(Minecraft mc, ClientState state, GroupsState.CurrentGroup group) {
         ClientConnectionState connection = state.getConnection();
-        UUID selfId = mc.thePlayer.getUniqueID();
         Set<UUID> speaking = java.util.Collections.emptySet();
         if (connection != null) {
-            selfId = connection.localPlayerId(mc.thePlayer.getCommandSenderName(), selfId);
             ClientVoiceSources sources = connection.getSources();
             if (sources != null) speaking = sources.speakingOn(ClientGroups.LINE_ID);
         }
         boolean transmitting = state.getActiveActivations().contains(ClientGroups.ACTIVATION_ID);
-        return GroupHudModel.entries(group.members, speaking, selfId, transmitting);
+        return GroupHudModel.entries(group.members, speaking, selfId(mc, state), transmitting);
+    }
+
+    /** The local player's id as the voice server knows it (the group member id); client thread. */
+    static UUID selfId(Minecraft mc, ClientState state) {
+        UUID selfId = mc.thePlayer.getUniqueID();
+        ClientConnectionState connection = state.getConnection();
+        return connection == null ? selfId : connection.localPlayerId(mc.thePlayer.getCommandSenderName(), selfId);
     }
 
     /** The shared measurement: the box of this group for an anchor (right anchors mirror, bottom ones reverse). */

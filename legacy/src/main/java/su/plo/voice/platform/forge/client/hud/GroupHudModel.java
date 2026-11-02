@@ -145,6 +145,27 @@ public final class GroupHudModel {
         return entries;
     }
 
+    /**
+     * Whether the Group Overlay is shown for the current group: never when OFF, always when ALWAYS, and with
+     * WHEN_OTHERS_ONLINE only while at least one member other than the local player is online. Evaluated every
+     * frame from the latest group snapshot, so it follows members joining, leaving and going offline at once.
+     */
+    public static boolean visible(HudOptions.GroupOverlayVisibility mode, List<GroupsState.Member> members,
+                                  UUID selfId) {
+        if (mode == null) mode = HudOptions.GroupOverlayVisibility.ALWAYS;
+        switch (mode) {
+            case OFF:
+                return false;
+            case WHEN_OTHERS_ONLINE:
+                for (GroupsState.Member member : members) {
+                    if (member.online && !member.id.equals(selfId)) return true;
+                }
+                return false;
+            default:
+                return true;
+        }
+    }
+
     /** The {@code [head] Name} style, see {@link #layout(List, boolean, boolean, HudOptions.OverlayStyle, ToIntFunction, IntFunction)}. */
     public static Layout layout(List<Entry> members, boolean right, boolean bottom,
                                 ToIntFunction<String> textWidth, IntFunction<String> moreText) {

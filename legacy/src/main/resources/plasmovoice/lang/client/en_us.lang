@@ -203,8 +203,11 @@ gui.plasmovoice.groups.delete.confirm=Click again to confirm
 
 # Group overlay (Overlay tab)
 gui.plasmovoice.overlay.group_category=Group Overlay
-gui.plasmovoice.overlay.group_show=Show Group Overlay
-gui.plasmovoice.overlay.group_show.tooltip=Shows your current group and its online members on screen.
+gui.plasmovoice.overlay.group_visibility=Group Overlay Visibility
+gui.plasmovoice.overlay.group_visibility.tooltip=When your current group and its online members are shown on screen.
+gui.plasmovoice.overlay.group_visibility.off=Off
+gui.plasmovoice.overlay.group_visibility.always=Always
+gui.plasmovoice.overlay.group_visibility.others_online=When Other Members Online
 gui.plasmovoice.overlay.group_style=Overlay Style
 gui.plasmovoice.overlay.group_opacity=Background Opacity
 gui.plasmovoice.overlay.group_position=Overlay Position

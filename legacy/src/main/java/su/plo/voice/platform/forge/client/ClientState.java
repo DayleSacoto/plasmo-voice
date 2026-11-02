@@ -107,9 +107,9 @@ public final class ClientState {
     @Setter
     private volatile HudOptions.OverlayStyle overlayStyle = HudOptions.OverlayStyle.NAME_SKIN;
     /** Legacy extension: the Group HUD (group name and online members); position in scaled GUI pixels, see GroupHudPosition. */
+    /** Group Overlay visibility mode; ALWAYS keeps the behaviour of the old on/off switch. */
     @Getter
-    @Setter
-    private volatile boolean groupHudEnabled = true;
+    private volatile HudOptions.GroupOverlayVisibility groupHudVisibility = HudOptions.GroupOverlayVisibility.ALWAYS;
     @Getter
     private volatile GroupHudPosition.Anchor groupHudAnchor = GroupHudPosition.DEFAULT_ANCHOR;
     @Getter
@@ -250,6 +250,10 @@ public final class ClientState {
 
     public void resetGroupHudPlacement() {
         setGroupHudPlacement(GroupHudPosition.DEFAULT);
+    }
+
+    public void setGroupHudVisibility(HudOptions.GroupOverlayVisibility visibility) {
+        this.groupHudVisibility = visibility == null ? HudOptions.GroupOverlayVisibility.ALWAYS : visibility;
     }
 
     public void setGroupHudStyle(HudOptions.OverlayStyle style) {
