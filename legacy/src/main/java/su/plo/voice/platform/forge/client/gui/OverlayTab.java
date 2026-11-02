@@ -1,6 +1,7 @@
 package su.plo.voice.platform.forge.client.gui;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import cpw.mods.fml.relauncher.Side;
@@ -10,6 +11,7 @@ import su.plo.voice.platform.forge.client.lang.VoiceLang;
 import net.minecraft.util.ResourceLocation;
 import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
+import su.plo.voice.platform.forge.client.groups.ClientGroups;
 import su.plo.voice.platform.forge.client.hud.GroupHudPosition;
 import su.plo.voice.platform.forge.client.hud.HudOptions;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
@@ -80,9 +82,9 @@ final class OverlayTab extends SettingsTab {
     }
 
     private void buildSources(ClientConfig config) {
+        List<VoiceSourceLine> lines = overlaySourceLines(config.getPacket().getSourceLines());
+        if (lines.isEmpty()) return;
         addCategory("gui.plasmovoice.overlay.sources");
-        List<VoiceSourceLine> lines = new ArrayList<>(config.getPacket().getSourceLines());
-        lines.sort((a, b) -> Integer.compare(a.getWeight(), b.getWeight()));
         for (VoiceSourceLine line : lines) {
             String name = line.getName();
             addIconOption(new ResourceLocation(line.getIcon()), state.translate(line.getTranslation()), null,
@@ -93,6 +95,20 @@ final class OverlayTab extends SettingsTab {
                     () -> state.getOverlaySourceState(name) == HudOptions.OverlaySourceState.OFF,
                     () -> state.setOverlaySourceState(name, HudOptions.OverlaySourceState.OFF));
         }
+    }
+
+    /**
+     * The source lines that get an Overlay Sources toggle, lightest first. The groups line is left out: group voice
+     * arrives as direct sources that the generic overlay never lists, and the Group HUD (its own controls below)
+     * shows group speakers instead.
+     */
+    static List<VoiceSourceLine> overlaySourceLines(Collection<VoiceSourceLine> sourceLines) {
+        List<VoiceSourceLine> lines = new ArrayList<>();
+        for (VoiceSourceLine line : sourceLines) {
+            if (!ClientGroups.LINE_ID.equals(line.getId())) lines.add(line);
+        }
+        lines.sort((a, b) -> Integer.compare(a.getWeight(), b.getWeight()));
+        return lines;
     }
 
     /** Upstream disables the anchor the other HUD element already uses. */
