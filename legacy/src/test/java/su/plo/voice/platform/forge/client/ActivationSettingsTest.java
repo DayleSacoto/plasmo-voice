@@ -289,7 +289,7 @@ public class ActivationSettingsTest {
         generator.initialize(2048);
         KeyPair keys = generator.generateKeyPair();
         ServerConfig serverConfig = new ServerConfig();
-        ClientConfig config = ClientConfig.decode(serverConfig.createPacket(keys.getPublic()), keys.getPrivate());
+        ClientConfig config = ClientConfig.decode(serverConfig.createPacket(keys.getPublic(), true), keys.getPrivate());
         UUID playerId = UUID.randomUUID();
         UUID lineId = serverConfig.getProximityLine().getId();
         DirectSourceInfo grouped = new DirectSourceInfo("plasmovoice", UUID.randomUUID(), lineId, null, (byte) 0,

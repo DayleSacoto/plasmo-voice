@@ -9,6 +9,7 @@ import java.util.Map;
 
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
+import su.plo.voice.platform.forge.server.groups.GroupProfile;
 
 /** The /groups command: dispatches to the subcommands in upstream registration order. */
 public final class GroupsCommand extends CommandBase {
@@ -70,6 +71,11 @@ public final class GroupsCommand extends CommandBase {
 
     /** Upstream CommandHandler.execute. */
     public void execute(GroupsCommandSource source, String[] args) {
+        GroupActions.Outcome unsupported = clientError(source);
+        if (unsupported != null) {
+            SubCommand.print(source, unsupported);
+            return;
+        }
         if (args.length == 0) {
             subCommands.get("browse").execute(source, args);
             return;
@@ -82,8 +88,18 @@ public final class GroupsCommand extends CommandBase {
         SubCommand.msg(source, "error.unknown_subcommand", String.join(", ", subCommands.keySet()));
     }
 
+    /**
+     * A player whose current client cannot use Groups gets no Groups at all: joining would make them a member that
+     * never hears the group. Their stored membership stays as it is. The console is always allowed.
+     */
+    private GroupActions.Outcome clientError(GroupsCommandSource source) {
+        GroupProfile player = source.profile();
+        return player == null ? null : GroupActions.clientError(platform.clientSupport(player.getId()), "error.");
+    }
+
     /** Upstream CommandHandler.suggest. */
     public List<String> suggest(GroupsCommandSource source, String[] args) {
+        if (clientError(source) != null) return Collections.emptyList();
         if (args.length <= 1) {
             String prefix = args.length == 0 ? "" : args[0];
             List<String> names = new ArrayList<>();

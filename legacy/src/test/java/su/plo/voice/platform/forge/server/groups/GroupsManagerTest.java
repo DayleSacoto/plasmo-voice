@@ -369,6 +369,109 @@ public class GroupsManagerTest {
         assertEquals(source, manager.route(alice.getId()).getSourceId());
     }
 
+    /**
+     * A member who logs in with a client from before Groups never announces it, so the manager never brings them
+     * online: the stored membership stays (groups.json is not touched), but they get no route and are nobody's
+     * recipient. Updating the client and reconnecting makes the same membership work again.
+     */
+    @Test
+    public void storedMemberWithAnOlderClientStaysStoredButIsNotRouted() {
+        Group p = manager.create("p", null, true, Collections.<String>emptySet(), alice);
+        manager.join(bob, p);
+        GroupsStore.Data data = manager.snapshot();
+
+        RecordingListener restarted = new RecordingListener();
+        GroupsManager other = new GroupsManager(restarted);
+        other.restore(data);
+        other.playerOnline(alice); // Groups client
+        // Bob is on the server with an older client: no playerOnline for him
+
+        Group r = other.group(p.getId());
+        assertSame(r, other.groupOf(bob.getId()));
+        assertTrue(r.getMembers().contains(bob.getId()));
+        assertFalse(r.onlineMembers().contains(bob.getId()));
+        assertTrue(other.route(alice.getId()).getRecipients().isEmpty());
+        assertNull(other.route(bob.getId()));
+        assertEquals(0, restarted.changed);
+        assertEquals(data.getGroupByPlayer(), other.snapshot().getGroupByPlayer());
+        assertEquals(data.getGroups().get(0).getMembers(), other.snapshot().getGroups().get(0).getMembers());
+
+        // Bob updates and reconnects: his membership works again, nothing was rewritten
+        other.playerOnline(bob);
+        assertEquals(Collections.singleton(bob.getId()), other.route(alice.getId()).getRecipients());
+        assertEquals(Collections.singleton(alice.getId()), other.route(bob.getId()).getRecipients());
+        assertEquals(0, restarted.changed);
+
+        // and leaving the server again only makes him inactive
+        other.playerOffline(bob.getId());
+        assertSame(r, other.groupOf(bob.getId()));
+        assertTrue(other.route(alice.getId()).getRecipients().isEmpty());
+    }
+
+    /**
+     * A non-persistent group lives while a member is online in Minecraft, not only while one has a Groups client:
+     * Alice (Groups client) leaves while Bob is online with an older client, and the group and his membership stay.
+     */
+    @Test
+    public void nonPersistentGroupSurvivesWhileAnOlderClientMemberIsOnline() {
+        Group g = create(alice);
+        manager.join(bob, g);
+        // Bob reconnects with an older client: online in Minecraft, never announces Groups
+        manager.playerOffline(bob.getId());
+        manager.playerPresent(bob);
+        assertSame(g, manager.groupOf(bob.getId()));
+        assertFalse(g.onlineMembers().contains(bob.getId()));
+        assertNull(manager.route(bob.getId()));
+
+        manager.playerOffline(alice.getId());
+
+        assertSame(g, manager.group(g.getId()));
+        assertSame(g, manager.groupOf(bob.getId()));
+        assertSame(g, manager.groupOf(alice.getId()));
+        assertTrue(g.onlineMembers().isEmpty());
+        assertNull(manager.route(bob.getId()));
+
+        // the last member online leaving the server ends it, exactly as for a Groups client
+        manager.playerOffline(bob.getId());
+        assertNull(manager.group(g.getId()));
+        assertNull(manager.groupOf(bob.getId()));
+    }
+
+    /** Bob, online with an older client, updates and reconnects while the group still exists: Groups works again. */
+    @Test
+    public void olderClientMemberOfANonPersistentGroupIsRestoredAfterUpdating() {
+        Group g = create(alice);
+        manager.join(bob, g);
+        manager.join(carol, g);
+        manager.playerOffline(bob.getId());
+        manager.playerPresent(bob); // older client
+        manager.playerOffline(alice.getId());
+        assertEquals(Collections.<UUID>emptySet(), manager.route(carol.getId()).getRecipients());
+
+        manager.playerOffline(bob.getId());
+        manager.playerPresent(bob); // updated client logs in...
+        manager.playerOnline(bob); // ...and announces Groups
+
+        assertSame(g, manager.groupOf(bob.getId()));
+        assertEquals(Collections.singleton(carol.getId()), manager.route(bob.getId()).getRecipients());
+        assertEquals(Collections.singleton(bob.getId()), manager.route(carol.getId()).getRecipients());
+    }
+
+    /** The owner leaving hands a non-persistent group to a member online with an older client rather than ending it. */
+    @Test
+    public void ownerLeavingHandsANonPersistentGroupToAnOlderClientMember() {
+        Group g = create(alice);
+        manager.join(bob, g);
+        manager.playerOffline(bob.getId());
+        manager.playerPresent(bob); // older client
+
+        assertTrue(manager.leave(alice.getId()));
+
+        assertSame(g, manager.group(g.getId()));
+        assertSame(g, manager.groupOf(bob.getId()));
+        assertEquals(bob.getId(), g.getOwner().getId());
+    }
+
     @Test
     public void snapshotAndRestoreRoundTripPersistentOnly() {
         Group p = manager.create("p", "pw", true, new HashSet<>(Collections.singleton("perm")), alice);

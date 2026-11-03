@@ -28,8 +28,12 @@ import org.apache.logging.log4j.Logger;
 /**
  * FML transport for the Groups GUI ({@link GroupsProtocol#CHANNEL}). Serverbound actions are queued from netty and
  * delivered on the server thread (END of the server tick, like {@code VoiceChannel}); clientbound messages are
- * delivered on the client game thread. Players without the channel simply never get a message: callers send only to
- * voice-connected players.
+ * delivered on the client game thread.
+ *
+ * <p>Groups is an optional client capability: a client announces it with a {@link GroupsHello} before its voice
+ * handshake reply, recorded here on the netty thread per connection ({@link #capabilities()}). Nothing is ever sent
+ * to a player whose current connection did not announce a supported protocol, and actions from such a connection
+ * are dropped, so clients from before Groups never see this channel.
  */
 public final class GroupsChannel {
     private static final int MAX_CLIENTBOUND = 0x1FFF9A;
@@ -41,6 +45,8 @@ public final class GroupsChannel {
     private final ArrayBlockingQueue<Runnable> pending = new ArrayBlockingQueue<>(256);
     /** Actions one connection may have waiting; above the service's 8/s limit, so honest clients never hit it. */
     private final ConnectionQuota<NetworkManager> quota = new ConnectionQuota<>(16);
+    private final GroupsCapabilities<NetworkManager> capabilities = new GroupsCapabilities<>();
+    private volatile BiConsumer<EntityPlayerMP, Integer> helloListener = (player, protocol) -> {};
     private volatile BiConsumer<EntityPlayerMP, GroupsAction> serverListener = (player, action) -> {};
     private volatile Consumer<Object> clientListener = message -> {};
 
@@ -64,6 +70,22 @@ public final class GroupsChannel {
         serverListener = Objects.requireNonNull(listener);
     }
 
+    /** Called on the server thread when a connection became Groups-capable, with the agreed protocol. */
+    public void setHelloListener(BiConsumer<EntityPlayerMP, Integer> listener) {
+        helloListener = Objects.requireNonNull(listener);
+    }
+
+    /** Session-only Groups support of the connected players; the one check every Groups send goes through. */
+    public GroupsCapabilities<NetworkManager> capabilities() {
+        return capabilities;
+    }
+
+    /** Server thread, on logout: that connection's capability is gone. */
+    public void disconnected(EntityPlayerMP player) {
+        NetworkManager connection = player.playerNetServerHandler == null ? null : player.playerNetServerHandler.netManager;
+        capabilities.remove(player.getUniqueID(), connection);
+    }
+
     /** Called on the client thread with a {@link GroupsState} or {@link GroupsResult}. */
     public void setClientListener(Consumer<Object> listener) {
         clientListener = Objects.requireNonNull(listener);
@@ -80,11 +102,22 @@ public final class GroupsChannel {
     }
 
     private void send(EntityPlayerMP player, byte[] data) {
+        if (!capabilities.supports(player.getUniqueID())) {
+            logger.debug("{} did not announce Groups support; Groups payload not sent", player.getCommandSenderName());
+            return;
+        }
         if (data.length > MAX_CLIENTBOUND) {
             logger.warn("Groups payload too large ({} bytes); not sent", data.length);
             return;
         }
         channel.sendTo(new FMLProxyPacket(Unpooled.wrappedBuffer(data), GroupsProtocol.CHANNEL), player);
+    }
+
+    /** Client game thread, while connected. */
+    @SideOnly(Side.CLIENT)
+    public void sendHello() {
+        byte[] data = GroupsProtocol.encode(new GroupsHello(GroupsCapabilities.MIN_PROTOCOL, GroupsCapabilities.MAX_PROTOCOL));
+        channel.sendToServer(new FMLProxyPacket(Unpooled.wrappedBuffer(data), GroupsProtocol.CHANNEL));
     }
 
     /** Client game thread, while connected. */
@@ -98,6 +131,7 @@ public final class GroupsChannel {
     public void clearServer() {
         pending.clear();
         quota.clear();
+        capabilities.clear();
     }
 
     private static byte[] bytes(FMLProxyPacket packet) {
@@ -113,15 +147,27 @@ public final class GroupsChannel {
             if (!GroupsProtocol.CHANNEL.equals(event.packet.channel())) return;
             NetworkManager connection = event.manager;
             INetHandlerPlayServer handler = event.handler;
-            GroupsAction action;
+            if (!(handler instanceof NetHandlerPlayServer)) return;
+            EntityPlayerMP player = ((NetHandlerPlayServer) handler).playerEntity;
+            Object decoded;
             try {
                 byte[] data = bytes(event.packet);
                 if (data.length > GroupsProtocol.MAX_SERVERBOUND) throw new IOException("Groups action too large");
-                Object decoded = GroupsProtocol.decode(data);
-                if (!(decoded instanceof GroupsAction)) throw new IOException("Unexpected serverbound groups payload");
-                action = (GroupsAction) decoded;
+                decoded = GroupsProtocol.decode(data);
+                if (!(decoded instanceof GroupsAction) && !(decoded instanceof GroupsHello)) {
+                    throw new IOException("Unexpected serverbound groups payload");
+                }
             } catch (Exception e) {
                 logger.debug("Dropped an invalid groups action", e);
+                return;
+            }
+            if (decoded instanceof GroupsHello) {
+                hello(connection, handler, player, (GroupsHello) decoded);
+                return;
+            }
+            GroupsAction action = (GroupsAction) decoded;
+            if (!capabilities.supports(player.getUniqueID())) {
+                logger.debug("Groups action from a connection without Groups support; dropped {}", action);
                 return;
             }
             if (!quota.tryAcquire(connection)) {
@@ -130,9 +176,8 @@ public final class GroupsChannel {
             }
             if (!pending.offer(() -> {
                 try {
-                    if (connection.isChannelOpen() && connection.getNetHandler() == handler
-                            && handler instanceof NetHandlerPlayServer) {
-                        serverListener.accept(((NetHandlerPlayServer) handler).playerEntity, action);
+                    if (connection.isChannelOpen() && connection.getNetHandler() == handler) {
+                        serverListener.accept(player, action);
                     }
                 } finally {
                     quota.release(connection);
@@ -140,6 +185,29 @@ public final class GroupsChannel {
             })) {
                 quota.release(connection);
                 logger.debug("Groups action queue is full; dropped {}", action);
+            }
+        }
+
+        /**
+         * Netty thread: recorded at once, so the voice PlayerInfoPacket that follows on this connection always finds
+         * it; the server thread hears about it on the next tick.
+         */
+        private void hello(NetworkManager connection, INetHandlerPlayServer handler, EntityPlayerMP player,
+                           GroupsHello hello) {
+            int protocol = capabilities.announce(player.getUniqueID(), connection, hello.minProtocol, hello.maxProtocol);
+            if (protocol == 0) {
+                if (!capabilities.supports(player.getUniqueID())) {
+                    logger.debug("{} announced no Groups protocol this server speaks: {}",
+                            player.getCommandSenderName(), hello);
+                }
+                return;
+            }
+            if (!pending.offer(() -> {
+                if (connection.isChannelOpen() && connection.getNetHandler() == handler) {
+                    helloListener.accept(player, protocol);
+                }
+            })) {
+                logger.warn("Groups queue is full; Groups activation of {} was dropped", player.getCommandSenderName());
             }
         }
 
@@ -168,7 +236,9 @@ public final class GroupsChannel {
             Object decoded;
             try {
                 decoded = GroupsProtocol.decode(bytes(event.packet));
-                if (decoded instanceof GroupsAction) throw new IOException("Unexpected clientbound groups payload");
+                if (decoded instanceof GroupsAction || decoded instanceof GroupsHello) {
+                    throw new IOException("Unexpected clientbound groups payload");
+                }
             } catch (Exception e) {
                 logger.debug("Dropped an invalid groups message", e);
                 return;

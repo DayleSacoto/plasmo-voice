@@ -125,7 +125,7 @@ public class ServerSettingsTest {
         assertEquals(25000, settings.advertisedPort());
 
         ConfigPacket packet = new ServerConfig(settings).createPacket(
-                java.security.KeyPairGenerator.getInstance("RSA").generateKeyPair().getPublic());
+                java.security.KeyPairGenerator.getInstance("RSA").generateKeyPair().getPublic(), true);
         assertEquals(settings.getServerId(), packet.getServerId());
         assertEquals(24_000, packet.getCaptureInfo().getSampleRate());
         assertEquals("64000", packet.getCaptureInfo().getEncoderInfo().getParams().get("bitrate"));

@@ -49,6 +49,7 @@ persistent_true = "Группа теперь постоянная"
 persistent_false = "Группа больше не постоянная"
 password_unset = "Защита паролем снята"
 permissions_unset = "Защита по правам снята"
+invite_client_outdated = "&e%s пытается пригласить вас в голосовую группу, но ваш клиент не поддерживает голосовые группы. Установите или обновите Plasmo Voice, чтобы пользоваться группами."
 
 [server.pv.addon.groups.error]
 uuid_parse = "&cОшибка разбора Uuid. «%s» не является Uuid"
@@ -59,6 +60,8 @@ unknown = "&cНеизвестная ошибка"
 name_length = "&cДлина названия группы должна быть от %1$s до %2$s символов"
 unknown_subcommand = "&cНеизвестная команда. Доступные команды: %s"
 player_not_found = "&cИгрока с таким именем нет"
+client_outdated = "&cВаш клиент не поддерживает голосовые группы. Установите или обновите Plasmo Voice, чтобы пользоваться группами."
+client_connecting = "&cГолосовой чат ещё подключается. Попробуйте чуть позже."
 
 [server.pv.addon.groups.command.set.error]
 usage = "&cИспользование: /groups set <флаг> <значение>"
@@ -84,6 +87,8 @@ usage = "&cИспользование: /groups invite <игрок>"
 invite_self = "&cНельзя пригласить самого себя"
 already_joined = "&cИгрок уже состоит в группе"
 banned = "&cИгрок заблокирован в этой группе"
+client_outdated = "&cИгрок %s не поддерживает голосовые группы. Для групп нужна совместимая версия Plasmo Voice."
+client_connecting = "&cИгрок %s ещё подключается к голосовому чату. Попробуйте чуть позже."
 
 [server.pv.addon.groups.command.join]
 success = "&aВы вступили в группу"

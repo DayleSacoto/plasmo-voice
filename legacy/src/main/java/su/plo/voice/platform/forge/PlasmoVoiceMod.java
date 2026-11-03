@@ -54,6 +54,7 @@ import su.plo.voice.platform.forge.server.connection.ServerVoicePlayers;
 import su.plo.voice.platform.forge.server.groups.Group;
 import su.plo.voice.platform.forge.server.groups.GroupProfile;
 import su.plo.voice.platform.forge.server.groups.GroupActor;
+import su.plo.voice.platform.forge.server.groups.GroupsClientSupport;
 import su.plo.voice.platform.forge.server.groups.GroupsGuiService;
 import su.plo.voice.platform.forge.server.groups.GroupsListener;
 import su.plo.voice.platform.forge.server.groups.GroupsManager;
@@ -129,6 +130,7 @@ public final class PlasmoVoiceMod {
     public void init(FMLInitializationEvent event) {
         voiceChannel = new VoiceChannel(LOGGER);
         groupsChannel = new GroupsChannel(LOGGER);
+        groupsChannel.setHelloListener((player, protocol) -> groupsAnnounced(player));
         voicePlayers = new ServerVoicePlayers(voiceChannel);
 
         voiceChannel.setClientListener((connection, packet) -> {
@@ -201,6 +203,8 @@ public final class PlasmoVoiceMod {
                         player.getCommandSenderName(), result, info.getVersion());
                 return;
             }
+            // A Groups client announces itself before this packet on the same connection, so this is final.
+            connection.setGroupsSupported(groupsCapable(player.getUniqueID()));
 
             connection.setServerMuted(mutes.isMuted(player.getUniqueID()));
             voicePlayers.put(connection);
@@ -239,6 +243,10 @@ public final class PlasmoVoiceMod {
         if (groupsGui != null) groupsGui.disconnected(event.player.getUniqueID());
         voicePlayers.remove(event.player.getUniqueID());
         if (udpServer != null) udpServer.removeSession(event.player.getUniqueID());
+        // Groups support is per connection: a reconnect announces it again (or not, with an older client).
+        if (groupsChannel != null && event.player instanceof EntityPlayerMP) {
+            groupsChannel.disconnected((EntityPlayerMP) event.player);
+        }
     }
 
     @Mod.EventHandler
@@ -313,8 +321,38 @@ public final class PlasmoVoiceMod {
         }
         voiceChannel.sendToPlayer(player, new PlayerInfoRequestPacket());
         if (serverConfig != null) pendingPlayers.put(player.getUniqueID(), new PendingPlayer(player, System.currentTimeMillis()));
-        // pv-addon-groups onPlayerJoin: a remembered membership is back online.
+        // Online in Minecraft keeps a non-persistent group alive, whatever the client supports.
+        if (groupsManager != null) groupsManager.playerPresent(groupProfile(player));
+        // pv-addon-groups onPlayerJoin happens in groupsAnnounced: a remembered membership comes back online only
+        // once the client announces Groups support; an older client keeps it stored but inactive.
+    }
+
+    /**
+     * Server thread: the player's current connection announced Groups support. Its voice config gains the Groups
+     * activation (when the handshake already ran without it), and a remembered membership comes back online.
+     */
+    private void groupsAnnounced(EntityPlayerMP player) {
+        UUID id = player.getUniqueID();
+        ServerConnection connection = voicePlayers.get(id);
+        if (connection != null && !connection.isGroupsSupported()) {
+            connection.setGroupsSupported(true);
+            if (serverConfig != null) voicePlayers.resendConfig(connection, serverConfig);
+        }
         if (groupsManager != null) groupsManager.playerOnline(groupProfile(player));
+        if (groupsGui != null && connection != null && connection.isVoiceConnected()) groupsGui.connected(id);
+    }
+
+    /** Whether the player's current connection announced a Groups protocol this server speaks. */
+    private boolean groupsCapable(UUID player) {
+        return groupsChannel != null && groupsChannel.capabilities().supports(player);
+    }
+
+    /**
+     * The one compatibility check of /groups and the Groups GUI. A Groups client announces itself before its voice
+     * handshake reply, so a player the server is still waiting on is "connecting", never "outdated".
+     */
+    public GroupsClientSupport groupsSupport(UUID player) {
+        return GroupsClientSupport.of(groupsCapable(player), pendingPlayers.containsKey(player));
     }
 
     @Mod.EventHandler
@@ -427,15 +465,16 @@ public final class PlasmoVoiceMod {
         public java.util.Collection<UUID> connected() {
             java.util.List<UUID> result = new java.util.ArrayList<>();
             for (ServerConnection connection : voicePlayers.all()) {
-                if (connection.isVoiceConnected()) result.add(connection.getPlayer().getUniqueID());
+                if (isConnected(connection.getPlayer().getUniqueID())) result.add(connection.getPlayer().getUniqueID());
             }
             return result;
         }
 
+        /** Voice-connected with a client that announced Groups: the only players the GUI talks to. */
         @Override
         public boolean isConnected(UUID player) {
             ServerConnection connection = voicePlayers.get(player);
-            return connection != null && connection.isVoiceConnected();
+            return connection != null && connection.isVoiceConnected() && groupsCapable(player);
         }
 
         @Override

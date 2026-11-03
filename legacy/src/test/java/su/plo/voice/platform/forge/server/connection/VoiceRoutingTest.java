@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -89,7 +90,7 @@ public class VoiceRoutingTest {
             assertEquals(before, listener.audio.size());
 
             // So is a server mute (upstream MuteManager).
-            speaker.session.setPresence(new UdpServer.Presence(true, false, false, true, 0, 0, 64, 0));
+            speaker.session.setPresence(new UdpServer.Presence(true, false, false, true, 0, 0, 64, 0, true));
             speaker.send(101, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}));
             Thread.sleep(200L);
             assertEquals(before, listener.audio.size());
@@ -210,6 +211,55 @@ public class VoiceRoutingTest {
         }
     }
 
+    /**
+     * Groups is an optional client capability: a stored member whose client never announced it hears no group voice
+     * and cannot speak into the group, while proximity voice works for it as before.
+     */
+    @Test
+    public void olderClientsKeepProximityButGetNoGroupVoice() throws Exception {
+        ServerConfig config = new ServerConfig();
+        UUID groups = config.getGroupsActivation().getId();
+        try (UdpServer server = new UdpServer(LOGGER, "127.0.0.1", 0, "127.0.0.1", 0, 15_000)) {
+            server.start();
+            server.setProximityActivation(config.getProximityActivation());
+
+            Peer speaker = new Peer(server, config, presence(false, false, 0, 0));
+            Peer member = new Peer(server, config, presence(false, false, 0, 100_000));
+            Peer older = new Peer(server, config, olderClient(0, 5));
+            Set<UUID> everyone = new HashSet<>(Arrays.asList(speaker.session.getPlayerId(),
+                    member.session.getPlayerId(), older.session.getPlayerId()));
+            GroupRoute route = new GroupRoute(speaker.session.getPlayerId(), UUID.randomUUID(), (byte) 1, everyone);
+            GroupRoute olderRoute = new GroupRoute(older.session.getPlayerId(), UUID.randomUUID(), (byte) 1, everyone);
+            server.setGroups(config.getGroupsActivation(), playerId -> playerId.equals(speaker.session.getPlayerId())
+                    ? route : playerId.equals(older.session.getPlayerId()) ? olderRoute : null);
+
+            // group voice: the Groups client hears it, the older client does not, even though the route lists it
+            for (int frame = 0; frame < 20; frame++) {
+                speaker.send(frame, speaker.config.getEncryption().encrypt(new byte[] {(byte) frame}), groups, (short) 0);
+            }
+            await(() -> member.audio.size() >= 20);
+            Thread.sleep(200L);
+            assertTrue(older.audio.isEmpty());
+
+            // proximity voice reaches the older client as before
+            speaker.send(100, speaker.config.getEncryption().encrypt(new byte[] {1, 2, 3}));
+            await(() -> !older.audio.isEmpty());
+            assertEquals(speaker.session.getSourceId(), ((SourceAudioPacket) older.audio.get(0)).getSourceId());
+
+            // and the older client's audio on the groups activation goes nowhere
+            int heard = member.audio.size();
+            older.send(1, older.config.getEncryption().encrypt(new byte[] {1, 2, 3}), groups, (short) 0);
+            Thread.sleep(200L);
+            assertEquals(heard, member.audio.size());
+            assertFalse(older.session.isGroupsActivationActive());
+            assertTrue(speaker.audio.stream().noneMatch(packet -> packet instanceof SourceAudioPacket));
+        }
+    }
+
+    private static UdpServer.Presence olderClient(int dimension, double x) {
+        return new UdpServer.Presence(true, false, false, false, dimension, x, 64, 0, false);
+    }
+
     @Test
     public void groupListenerIsNeverTheSpeaker() {
         UdpServer.Session speaker = new UdpServer.Session(UUID.randomUUID(), UUID.randomUUID());
@@ -244,7 +294,7 @@ public class VoiceRoutingTest {
             KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
             generator.initialize(2048);
             KeyPair keys = generator.generateKeyPair();
-            config = ClientConfig.decode(serverConfig.createPacket(keys.getPublic()), keys.getPrivate());
+            config = ClientConfig.decode(serverConfig.createPacket(keys.getPublic(), true), keys.getPrivate());
             ClientConnectionState.UdpState udp = new ClientConnectionState(sent -> {}).replaceUdp();
             client = new UdpClient(LOGGER, connection.getSecret(), connection.getIp(), connection.getPort(), udp, packet -> {
                 audio.add(packet);
@@ -273,7 +323,7 @@ public class VoiceRoutingTest {
     }
 
     private static UdpServer.Presence presence(boolean voiceDisabled, boolean microphoneMuted, int dimension, double x) {
-        return new UdpServer.Presence(true, voiceDisabled, microphoneMuted, false, dimension, x, 64, 0);
+        return new UdpServer.Presence(true, voiceDisabled, microphoneMuted, false, dimension, x, 64, 0, true);
     }
 
     /** Decrypts and decodes the routed frames in sequence order, as the playback thread does. */

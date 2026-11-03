@@ -113,13 +113,17 @@ public final class ServerVoicePlayers {
 
     /** Upstream reload: every voice player gets the new ConfigPacket. */
     public void resendConfig(ServerConfig config) {
-        for (ServerConnection connection : connections.values()) {
-            if (!connection.isVoiceConnected()) continue;
-            try {
-                channel.sendToPlayer(connection.getPlayer(), config.createPacket(connection.getPublicKey()));
-            } catch (GeneralSecurityException e) {
-                LOGGER.warn("Failed to encrypt voice configuration", e);
-            }
+        for (ServerConnection connection : connections.values()) resendConfig(connection, config);
+    }
+
+    /** The ConfigPacket again for one voice-connected player (its Groups support changed, or a reload). */
+    public void resendConfig(ServerConnection connection, ServerConfig config) {
+        if (!connection.isVoiceConnected()) return;
+        try {
+            channel.sendToPlayer(connection.getPlayer(),
+                    config.createPacket(connection.getPublicKey(), connection.isGroupsSupported()));
+        } catch (GeneralSecurityException e) {
+            LOGGER.warn("Failed to encrypt voice configuration", e);
         }
     }
 
@@ -185,7 +189,8 @@ public final class ServerVoicePlayers {
         }
         // A group source is described only to the members it is routed to.
         GroupRoute route = groupRoutesBySource.apply(sourceId);
-        if (route == null || !route.getRecipients().contains(requester.getPlayer().getUniqueID())) return;
+        if (route == null || !requester.isGroupsSupported()
+                || !route.getRecipients().contains(requester.getPlayer().getUniqueID())) return;
         SourceInfoPacket info = groupSourceInfo(route, config);
         if (info != null) channel.sendToPlayer(requester.getPlayer(), info);
     }
@@ -200,9 +205,7 @@ public final class ServerVoicePlayers {
             if (info == null) continue;
             for (UUID recipient : route.getRecipients()) {
                 ServerConnection listener = connections.get(recipient);
-                if (listener != null && listener.isVoiceConnected() && !listener.isVoiceDisabled()) {
-                    channel.sendToPlayer(listener.getPlayer(), info);
-                }
+                if (isGroupListener(listener)) channel.sendToPlayer(listener.getPlayer(), info);
             }
         }
     }
@@ -250,10 +253,17 @@ public final class ServerVoicePlayers {
         SourceAudioEndPacket end = new SourceAudioEndPacket(route.getSourceId(), packet.getSequenceNumber());
         for (UUID recipient : route.getRecipients()) {
             ServerConnection listener = connections.get(recipient);
-            if (listener != null && listener.isVoiceConnected() && !listener.isVoiceDisabled()) {
-                channel.sendToPlayer(listener.getPlayer(), end);
-            }
+            if (isGroupListener(listener)) channel.sendToPlayer(listener.getPlayer(), end);
         }
+    }
+
+    /**
+     * A group member that may hear group voice now: voice-connected with voice enabled, and its client announced
+     * Groups support. Older clients stay out even when a route lists them.
+     */
+    static boolean isGroupListener(ServerConnection listener) {
+        return listener != null && listener.isGroupsSupported() && listener.isVoiceConnected()
+                && !listener.isVoiceDisabled();
     }
 
     private void sendToListeners(UdpServer.Session speaker, short distance, Packet<?> packet) {

@@ -78,8 +78,8 @@ public class AesEncryptionTest {
         KeyPair speaker = generator.generateKeyPair();
         KeyPair listener = generator.generateKeyPair();
         ServerConfig server = new ServerConfig();
-        AesEncryption speakerAes = ClientConfig.decode(server.createPacket(speaker.getPublic()), speaker.getPrivate()).getEncryption();
-        AesEncryption listenerAes = ClientConfig.decode(server.createPacket(listener.getPublic()), listener.getPrivate()).getEncryption();
+        AesEncryption speakerAes = ClientConfig.decode(server.createPacket(speaker.getPublic(), true), speaker.getPrivate()).getEncryption();
+        AesEncryption listenerAes = ClientConfig.decode(server.createPacket(listener.getPublic(), true), listener.getPrivate()).getEncryption();
 
         byte[] frame = bytes(120); // stands in for an Opus frame
         UUID secret = UUID.randomUUID();

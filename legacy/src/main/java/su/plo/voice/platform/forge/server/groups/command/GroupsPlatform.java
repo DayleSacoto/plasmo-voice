@@ -7,6 +7,7 @@ import java.util.UUID;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.util.IChatComponent;
 import su.plo.voice.platform.forge.server.groups.GroupProfile;
+import su.plo.voice.platform.forge.server.groups.GroupsClientSupport;
 import su.plo.voice.platform.forge.server.groups.GroupsSettings;
 
 /** Everything /groups needs from the running server. 1.7.10 has no vanish API, so every online player is visible. */
@@ -37,4 +38,7 @@ public interface GroupsPlatform {
 
     /** Wraps the sender of a vanilla command. */
     GroupsCommandSource source(ICommandSender sender);
+
+    /** Whether the online player's current client can use Groups (session-only, never persisted). */
+    GroupsClientSupport clientSupport(UUID player);
 }

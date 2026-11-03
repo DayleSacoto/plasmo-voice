@@ -26,6 +26,11 @@ public final class GroupsProtocol {
     public static final int KIND_ACTION = 1;
     public static final int KIND_STATE = 2;
     public static final int KIND_RESULT = 3;
+    /**
+     * Serverbound {@link GroupsHello}. Its frame never changes: {@code [byte 1][byte 4][short min][short max]}, and
+     * bytes after that are ignored, so any future client can still announce itself to this server.
+     */
+    public static final int KIND_HELLO = 4;
 
     public static final int MAX_NAME = 64;
     public static final int MAX_PASSWORD = 64;
@@ -101,13 +106,24 @@ public final class GroupsProtocol {
         });
     }
 
+    public static byte[] encode(GroupsHello hello) {
+        return write(KIND_HELLO, out -> {
+            out.writeShort(hello.minProtocol);
+            out.writeShort(hello.maxProtocol);
+        });
+    }
+
     // ---- decode ----
 
-    /** Returns a {@link GroupsAction}, {@link GroupsState} or {@link GroupsResult}. */
+    /** Returns a {@link GroupsAction}, {@link GroupsState}, {@link GroupsResult} or {@link GroupsHello}. */
     public static Object decode(byte[] data) throws IOException {
         if (data == null || data.length < 2) throw new IOException("Groups payload too short");
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(data));
         int version = in.readUnsignedByte();
+        if (version == 1 && data[1] == KIND_HELLO) {
+            in.readUnsignedByte();
+            return new GroupsHello(in.readUnsignedShort(), in.readUnsignedShort());
+        }
         if (version != VERSION) throw new IOException("Unsupported groups protocol version " + version);
         int kind = in.readUnsignedByte();
         Object decoded;
@@ -190,7 +206,7 @@ public final class GroupsProtocol {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream(64);
             DataOutputStream out = new DataOutputStream(bytes);
-            out.writeByte(VERSION);
+            out.writeByte(kind == KIND_HELLO ? 1 : VERSION);
             out.writeByte(kind);
             body.write(out);
             out.flush();

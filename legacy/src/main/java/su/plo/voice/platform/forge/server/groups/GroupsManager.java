@@ -33,6 +33,11 @@ public final class GroupsManager {
     private final Map<UUID, GroupRoute> routesBySource = new ConcurrentHashMap<>();
     /** Profiles of online players that joined or reconnected; used to name a new owner. */
     private final Map<UUID, GroupProfile> profiles = new ConcurrentHashMap<>();
+    /**
+     * Players online in Minecraft, with or without a Groups client. A non-persistent group lives while one of its
+     * members is here, even when nobody is an active Groups participant (onlineSet), as before Groups was optional.
+     */
+    private final Map<UUID, GroupProfile> present = new ConcurrentHashMap<>();
     /** Last known name of every player seen in a group; survives going offline. */
     private final Map<UUID, String> names = new ConcurrentHashMap<>();
     /** Bumped on every state change, so a cache of derived views (the Groups GUI) knows when to rebuild. */
@@ -119,6 +124,7 @@ public final class GroupsManager {
         routes.clear();
         routesBySource.clear();
         profiles.clear();
+        present.clear();
     }
 
     // ---- lifecycle ----
@@ -178,7 +184,7 @@ public final class GroupsManager {
                 group.setOwner(next);
                 if (next != null) listener.notifyGroup(group, "notifications.new_owner", next.getName());
             }
-            if (group.onlineSet().isEmpty()) {
+            if (!anyMemberPresent(group)) {
                 delete(group);
                 return true;
             }
@@ -262,10 +268,20 @@ public final class GroupsManager {
 
     // ---- connection events ----
 
+    /**
+     * Minecraft login, before (or without) Groups support: the player counts for keeping a non-persistent group, but
+     * is not a Groups participant until {@link #playerOnline}.
+     */
+    public void playerPresent(GroupProfile player) {
+        remember(player);
+        present.put(player.getId(), player);
+    }
+
     /** Upstream onPlayerJoin (voice connection established): restores a remembered membership. */
     public void playerOnline(GroupProfile player) {
         touch();
         remember(player);
+        present.put(player.getId(), player);
         Group group = groupByPlayer.get(player.getId());
         if (group == null) return;
         profiles.put(player.getId(), player);
@@ -284,11 +300,12 @@ public final class GroupsManager {
     public void playerOffline(UUID player) {
         touch();
         profiles.remove(player);
+        present.remove(player);
         discardSource(player);
         Group group = groupByPlayer.get(player);
         if (group == null) return;
         group.onlineSet().remove(player);
-        if (group.onlineSet().isEmpty() && !group.isPersistent()) {
+        if (!group.isPersistent() && !anyMemberPresent(group)) {
             delete(group);
         } else {
             republish(group);
@@ -383,7 +400,23 @@ public final class GroupsManager {
                 best = profile;
             }
         }
+        if (best != null) return best;
+        // nobody with a Groups client is online: a member online with an older client keeps the group owned
+        for (UUID id : group.memberSet()) {
+            GroupProfile profile = present.get(id);
+            if (profile != null && (best == null || profile.getName().compareToIgnoreCase(best.getName()) < 0)) {
+                best = profile;
+            }
+        }
         return best;
+    }
+
+    /** Whether a member is online in Minecraft, with or without a Groups client. */
+    private boolean anyMemberPresent(Group group) {
+        for (UUID id : group.memberSet()) {
+            if (group.onlineSet().contains(id) || present.containsKey(id)) return true;
+        }
+        return false;
     }
 
     private void discardSource(UUID player) {

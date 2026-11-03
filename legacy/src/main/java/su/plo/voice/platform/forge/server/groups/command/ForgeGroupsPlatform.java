@@ -14,6 +14,7 @@ import net.minecraft.util.IChatComponent;
 import su.plo.voice.platform.forge.PlasmoVoiceMod;
 import su.plo.voice.platform.forge.server.groups.GroupPermissions;
 import su.plo.voice.platform.forge.server.groups.GroupProfile;
+import su.plo.voice.platform.forge.server.groups.GroupsClientSupport;
 import su.plo.voice.platform.forge.server.groups.GroupsSettings;
 
 /** The running Forge 1.7.10 server behind /groups. */
@@ -70,6 +71,11 @@ public final class ForgeGroupsPlatform implements GroupsPlatform {
     @Override
     public GroupsCommandSource source(ICommandSender sender) {
         return wrap(mod, sender);
+    }
+
+    @Override
+    public GroupsClientSupport clientSupport(UUID player) {
+        return mod.groupsSupport(player);
     }
 
     /**

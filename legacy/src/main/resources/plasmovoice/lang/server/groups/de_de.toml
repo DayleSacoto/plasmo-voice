@@ -49,6 +49,7 @@ persistent_true = "Die Gruppe ist jetzt dauerhaft"
 persistent_false = "Die Gruppe ist nicht mehr dauerhaft"
 password_unset = "Passwortschutz entfernt"
 permissions_unset = "Berechtigungsschutz entfernt"
+invite_client_outdated = "&e%s wollte dich in eine Sprachgruppe einladen, aber dein Client unterstützt keine Sprachgruppen. Installiere oder aktualisiere Plasmo Voice, um Gruppen zu nutzen."
 
 [server.pv.addon.groups.error]
 uuid_parse = "&cUuid-Fehler: „%s“ ist keine Uuid"
@@ -59,6 +60,8 @@ unknown = "&cUnbekannter Fehler"
 name_length = "&cDer Gruppenname muss zwischen %1$s und %2$s Zeichen lang sein"
 unknown_subcommand = "&cUnbekannter Befehl. Verfügbare Befehle: %s"
 player_not_found = "&cEs gibt keinen Spieler mit diesem Namen"
+client_outdated = "&cDein Client unterstützt keine Sprachgruppen. Installiere oder aktualisiere Plasmo Voice, um Gruppen zu nutzen."
+client_connecting = "&cDer Sprachchat verbindet sich noch. Versuche es gleich noch einmal."
 
 [server.pv.addon.groups.command.set.error]
 usage = "&cVerwendung: /groups set <Flag> <Wert>"
@@ -84,6 +87,8 @@ usage = "&cVerwendung: /groups invite <Spieler>"
 invite_self = "&cDu kannst dich nicht selbst einladen"
 already_joined = "&cDer Spieler ist bereits in der Gruppe"
 banned = "&cDer Spieler ist in dieser Gruppe gesperrt"
+client_outdated = "&c%s unterstützt keine Sprachgruppen. Dafür wird eine kompatible Plasmo-Voice-Version benötigt."
+client_connecting = "&c%s verbindet sich noch mit dem Sprachchat. Versuche es gleich noch einmal."
 
 [server.pv.addon.groups.command.join]
 success = "&aDu bist der Gruppe beigetreten"

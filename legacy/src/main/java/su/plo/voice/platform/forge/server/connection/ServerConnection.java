@@ -55,6 +55,12 @@ public final class ServerConnection {
     private boolean configSent;
     /** Upstream hasVoiceChat(): from the config sent after UDP authentication until the session is lost. */
     private boolean voiceConnected;
+    /**
+     * This connection announced Groups support (session-only, from the Groups channel): only then does its config
+     * carry the Groups activation and source line.
+     */
+    @Setter
+    private boolean groupsSupported;
     @Getter(AccessLevel.NONE)
     final StateBroadcastThrottle stateThrottle = new StateBroadcastThrottle();
     private final Map<UUID, Integer> activationDistances = new HashMap<>();
@@ -97,7 +103,7 @@ public final class ServerConnection {
             synchronized (udpSession) {
                 if (configSent || !udpSession.isActive() || !udpSession.isAuthenticated()) return TickResult.NONE;
                 try {
-                    channel.sendToPlayer(player, config.createPacket(publicKey));
+                    channel.sendToPlayer(player, config.createPacket(publicKey, groupsSupported));
                     configSent = true;
                     voiceConnected = true;
                     LOGGER.info("{} connected to voice chat",
@@ -135,7 +141,7 @@ public final class ServerConnection {
     /** Snapshot for the UDP worker; EntityPlayerMP must only be read on the server thread. */
     UdpServer.Presence presence() {
         return new UdpServer.Presence(voiceConnected, voiceDisabled, microphoneMuted, serverMuted,
-                player.dimension, player.posX, player.posY, player.posZ);
+                player.dimension, player.posX, player.posY, player.posZ, groupsSupported);
     }
 
     VoicePlayerInfo createPlayerInfo() {

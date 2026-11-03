@@ -397,7 +397,7 @@ public class ClientSettingsTest {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
         KeyPair keys = generator.generateKeyPair();
-        ClientConfig config = ClientConfig.decode(new ServerConfig().createPacket(keys.getPublic()), keys.getPrivate());
+        ClientConfig config = ClientConfig.decode(new ServerConfig().createPacket(keys.getPublic(), true), keys.getPrivate());
         UUID serverId = config.getPacket().getServerId();
 
         ClientState state = new ClientState();
@@ -431,7 +431,7 @@ public class ClientSettingsTest {
         generator.initialize(2048);
         KeyPair keys = generator.generateKeyPair();
         ServerConfig serverConfig = new ServerConfig();
-        ClientConfig config = ClientConfig.decode(serverConfig.createPacket(keys.getPublic()), keys.getPrivate());
+        ClientConfig config = ClientConfig.decode(serverConfig.createPacket(keys.getPublic(), true), keys.getPrivate());
         UUID playerId = UUID.randomUUID();
         String playerKey = ClientState.playerVolumeKey(playerId);
         PlayerSourceInfo source = new PlayerSourceInfo("plasmovoice", UUID.randomUUID(), serverConfig.getProximityLine().getId(),

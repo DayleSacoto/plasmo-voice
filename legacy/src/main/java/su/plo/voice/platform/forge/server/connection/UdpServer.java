@@ -348,8 +348,8 @@ public final class UdpServer implements AutoCloseable {
     private void routeGroupAudio(DatagramSocket endpoint, Session speaker, Presence presence, VoiceActivation activation,
                                  PlayerAudioPacket audio) {
         GroupRoute route = groupRoutes.apply(speaker.playerId);
-        if (presence == null || !presence.isVoiceConnected() || presence.isServerMuted() || presence.isMicrophoneMuted()
-                || route == null) {
+        if (presence == null || !presence.isGroupsSupported() || !presence.isVoiceConnected() || presence.isServerMuted()
+                || presence.isMicrophoneMuted() || route == null) {
             if (DEBUG.enabled()) speaker.rejected(presence, activation, audio);
             return;
         }
@@ -364,11 +364,11 @@ public final class UdpServer implements AutoCloseable {
         }
     }
 
-    /** pv-addon-groups source filter: an online member with voice enabled, never the speaker. */
+    /** pv-addon-groups source filter: an online member with voice enabled and a Groups client, never the speaker. */
     static boolean isGroupListener(Session speaker, Session listener) {
         if (listener == null || listener == speaker || !listener.active || !listener.authenticated) return false;
         Presence to = listener.presence;
-        return to != null && to.isVoiceConnected() && !to.isVoiceDisabled();
+        return to != null && to.isGroupsSupported() && to.isVoiceConnected() && !to.isVoiceDisabled();
     }
 
     /** Upstream VoiceServerProximitySource listeners: not the speaker, voice enabled, same world, in range. */
@@ -607,5 +607,7 @@ public final class UdpServer implements AutoCloseable {
         double x;
         double y;
         double z;
+        /** The client announced Groups support: only then may it send or hear group voice. */
+        boolean groupsSupported;
     }
 }

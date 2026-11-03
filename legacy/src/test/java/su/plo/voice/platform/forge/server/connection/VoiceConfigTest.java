@@ -26,8 +26,8 @@ public class VoiceConfigTest {
         KeyPair first = generator.generateKeyPair();
         KeyPair second = generator.generateKeyPair();
         ServerConfig server = new ServerConfig();
-        ClientConfig a = decode(server.createPacket(first.getPublic()), first);
-        ClientConfig b = decode(server.createPacket(second.getPublic()), second);
+        ClientConfig a = decode(server.createPacket(first.getPublic(), true), first);
+        ClientConfig b = decode(server.createPacket(second.getPublic(), true), second);
         assertEquals(a.getPacket().getServerId(), b.getPacket().getServerId());
         assertArrayEquals(a.getAesKey().getEncoded(), b.getAesKey().getEncoded());
         assertEquals(16, a.getAesKey().getEncoded().length);
@@ -40,11 +40,11 @@ public class VoiceConfigTest {
         assertEquals("-1000", a.getPacket().getCaptureInfo().getEncoderInfo().getParams().get("bitrate"));
         assertEquals(java.util.Collections.singletonMap("pv.allow_freecam", true), a.getPacket().getPermissions());
         assertNotNull(a.getPacket().getPlayerIconConfig());
-        ClientConfig next = decode(new ServerConfig().createPacket(first.getPublic()), first);
+        ClientConfig next = decode(new ServerConfig().createPacket(first.getPublic(), true), first);
         assertNotEquals(a.getPacket().getServerId(), next.getPacket().getServerId());
         assertFalse(Arrays.equals(a.getAesKey().getEncoded(), next.getAesKey().getEncoded()));
         assertThrows(java.security.GeneralSecurityException.class,
-                () -> decode(server.createPacket(first.getPublic()), second));
+                () -> decode(server.createPacket(first.getPublic(), true), second));
     }
 
     @Test
@@ -53,7 +53,7 @@ public class VoiceConfigTest {
         generator.initialize(2048);
         KeyPair pair = generator.generateKeyPair();
         ServerConfig server = new ServerConfig();
-        ConfigPacket packet = decode(server.createPacket(pair.getPublic()), pair).getPacket();
+        ConfigPacket packet = decode(server.createPacket(pair.getPublic(), true), pair).getPacket();
 
         VoiceSourceLine line = packet.getSourceLines().stream()
                 .filter(it -> it.getId().equals(VoiceSourceLine.PROXIMITY_ID)).findFirst().orElse(null);
@@ -79,7 +79,7 @@ public class VoiceConfigTest {
         assertFalse(activation.getEncoderInfo().isPresent());
         assertEquals(1, activation.getWeight());
 
-        ClientConfig client = decode(server.createPacket(pair.getPublic()), pair);
+        ClientConfig client = decode(server.createPacket(pair.getPublic(), true), pair);
         assertEquals(Integer.valueOf(16), client.activationDistances().get(VoiceActivation.PROXIMITY_ID));
 
         java.util.Map<java.util.UUID, Integer> sent = new java.util.HashMap<>();
@@ -96,7 +96,7 @@ public class VoiceConfigTest {
         generator.initialize(2048);
         KeyPair pair = generator.generateKeyPair();
         ServerConfig server = new ServerConfig();
-        ConfigPacket packet = decode(server.createPacket(pair.getPublic()), pair).getPacket();
+        ConfigPacket packet = decode(server.createPacket(pair.getPublic(), true), pair).getPacket();
 
         VoiceSourceLine line = packet.getSourceLines().stream()
                 .filter(it -> it.getName().equals("groups")).findFirst().orElse(null);
@@ -120,12 +120,52 @@ public class VoiceConfigTest {
         assertEquals(10, activation.getWeight());
     }
 
+    /**
+     * A client that never announced Groups gets the normal voice config, the same lifecycle key and proximity, but
+     * no Groups activation or source line: nothing it does not know, and no Groups key to press.
+     */
+    @Test
+    public void olderClientsGetTheNormalConfigWithoutGroups() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair pair = generator.generateKeyPair();
+        ServerConfig server = new ServerConfig();
+        ClientConfig groups = decode(server.createPacket(pair.getPublic(), true), pair);
+        ClientConfig older = decode(server.createPacket(pair.getPublic(), false), pair);
+
+        assertNotNull(server.getGroupsActivation());
+        assertArrayEquals(groups.getAesKey().getEncoded(), older.getAesKey().getEncoded());
+        assertEquals(groups.getPacket().getServerId(), older.getPacket().getServerId());
+        assertEquals(Arrays.asList(server.getProximityActivation().getId()), ids(older.getPacket().getActivations()));
+        assertEquals(Arrays.asList(server.getProximityLine().getId()), lineIds(older.getPacket().getSourceLines()));
+        assertEquals(set(server.getProximityActivation().getId(), server.getGroupsActivation().getId()),
+                new java.util.HashSet<>(ids(groups.getPacket().getActivations())));
+        assertEquals(set(server.getProximityLine().getId(), server.getGroupsLine().getId()),
+                new java.util.HashSet<>(lineIds(groups.getPacket().getSourceLines())));
+    }
+
+    private static java.util.Set<java.util.UUID> set(java.util.UUID... ids) {
+        return new java.util.HashSet<>(Arrays.asList(ids));
+    }
+
+    private static java.util.List<java.util.UUID> ids(java.util.Collection<VoiceActivation> activations) {
+        java.util.List<java.util.UUID> ids = new java.util.ArrayList<>();
+        for (VoiceActivation activation : activations) ids.add(activation.getId());
+        return ids;
+    }
+
+    private static java.util.List<java.util.UUID> lineIds(java.util.Collection<VoiceSourceLine> lines) {
+        java.util.List<java.util.UUID> ids = new java.util.ArrayList<>();
+        for (VoiceSourceLine line : lines) ids.add(line.getId());
+        return ids;
+    }
+
     @Test
     public void rejectsUnsupportedEncryptionAndInvalidKeyLength() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
         KeyPair pair = generator.generateKeyPair();
-        ConfigPacket original = new ServerConfig().createPacket(pair.getPublic());
+        ConfigPacket original = new ServerConfig().createPacket(pair.getPublic(), true);
         ConfigPacket unsupported = withEncryption(original, new EncryptionInfo("unknown", new byte[] {1}));
         assertThrows(java.security.GeneralSecurityException.class, () -> decode(unsupported, pair));
         Cipher rsa = Cipher.getInstance("RSA");

@@ -10,12 +10,14 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
+import net.minecraft.util.ChatComponentText;
 import su.plo.voice.platform.forge.server.groups.Group;
 import su.plo.voice.platform.forge.server.groups.GroupAccess;
 import su.plo.voice.platform.forge.server.groups.GroupActor;
 import su.plo.voice.platform.forge.server.groups.GroupPermissions;
 import su.plo.voice.platform.forge.server.groups.GroupProfile;
 import su.plo.voice.platform.forge.server.groups.GroupRules;
+import su.plo.voice.platform.forge.server.groups.GroupsClientSupport;
 import su.plo.voice.platform.forge.server.groups.GroupsListener;
 import su.plo.voice.platform.forge.server.groups.GroupsManager;
 import su.plo.voice.platform.forge.server.groups.GroupsSettings;
@@ -279,6 +281,27 @@ public final class GroupActions {
         return Outcome.ok("command.leave.success", member.group.getName());
     }
 
+    // ---- client compatibility ----
+
+    /**
+     * The one Groups compatibility verdict for an online player's current client ({@link
+     * GroupsPlatform#clientSupport}), shared by /groups and by invites from the commands and the Groups GUI. A
+     * client still in its voice handshake is reported as connecting, never as outdated.
+     *
+     * @param keyPrefix "error." for the player's own client, "command.invite.error." for an invited player
+     * @return null when the client can use Groups
+     */
+    static Outcome clientError(GroupsClientSupport support, String keyPrefix, Object... args) {
+        switch (support) {
+            case SUPPORTED:
+                return null;
+            case CONNECTING:
+                return Outcome.error(keyPrefix + "client_connecting", args);
+            default:
+                return Outcome.error(keyPrefix + "client_outdated", args);
+        }
+    }
+
     // ---- invite / kick / ban / unban / transfer / delete ----
 
     public Outcome invite(final GroupActor actor, Target target) {
@@ -294,9 +317,19 @@ public final class GroupActions {
         Group group = member.group;
         if (manager.groupOf(invited.getId()) == group) return Outcome.error("command.invite.error.already_joined");
         if (group.isBanned(invited.getId())) return Outcome.error("command.invite.error.banned");
+        final UUID receiver = invited.getId();
+        GroupsClientSupport support = platform.clientSupport(receiver);
+        Outcome unsupported = clientError(support, "command.invite.error.", invited.getName());
+        if (unsupported != null) {
+            // plain chat, which every client shows; nothing about the invite is kept
+            if (support == GroupsClientSupport.OUTDATED) {
+                platform.send(receiver, new ChatComponentText(platform.translate(receiver,
+                        GroupsNotifier.PREFIX + "notifications.invite_client_outdated", member.profile.getName())));
+            }
+            return unsupported;
+        }
 
         // the join button is built now, so it carries the password the group has at this moment
-        final UUID receiver = invited.getId();
         Translator tr = new Translator() {
             @Override
             public String translate(String key, Object... a) {

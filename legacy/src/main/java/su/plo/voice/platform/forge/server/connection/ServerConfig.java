@@ -99,13 +99,23 @@ public final class ServerConfig {
         }
     }
 
-    public ConfigPacket createPacket(PublicKey publicKey) throws GeneralSecurityException {
+    /**
+     * @param groups whether the client announced Groups support; other clients get no Groups activation or source
+     *               line, so an older client shows no dead Groups key and never transmits on it
+     */
+    public ConfigPacket createPacket(PublicKey publicKey, boolean groups) throws GeneralSecurityException {
         Cipher cipher = Cipher.getInstance("RSA");
         cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+        Set<VoiceSourceLine> lines = sourceLines();
+        Set<VoiceActivation> activations = activations();
+        if (!groups) {
+            lines.remove(groupsLine);
+            activations.remove(groupsActivation);
+        }
         return new ConfigPacket(serverId, captureInfo,
                 new EncryptionInfo("AES/CBC/PKCS5Padding", cipher.doFinal(aesKey)),
-                sourceLines(),
-                activations(),
+                lines,
+                activations,
                 synchronizedPermissions(),
                 new PlayerIconConfig(settings.getPlayerIconVisibility(), new Pos3d(0D, settings.getPlayerIconYOffset(), 0D)));
     }

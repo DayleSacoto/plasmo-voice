@@ -29,6 +29,7 @@ import su.plo.voice.platform.forge.debug.VoiceDebug.Category;
 import su.plo.voice.proto.data.audio.capture.VoiceActivation;
 import su.plo.voice.proto.data.player.VoicePlayerInfo;
 import su.plo.voice.platform.forge.network.VoiceChannel;
+import su.plo.voice.platform.forge.network.groups.GroupsChannel;
 import su.plo.voice.proto.packets.Packet;
 import su.plo.voice.proto.packets.tcp.clientbound.PlayerInfoRequestPacket;
 import su.plo.voice.proto.packets.tcp.clientbound.ConnectionPacket;
@@ -342,6 +343,9 @@ public final class ClientConnection implements AutoCloseable {
                             + "udpGeneration={}, configured={}", clientState.isVoiceDisabled(), clientState.isMicrophoneMuted(),
                     udpClient == null ? "none" : udpClient.getGeneration(), state.isConfigured());
         }
+        // Groups is optional: announce it first on the same connection, so the server knows before the handshake.
+        GroupsChannel groups = GroupsChannel.get();
+        if (groups != null) groups.sendHello();
         channel.sendToServer(clientState.createPlayerInfo(
                 "1.7.10",
                 PlasmoVoiceMod.VOICE_COMPAT_VERSION,

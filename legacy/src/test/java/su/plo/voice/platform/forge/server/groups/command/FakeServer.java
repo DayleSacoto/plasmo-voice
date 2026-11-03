@@ -16,6 +16,7 @@ import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.IChatComponent;
 import su.plo.voice.platform.forge.server.groups.GroupPermissions;
 import su.plo.voice.platform.forge.server.groups.GroupProfile;
+import su.plo.voice.platform.forge.server.groups.GroupsClientSupport;
 import su.plo.voice.platform.forge.server.groups.GroupsSettings;
 
 /** In-memory server: online players that record every message they receive. Messages translate to key(args). */
@@ -100,6 +101,15 @@ final class FakeServer implements GroupsPlatform {
     @Override
     public GroupsCommandSource source(ICommandSender sender) {
         throw new UnsupportedOperationException();
+    }
+
+    /** Clients that are not Groups-capable this session; every other player announced Groups support. */
+    final Map<UUID, GroupsClientSupport> clients = new HashMap<>();
+
+    @Override
+    public GroupsClientSupport clientSupport(UUID player) {
+        GroupsClientSupport support = clients.get(player);
+        return support == null ? GroupsClientSupport.SUPPORTED : support;
     }
 
     /** A player (or the console when the profile is null). */

@@ -49,6 +49,7 @@ persistent_true = "Le groupe est désormais persistant"
 persistent_false = "Le groupe n'est plus persistant"
 password_unset = "La protection par mot de passe a été retirée"
 permissions_unset = "La protection par permissions a été retirée"
+invite_client_outdated = "&e%s a essayé de vous inviter dans un groupe vocal, mais votre client ne prend pas en charge les groupes vocaux. Installez ou mettez à jour Plasmo Voice pour utiliser les groupes."
 
 [server.pv.addon.groups.error]
 uuid_parse = "&cErreur d'analyse de l'Uuid : « %s » n'est pas un Uuid"
@@ -59,6 +60,8 @@ unknown = "&cErreur inconnue"
 name_length = "&cLe nom du groupe doit contenir entre %1$s et %2$s caractères"
 unknown_subcommand = "&cCommande inconnue. Commandes disponibles : %s"
 player_not_found = "&cAucun joueur ne porte ce nom"
+client_outdated = "&cVotre client ne prend pas en charge les groupes vocaux. Installez ou mettez à jour Plasmo Voice pour utiliser les groupes."
+client_connecting = "&cLe chat vocal est encore en cours de connexion. Réessayez dans un instant."
 
 [server.pv.addon.groups.command.set.error]
 usage = "&cUtilisation : /groups set <option> <valeur>"
@@ -84,6 +87,8 @@ usage = "&cUtilisation : /groups invite <joueur>"
 invite_self = "&cVous ne pouvez pas vous inviter vous-même"
 already_joined = "&cLe joueur a déjà rejoint le groupe"
 banned = "&cLe joueur est banni de ce groupe"
+client_outdated = "&c%s ne prend pas en charge les groupes vocaux. Une version compatible de Plasmo Voice est nécessaire pour utiliser les groupes."
+client_connecting = "&c%s se connecte encore au chat vocal. Réessayez dans un instant."
 
 [server.pv.addon.groups.command.join]
 success = "&aVous avez rejoint le groupe"
