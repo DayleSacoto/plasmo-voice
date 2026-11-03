@@ -130,7 +130,7 @@ public final class VoiceHud extends Gui {
         UUID speaker = SourcePlayer.id(source);
         if (style.hasSkin() && speaker != null) {
             if (position.isRight()) x -= 16;
-            drawHead(mc, speaker, x, y, 16);
+            PlayerHeads.draw(mc, speaker, SourcePlayer.name(source), x, y, 16, PlayerHeads.Style.of(true, false));
             if (!position.isRight()) x += 16 + 1;
         }
 
@@ -149,15 +149,6 @@ public final class VoiceHud extends Gui {
         GL11.glColor4f(1F, 1F, 1F, 1F);
         mc.getTextureManager().bindTexture(new ResourceLocation(line.getIcon()));
         func_146110_a(x, y, 0F, 0F, 16, 16, 16F, 16F);
-    }
-
-    /**
-     * The face and the hat layer over it, from the skin the world renderer uses for the player, Steve otherwise.
-     * ponytail: 1.7.10 has no profile cache for players out of render range. Load skins by profile if the overlay
-     * needs distant sources.
-     */
-    public static void drawHead(Minecraft mc, UUID playerId, int x, int y, int size) {
-        PlayerHeads.draw(mc, playerId, x, y, size, false, false);
     }
 
     /** Skin height in 64 pixel wide texture units: 32 for a legacy skin, 64 for a modern one (also in HD). */

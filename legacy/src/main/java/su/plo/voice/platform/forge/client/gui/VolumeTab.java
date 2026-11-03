@@ -17,7 +17,7 @@ import su.plo.voice.platform.forge.client.ClientState;
 import su.plo.voice.platform.forge.client.audio.VoiceLeveler;
 import su.plo.voice.platform.forge.client.connection.ClientConfig;
 import su.plo.voice.platform.forge.client.connection.ClientConnectionState;
-import su.plo.voice.platform.forge.client.hud.VoiceHud;
+import su.plo.voice.platform.forge.client.hud.PlayerHeads;
 import su.plo.voice.proto.data.audio.line.VoiceSourceLine;
 import su.plo.voice.proto.data.player.VoicePlayerInfo;
 
@@ -70,7 +70,7 @@ final class VolumeTab extends SettingsTab {
         addFullWidth(search, SEARCH_ROW_HEIGHT);
         shownPlayers = players(connection, config);
         shownPlayers.forEach((playerId, name) -> addVolume(PLAYER_ROW_HEIGHT, (mc, x, centerY) -> {
-            VoiceHud.drawHead(mc, playerId, x, centerY - 12, 24);
+            PlayerHeads.draw(mc, playerId, name, x, centerY - 12, 24, PlayerHeads.Style.of(true, false));
             return 30;
         }, name, ClientState.playerVolumeKey(playerId)));
     }

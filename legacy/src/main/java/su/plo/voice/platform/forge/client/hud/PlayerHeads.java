@@ -51,11 +51,6 @@ public final class PlayerHeads {
         draw(mc, PlayerSkins.skin(mc, playerId, nickname), x, y, size, style.dimmed, style.outlined);
     }
 
-    /** Draws a {@code size} x {@code size} head of a loaded player (Steve otherwise) with its top left at (x, y). */
-    public static void draw(Minecraft mc, UUID playerId, int x, int y, int size, boolean dimmed, boolean outlined) {
-        draw(mc, PlayerSkins.skin(mc, playerId, null), x, y, size, dimmed, outlined);
-    }
-
     private static void draw(Minecraft mc, ResourceLocation skin, int x, int y, int size, boolean dimmed,
                              boolean outlined) {
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_CURRENT_BIT);
