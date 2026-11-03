@@ -40,11 +40,11 @@ final class DropDownWidget extends Widget {
 
     @Override
     void render(Minecraft mc, int mouseX, int mouseY) {
-        FontRenderer font = mc.fontRenderer;
-        drawButtonBackground(mc, x, y, width, open ? 2 : buttonState(mouseX, mouseY));
-        int color = textColor(mouseX, mouseY);
-        drawString(font, fit(font, text.get(), width - 20), x + 5, y + (height - 8) / 2, color);
-        drawString(font, open ? "▲" : "▼", x + width - 12, y + (height - 8) / 2, color);
+        String label = text.get();
+        VanillaButton.draw(mc, this, isMouseOver(mouseX, mouseY), open ? 2 : -1, label, 0, null, (font, color) -> {
+            drawString(font, fit(font, label, width - 20), x + 5, y + (height - 8) / 2, color);
+            drawString(font, open ? "▲" : "▼", x + width - 12, y + (height - 8) / 2, color);
+        });
     }
 
     /** Drawn after every row so the open list covers the rows below it. */

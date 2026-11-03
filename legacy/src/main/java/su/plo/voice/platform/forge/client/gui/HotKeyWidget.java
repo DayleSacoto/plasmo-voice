@@ -37,7 +37,6 @@ final class HotKeyWidget extends Widget {
     @Override
     void render(Minecraft mc, int mouseX, int mouseY) {
         FontRenderer font = mc.fontRenderer;
-        drawButtonBackground(mc, x, y, width, buttonState(mouseX, mouseY));
         String text;
         int color;
         if (isRecording()) {
@@ -45,9 +44,9 @@ final class HotKeyWidget extends Widget {
             color = 0xFFFF55;
         } else {
             text = fit(font, format(hotkeys.getKeys(name)), width - 16);
-            color = textColor(mouseX, mouseY);
+            color = 0; // vanilla's own color for the button state
         }
-        drawCenteredString(font, text, x + width / 2, y + (height - 8) / 2, color);
+        VanillaButton.draw(mc, this, isMouseOver(mouseX, mouseY), -1, text, color, null, null);
     }
 
     @Override

@@ -14,9 +14,9 @@ import org.lwjgl.opengl.GL11;
 @SideOnly(Side.CLIENT)
 abstract class Widget extends Gui {
     static final ResourceLocation WIDGETS = new ResourceLocation("textures/gui/widgets.png");
+    /** Open dropdown list entries; buttons themselves take their text color from {@link VanillaButton}. */
     static final int TEXT = 0xE0E0E0;
     static final int TEXT_HOVERED = 0xFFFFA0;
-    static final int TEXT_DISABLED = 0xA0A0A0;
 
     int x;
     int y;
@@ -79,11 +79,6 @@ abstract class Widget extends Gui {
     int buttonState(int mouseX, int mouseY) {
         if (!active) return 0;
         return isMouseOver(mouseX, mouseY) ? 2 : 1;
-    }
-
-    int textColor(int mouseX, int mouseY) {
-        if (!active) return TEXT_DISABLED;
-        return isMouseOver(mouseX, mouseY) ? TEXT_HOVERED : TEXT;
     }
 
     static String fit(FontRenderer font, String text, int width) {

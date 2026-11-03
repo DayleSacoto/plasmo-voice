@@ -20,9 +20,8 @@ final class ButtonWidget extends Widget {
 
     @Override
     void render(Minecraft mc, int mouseX, int mouseY) {
-        drawButtonBackground(mc, x, y, width, buttonState(mouseX, mouseY));
-        drawCenteredString(mc.fontRenderer, fit(mc.fontRenderer, text.get(), width - 8), x + width / 2,
-                y + (height - 8) / 2, textColor(mouseX, mouseY));
+        VanillaButton.draw(mc, this, isMouseOver(mouseX, mouseY), -1, fit(mc.fontRenderer, text.get(), width - 8), 0,
+                null, null);
     }
 
     @Override

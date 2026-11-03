@@ -24,7 +24,11 @@ final class TabButton extends Widget {
 
     @Override
     void render(Minecraft mc, int mouseX, int mouseY) {
-        drawButtonBackground(mc, x, y, width, buttonState(mouseX, mouseY));
+        VanillaButton.draw(mc, this, isMouseOver(mouseX, mouseY), -1, text, 0, () -> drawIcon(mc),
+                (font, color) -> font.drawStringWithShadow(text, x + 16, y + (height - 8) / 2, color));
+    }
+
+    private void drawIcon(Minecraft mc) {
         mc.getTextureManager().bindTexture(active ? icon : disabledIcon);
         GL11.glEnable(GL11.GL_BLEND);
         OpenGlHelper.glBlendFunc(770, 771, 1, 0);
@@ -33,7 +37,6 @@ final class TabButton extends Widget {
         func_146110_a(x + 7, y + 7, 0F, 0F, 8, 8, 8F, 8F);
         GL11.glColor4f(1F, 1F, 1F, 1F);
         func_146110_a(x + 6, y + 6, 0F, 0F, 8, 8, 8F, 8F);
-        mc.fontRenderer.drawStringWithShadow(text, x + 16, y + (height - 8) / 2, active ? 0xFFFFFF : 0xA0A0A0);
     }
 
     @Override

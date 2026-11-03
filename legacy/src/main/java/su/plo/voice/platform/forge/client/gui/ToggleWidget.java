@@ -23,10 +23,10 @@ final class ToggleWidget extends Widget {
     @Override
     void render(Minecraft mc, int mouseX, int mouseY) {
         boolean on = value.getAsBoolean();
-        drawButtonBackground(mc, x, y, width, 0);
-        drawKnob(on ? x + width - 8 : x, y);
-        drawCenteredString(mc.fontRenderer, VoiceLang.format(on ? "gui.plasmovoice.toggle.on" : "gui.plasmovoice.toggle.off"),
-                x + width / 2, y + (height - 8) / 2, textColor(mouseX, mouseY));
+        // vanilla GuiOptionSlider: disabled background row, knob drawn in mouseDragged, normal button text colors
+        VanillaButton.draw(mc, this, isMouseOver(mouseX, mouseY), 0,
+                VoiceLang.format(on ? "gui.plasmovoice.toggle.on" : "gui.plasmovoice.toggle.off"), 0,
+                () -> drawKnob(on ? x + width - 8 : x, y), null);
     }
 
     @Override

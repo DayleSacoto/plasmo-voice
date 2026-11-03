@@ -32,12 +32,12 @@ final class SliderWidget extends Widget {
 
     @Override
     void render(Minecraft mc, int mouseX, int mouseY) {
-        drawButtonBackground(mc, x, y, width, 0);
-        if (level != null) drawLevel(mc, level.getAsDouble());
         double current = Math.max(0D, Math.min(1D, value.getAsDouble()));
-        drawKnob(x + (int) (current * (width - 8)), y);
-        drawCenteredString(mc.fontRenderer, text.get(), x + width / 2, y + (height - 8) / 2,
-                dragging ? TEXT_HOVERED : textColor(mouseX, mouseY));
+        // vanilla GuiOptionSlider: disabled background row, knob drawn in mouseDragged; a dragged slider stays hovered
+        VanillaButton.draw(mc, this, dragging || isMouseOver(mouseX, mouseY), 0, text.get(), 0, () -> {
+            if (level != null) drawLevel(mc, level.getAsDouble());
+            drawKnob(x + (int) (current * (width - 8)), y);
+        }, null);
     }
 
     /** Upstream renderMicrophoneValue: the slider texture tinted green, yellow above 0.7 and red above 0.95. */
