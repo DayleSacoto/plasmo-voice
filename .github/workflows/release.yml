@@ -9,8 +9,8 @@ name: Release
 # The tagged commit is built once, by build.yml; both publishing jobs take its artifacts and do not depend on each
 # other. Nothing is published when validation, the tests or the build fail.
 #
-# The GitHub Release is a pre-release and the CurseForge file is a beta: the project is in active development, and
-# the update check of installed copies counts pre-releases. The tag never carries a pre-release suffix.
+# The GitHub Release is a pre-release (the update check of installed copies counts pre-releases) and the CurseForge
+# file is a release. The tag never carries a pre-release suffix.
 # To promote a tested release: gh release edit legacy-X.Y.Z --prerelease=false --latest
 #
 # CurseForge needs two repository settings (Settings -> Secrets and variables -> Actions):
@@ -172,7 +172,7 @@ jobs:
         jq -n --arg name "Plasmo Voice Legacy Forge $VERSION" \
           --arg changelog "Plasmo Voice Legacy Forge $VERSION for Minecraft 1.7.10 / Forge. Release notes: $RELEASE_URL" \
           '{changelog: $changelog, changelogType: "markdown", displayName: $name,
-            gameVersionNames: ["1.7.10", "Forge", "Client", "Server"], releaseType: "beta"}' > metadata.json
+            gameVersionNames: ["1.7.10", "Forge", "Client", "Server"], releaseType: "release"}' > metadata.json
 
         response=$(curl --silent --show-error --fail-with-body --max-time 600 \
           -H "X-Api-Token: $CURSEFORGE_TOKEN" \
@@ -185,4 +185,4 @@ jobs:
           echo "::error::CurseForge returned no file ID: $response"
           exit 1
         }
-        echo "CurseForge file $file_id: \`$RUNTIME_JAR\` (beta)" >> "$GITHUB_STEP_SUMMARY"
+        echo "CurseForge file $file_id: \`$RUNTIME_JAR\` (release)" >> "$GITHUB_STEP_SUMMARY"
