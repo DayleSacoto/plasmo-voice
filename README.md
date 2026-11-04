@@ -1,163 +1,66 @@
-[![Latest release](https://img.shields.io/github/v/release/DayleSacoto/plasmo-voice?label=Forge%201.7.10)](https://github.com/DayleSacoto/plasmo-voice/releases)
-[![Plasmo Voice Discord](http://img.shields.io/discord/833693644501286993?label=Plasmo%20Voice&style=flat&logo=discord)](https://discord.gg/uueEqzwCJJ)
-[![GTNH Discord](https://img.shields.io/badge/Discord-GT%20New%20Horizons-5865F2?logo=discord)](https://discord.gg/gtnh)
+[![Release](https://shieldcn.dev/github/release/DayleSacoto/plasmo-voice.svg?split=true&variant=secondary&size=xs&label=Release&labelColor=232925&labelTextColor=FFFFFF&color=2F70AD&valueColor=29243B&logo=ri:LuTag&logoColor=FFFFFF&iconSize=14&radius=5)](https://github.com/DayleSacoto/plasmo-voice/releases)
+[![GTNH](https://shieldcn.dev/badge/GTNH-Compatible-2F70AD.svg?&variant=secondary&size=xs&labelColor=232925&labelTextColor=FFFFFF&valueColor=FFFFFF&logo=ri:LuCircleCheck&logoColor=0FBF3E&iconSize=14&radius=5)](https://www.gtnewhorizons.com/)
 
 <div align="center">
-  <img src="https://imgur.com/3ccgCRz.png" alt="Plasmo Voice Logo">
-
-  <br>
-
-  <b>Plasmo Voice 2.1.17 backport for Minecraft 1.7.10 / Forge</b>
-
-  <br><br>
-
-  <a href="https://github.com/DayleSacoto/plasmo-voice/releases">Downloads</a>
-  <span> • </span>
-  <a href="https://github.com/plasmoapp/plasmo-voice">Upstream</a>
-  <span> • </span>
-  <a href="https://plasmovoice.com">Documentation</a>
-  <span> • </span>
-  <a href="https://discord.gg/gtnh">GTNH Discord</a>
+  <img src="https://raw.githubusercontent.com/DayleSacoto/plasmo-voice/assets/branding/banner.png" alt="Plasmo Voice Logo">
+  <div>
+    <a href="https://www.curseforge.com/minecraft/mc-mods/plasmo-voice-legacy-forge">CurseForge</a>
+    <span> | </span>
+    <a href="https://github.com/DayleSacoto/plasmo-voice">GitHub</a>
+    <span> | </span>
+    <a href="https://plasmovoice.com">Documentation</a>
+  </div>
 </div>
 
----
+## Bringing players together through voice in the worlds of legacy Minecraft.
+Lately, I've been spending a lot of time playing [GregTech New Horizons (GTNH)](https://www.gtnewhorizons.com/). While Discord works fine, I wanted something more natural - a way to talk to friends directly in Minecraft without relying on external voice chat.<br>
+I started looking for voice chat mods for Minecraft 1.7.10, but apart from [Gliby's Voice Chat](https://www.curseforge.com/minecraft/mc-mods/glibys-voice-chat), I couldn't find much. That's when I discovered modern alternatives, particularly Plasmo Voice. After exploring its source code and license, I realized that backporting it was entirely possible. And that's how Plasmo Voice Legacy Forge was born.<br>
 
-# Plasmo Voice for Forge 1.7.10
+And here we are!
 
-Unofficial manual backport of **Plasmo Voice 2.1.17** for **Minecraft 1.7.10 / Forge**.
-
-Primarily developed and tested for **GT New Horizons** with **lwjgl3ify / LWJGL3 / OpenAL Soft**.
-
-> [!WARNING]
-> This is a community-maintained backport and is **not an official Plasmo Voice 1.7.10 release**.
->
-> New releases should be tested carefully. Please report reproducible issues with logs when possible.
-
-## Compatibility
-
-**Minecraft 1.7.10** · **Forge 10.13.4.1614** · **GT New Horizons** · **lwjgl3ify / LWJGL3**
-
-The same standalone JAR is installed on both the client and server.
-
-<p align="center">
-  <img src="https://i.imgur.com/wCbe0al.png" width="300" alt="Forge 1.7.10 compatibility">
-</p>
-
-Players without the mod can still join if vanilla clients are allowed, but they cannot use voice chat.
+The project is still young and actively developed. There's plenty of work ahead, from fixing bugs and adapting features to gradually becoming independent of the modern codebase. The goal remains simple - to bring modern voice chat to legacy Minecraft.<br>
+Players need the client-side mod to use voice chat. Those without it can still join and play normally, but they won't be able to use voice chat.
 
 ## Features
 
-**Voice**
-- Proximity voice chat
-- Push-to-Talk and Voice Activation
-- Adjustable voice distance
-- Per-player and per-source volume
-- Client and server-side mute
-- Singleplayer and Open to LAN
+**Plasmo Voice Legacy Forge** brings the core features of the [original Plasmo Voice](https://www.curseforge.com/minecraft/mc-mods/plasmo-voice) to Minecraft 1.7.10, preserving its familiar interface, high-quality audio, and customization options. At the same time, the project is gradually evolving into an independent version with improvements and adaptations for legacy Minecraft, especially GregTech New Horizons (GTNH).
 
-**Audio**
-- Opus codec
-- RNNoise noise suppression
-- OpenAL 3D positional audio
-- Stereo capture
-- Sound Occlusion
-- Directional Sources
-- HRTF
-- Java Sound microphone fallback
+### Voice Chat
+- **Proximity Voice Chat** - Communicate with nearby players based on their distance and position in the world.
+- **Push-to-Talk & Voice Activation** - Choose between pressing a key to speak or automatic microphone activation.
+- **Individual Volume Control** - Adjust the volume of each player independently.
+- **Adjustable Proximity Distance** - Customize how far away other players can hear your voice.
 
-**Interface**
-- Devices, Volume, Activation, Overlay, Advanced and Hotkeys
-- Player voice icons and distance visualization
-- Modern GTNH 64x64 skins and second head layers
+### Audio & Immersion
+- **3D Positional Audio** - Spatial audio powered by OpenAL.
+- **Noise Suppression** - Reduce background noise using RNNoise.
+- **Sound Occlusion** - Muffle voices when obstacles are between players.
+- **Directional Audio** - Adjust voice volume based on the direction the speaker is facing.
+- **Opus Codec** - High-quality voice transmission with low bandwidth usage.
+- **Voice Leveling** - Automatically adjusts voice volume toward a configurable target level, keeping different players at a more consistent loudness. A community-requested feature.
 
-Press **`V`** to open voice settings.
+### Interface & Controls
+- In-game interface for managing voice chat.
+- Configurable audio input and output devices.
+- Microphone activity and speaking indicators.
+- Customizable keybindings, overlay, and audio settings.
 
-## Installation
+### Built-in Add-ons
 
-Download the latest release:
+Unlike the original Plasmo Voice, Plasmo Voice Legacy Forge integrates selected add-on features directly into the mod.<br>
+Group Voice Chat is already built in, allowing players to communicate in groups without installing additional modules.<br>
+We plan to integrate more add-on features over time. Each built-in feature will have its own configuration options, allowing players and server administrators to enable or disable functionality as needed.<br>
 
-**[Forge 1.7.10 Releases](https://github.com/DayleSacoto/plasmo-voice/releases)**
+## Download
+- [Plasmo Voice Legacy on CurseForge](https://www.curseforge.com/minecraft/mc-mods/plasmo-voice-legacy-forge)
+- [Releases](https://github.com/DayleSacoto/plasmo-voice/releases)
 
-Place the same JAR in the `mods/` directory on both the client and Forge server.
+## Credits
 
-```text
-plasmovoice-forge-1.7.10-X.Y.Z.jar
-```
+**Plasmo Voice Legacy Forge** is based on the original [Plasmo Voice](https://github.com/plasmoapp/plasmo-voice) project.
 
-A release also has a `-dev` JAR (deobfuscated, for a mod development environment) and a `-sources` JAR. They are for mod developers and are not installed.
+💖 Special thanks to the **Plasmo Voice developers** for creating an excellent open-source voice chat mod and making this backport possible.  
+❤️ Thanks to the **GregTech New Horizons community** for keeping Minecraft 1.7.10 alive and inspiring this project.  
+🤝 Thanks to everyone who tests the mod, reports bugs, suggests new features, and helps make it better.
 
-## Settings screen languages
-
-The settings screen follows the language selected in Minecraft. English, Russian, Ukrainian, German and French are built in.
-On the first start the client creates editable copies in `config/plasmovoice/lang/` (`en_us.lang`, `ru_ru.lang`, ...).
-Edit them in UTF-8 and press F3+T to reload. The mod never overwrites an existing file: keys missing from it fall back
-to the built-in text, then to another region of the same language (Canadian French uses `fr_fr.lang`), then to English. Delete a file to get a fresh copy on the next start. To add a language, create
-a file named after the Minecraft language code, for example `pl_pl.lang`.
-Server messages are translated separately, in `config/plasmovoice/languages/` on the server.
-
-## Versioning
-
-Plasmo Voice Legacy Forge uses its own independent release versioning: `0.4.0`, `0.4.1`, `0.5.0`, ... `1.0.0`.
-
-The original manual backport was based on Plasmo Voice 2.1.17. The two version lines are unrelated: Legacy Forge `0.4.0` is **not** upstream Plasmo Voice `0.4.0`, and the voice protocol stays the one of Plasmo Voice 2.1.17.
-
-- **PATCH** - bug fixes that do not intentionally change behavior
-- **MINOR** - new backwards-compatible Legacy Forge functionality
-- **MAJOR** - significant compatibility changes, once the project reaches a stable 1.x
-
-Releases are tagged `legacy-X.Y.Z` (`legacy-0.4.0`, `legacy-0.4.1`, ...). The in-game update notification reads only these tags.
-
-Legacy Forge is an independent maintenance branch and does not follow upstream releases: a newer upstream Plasmo Voice version is not an update for this mod. Upstream fixes are reviewed by hand and, where they apply, ported into a regular Legacy Forge release.
-
-Releases before `0.4.0` were published as `2.1.17-forge-1.7.10` and its `r1`, `r2` and `r3` revisions. They remain available as historical releases; that numbering is no longer used. Their update notification does not see `legacy-` releases, so updating from them to `0.4.0` is a one-time manual step.
-
-## Server commands
-
-```text
-/vlist
-/vrc
-/vmute
-/vunmute
-/vmutelist
-/vreload
-```
-
-`plasmovoice:` aliases are also supported.
-
-## Debugging
-
-For detailed diagnostics:
-
-```properties
-debug.enabled=true
-```
-
-Useful when reporting microphone, audio, UDP, reconnect or playback issues.
-
-## Backport scope
-
-The goal is to preserve the **core Plasmo Voice 2.1.17 experience** on Forge 1.7.10.
-
-Some modern systems are intentionally outside the current scope, including full addon API parity, modern proxy/platform integrations, PlaceholderAPI, vanish integration and About/Addons functionality.
-
-The backport also includes several GTNH / legacy-specific compatibility changes.
-
-## Community
-
-**GT New Horizons**  
-https://discord.gg/gtnh
-
-**Plasmo Voice**  
-https://discord.gg/uueEqzwCJJ
-
-## Upstream
-
-Based on **Plasmo Voice 2.1.17** by the Plasmo Voice developers.
-
-- [GitHub](https://github.com/plasmoapp/plasmo-voice)
-- [Website](https://plasmovoice.com)
-- [Modrinth](https://modrinth.com/mod/plasmo-voice)
-- [CurseForge](https://www.curseforge.com/minecraft/mc-mods/plasmo-voice)
-
-> [!NOTE]
-> This Forge 1.7.10 branch is an unofficial community backport and is not maintained by the upstream Plasmo Voice developers.
+*This is an independent community-maintained backport and is not officially affiliated with the original Plasmo Voice team.*
