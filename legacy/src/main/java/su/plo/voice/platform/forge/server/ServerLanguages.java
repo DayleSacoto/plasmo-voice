@@ -21,7 +21,7 @@ import org.apache.logging.log4j.Logger;
 public final class ServerLanguages {
     private static final String FALLBACK_LANGUAGE = "en_us";
     private static final String BUNDLED = "/plasmovoice/lang/server/core/" + FALLBACK_LANGUAGE + ".toml";
-    static final String[] GROUPS_LANGUAGES = {"en_us", "ru_ru", "uk_ua", "de_de", "fr_fr"};
+    static final String[] GROUPS_LANGUAGES = {"en_us", "ru_ru", "uk_ua", "de_de", "fr_fr", "zh_cn"};
 
     private final Map<String, Map<String, String>> server = new HashMap<>();
     private final Map<String, Map<String, String>> client = new HashMap<>();

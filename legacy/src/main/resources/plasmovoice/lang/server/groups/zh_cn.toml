@@ -1,0 +1,132 @@
+# 语音群组消息，改编自 pv-addon-groups（MIT，Copyright (c) 2022 Plasmo）。
+# 缺失时会复制到 config/plasmovoice/languages/groups/；请编辑那里的副本。
+
+[server.pv.addon.groups]
+divider = "&8&m-----------------------------------------------------"
+
+[server.pv.addon.groups.tooltip]
+group_uuid = "Uuid：%s"
+password_protected = "群组受密码保护"
+
+[server.pv.addon.groups.format]
+group_name = "&6[%s]"
+players_and_owner = "&7玩家：&r%1$s&7，所有者：&r%2$s"
+only_players = "&7玩家：&r%s"
+invite = "%1$s 邀请你加入语音群组 %2$s"
+page = "&7第 &r%1$s/%2$s&7 页"
+
+[server.pv.addon.groups.icons]
+password_protected = "&6⛨"
+
+[server.pv.addon.groups.button]
+next = "&e>"
+prev = "&e<"
+leave = "&c← 离开"
+join = "&e→ 加入"
+invite = "&e✉ 邀请"
+
+[server.pv.addon.groups.arg]
+permissions = "<以逗号分隔的权限列表>"
+name = "<名称>"
+groups_uuid = "<群组 uuid>"
+password = "<密码>"
+page = "[页码]"
+
+[server.pv.addon.groups.notifications]
+new_owner = "%s 现在是群组的所有者"
+player_left = "%s 离开了群组"
+player_join = "%s 加入了群组"
+group_deleted = "群组已被删除"
+name_change = "群组名称已从“%1$s”改为“%2$s”"
+password_changed = "群组密码已更改"
+permissions_changed = "群组权限已更改"
+kicked = "&c你已被踢出群组"
+player_kicked = "%s 已被踢出群组"
+banned = "&c你已被封禁于该群组"
+player_banned = "%s 已被封禁于该群组"
+player_unbanned = "%s 已在该群组中解除封禁"
+persistent_true = "该群组现在是持久化的"
+persistent_false = "该群组不再是持久化的"
+password_unset = "密码保护已移除"
+permissions_unset = "权限保护已移除"
+invite_client_outdated = "&e%s 尝试邀请你加入语音群组，但你的客户端不支持语音群组。请安装或更新 Plasmo Voice 以使用群组。"
+
+[server.pv.addon.groups.error]
+uuid_parse = "&cUuid 解析错误。“%s”不是有效的 Uuid"
+no_permission = "&c没有权限：“%s”"
+group_not_found = "&c找不到群组"
+not_in_group = "&c你必须在该群组中才能执行此命令"
+unknown = "&c未知错误"
+name_length = "&c群组名称长度必须在 %1$s 到 %2$s 个字符之间"
+unknown_subcommand = "&c未知命令。可用命令：%s"
+player_not_found = "&c没有找到该名称的玩家"
+client_outdated = "&c你的客户端不支持语音群组。请安装或更新 Plasmo Voice 以使用群组。"
+client_connecting = "&c语音聊天仍在连接中。请稍后再试。"
+
+[server.pv.addon.groups.command.set.error]
+usage = "&c用法：/groups set <flag> <value>"
+unknown_flag = "&c未知标志：“%1$s”。可用标志：%2$s"
+identical_value = "&c该值与当前值相同"
+invalid_value = "&c无效值：“%s”"
+
+[server.pv.addon.groups.command.unset.error]
+usage = "&c用法：/groups unset <flag>"
+unknown_flag = "&c无法取消标志“%1$s”。可用标志：%2$s"
+password_not_set = "&c该群组本来就没有密码保护"
+permissions_not_set = "&c权限过滤器已经为空"
+
+[server.pv.addon.groups.command.browse.error]
+page_not_found = "&c找不到该页"
+no_groups = "&c没有群组。使用“/groups create”创建群组"
+
+[server.pv.addon.groups.command.invite]
+success = "&a邀请已发送给 %s"
+
+[server.pv.addon.groups.command.invite.error]
+usage = "&c用法：/groups invite <player>"
+invite_self = "&c你不能邀请自己"
+already_joined = "&c玩家已加入该群组"
+banned = "&c玩家已被封禁于该群组"
+client_outdated = "&c%s 不支持语音群组。对方需要兼容的 Plasmo Voice 版本才能使用群组。"
+client_connecting = "&c%s 仍在连接语音聊天。请稍后再试。"
+
+[server.pv.addon.groups.command.join]
+success = "&a你已加入群组"
+
+[server.pv.addon.groups.command.join.error]
+usage = "&c用法：/groups join <group uuid> [password]"
+already_joined = "&c你已经加入该群组"
+banned = "&c你已被封禁于该群组"
+no_permission = "&c你没有加入该群组的权限"
+password_arg_missing = "&c该群组需要密码才能加入"
+wrong_password = "&c密码错误"
+
+[server.pv.addon.groups.command.transfer.error]
+usage = "&c用法：/groups transfer <player>"
+already_owner = "&c你已经是该群组的所有者"
+not_in_group = "&c玩家不在该群组中"
+
+[server.pv.addon.groups.command.kick.error]
+usage = "&c用法：/groups kick <player>"
+not_in_group = "&c玩家不在该群组中"
+
+[server.pv.addon.groups.command.ban.error]
+usage = "&c用法：/groups ban <player>"
+already_banned = "&c玩家已被封禁于该群组"
+
+[server.pv.addon.groups.command.unban.error]
+usage = "&c用法：/groups unban <player>"
+not_banned = "&c玩家未被封禁于该群组"
+
+[server.pv.addon.groups.command.create]
+success = "&a群组已创建："
+
+[server.pv.addon.groups.command.leave]
+success = "&a你已离开群组"
+
+[server.pv.addon.groups.gui]
+done = "&a完成"
+updated = "&a群组已更新"
+
+[client.pv.activation]
+groups = "群组"

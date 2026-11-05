@@ -1,0 +1,9 @@
+key.plasmovoice.settings=语音设置
+message.plasmovoice.on=开
+message.plasmovoice.off=关
+pv.activation.proximity=附近
+message.plasmovoice.distance_changed=%s 语音距离：%d
+message.plasmovoice.activation.toggle=%s：%s
+key.category.plasmovoice.name=Plasmo Voice
+message.plasmovoice.occlusion_changed=声音遮挡：%s
+message.plasmovoice.update_available=[Plasmo Voice] Forge 1.7.10 新版本可用：%s（当前：%s）

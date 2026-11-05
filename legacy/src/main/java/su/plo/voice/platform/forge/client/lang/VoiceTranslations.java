@@ -29,7 +29,7 @@ public final class VoiceTranslations {
     public static final String FALLBACK = "en_us";
     /** Bundled files, in the order they are provisioned. */
     public static final List<String> BUNDLED = Collections.unmodifiableList(
-            Arrays.asList("en_us", "ru_ru", "uk_ua", "de_de", "fr_fr"));
+            Arrays.asList("en_us", "ru_ru", "uk_ua", "de_de", "fr_fr", "zh_cn"));
     private static final String EXTENSION = ".lang";
 
     /** Default source of bundled files: classpath resources under plasmovoice/lang/client. */
