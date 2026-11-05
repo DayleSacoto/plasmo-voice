@@ -12,7 +12,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** The five bundled settings screen languages must stay complete and format-compatible with English. */
+/** The bundled settings screen languages must stay complete and format-compatible with English. */
 public class BundledLangTest {
     private static final Pattern PLACEHOLDER = Pattern.compile("%(\\d+\\$)?[-#+ 0,(]*\\d*(\\.\\d+)?[a-zA-Z%]");
 
@@ -100,7 +100,7 @@ public class BundledLangTest {
         }
     }
 
-    private static final List<String> VANILLA = java.util.Arrays.asList("en_US", "ru_RU", "uk_UA", "de_DE", "fr_FR");
+    private static final List<String> VANILLA = java.util.Arrays.asList("en_US", "ru_RU", "uk_UA", "de_DE", "fr_FR", "zh_CN");
 
     private static Map<String, String> vanilla(String locale) throws Exception {
         byte[] data;

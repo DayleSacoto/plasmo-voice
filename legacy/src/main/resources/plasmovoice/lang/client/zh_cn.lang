@@ -1,0 +1,219 @@
+# Plasmo Voice 设置界面翻译（UTF-8）。
+# 格式：key=value。以 # 开头的行是注释。\n 在提示中表示换行。
+# 请保持 %s、%1$s、%d 和 %% 原样不变。
+# 缺失的键会回退到内置文本，然后回退到英文。
+# 删除此文件后，下次启动时会从模组中重新生成一份。
+# 服务器消息在 config/plasmovoice/languages/ 中翻译，不在这里。
+
+# 界面
+gui.plasmovoice.title=%1$s %2$s 设置
+gui.plasmovoice.toggle.microphone=切换麦克风\n%s
+gui.plasmovoice.toggle.voice=切换语音聊天\n%s
+gui.plasmovoice.toggle.currently=当前：%s
+gui.plasmovoice.toggle.enabled=已启用
+gui.plasmovoice.toggle.disabled=已禁用
+gui.plasmovoice.toggle.on=开
+gui.plasmovoice.toggle.off=关
+gui.plasmovoice.not_available=此服务器未安装 Plasmo Voice
+gui.plasmovoice.connecting=正在连接 UDP 服务器...
+gui.plasmovoice.cannot_connect_to_udp=无法连接到 UDP 服务器。\nUDP 端口很可能已关闭。请参阅 wiki：\n%s
+message.plasmovoice.close=关闭
+
+# 设备标签页
+gui.plasmovoice.devices=设备
+gui.plasmovoice.devices.microphone=麦克风
+gui.plasmovoice.devices.activation_threshold=激活阈值
+gui.plasmovoice.devices.activation_threshold.tooltip=仅在激活类型设为“语音激活”时使用。\n\n将滑块调到一个你说话时音量才会超过的位置。
+gui.plasmovoice.devices.not_available=不可用
+gui.plasmovoice.devices.microphone_volume=麦克风音量
+gui.plasmovoice.devices.noise_suppression=噪声抑制
+gui.plasmovoice.devices.noise_suppression.tooltip=RNNoise 噪声抑制。\n\n使用神经网络，效果不错，但可能比较消耗 CPU。\n\n作用于你的麦克风。
+gui.plasmovoice.devices.stereo_capture=立体声采集
+gui.plasmovoice.devices.stereo_capture.tooltip=以立体声采集声音，然后转换为单声道。\n可能提升音质，但会让声音变小。
+gui.plasmovoice.devices.disable_input_device=禁用输入设备
+gui.plasmovoice.devices.disable_input_device.tooltip=完全禁用任何麦克风。\n\n适用于蓝牙耳机需要关闭麦克风才能保持立体声模式的情况。
+gui.plasmovoice.devices.failed_to_initialize_microphone.tooltip=麦克风初始化失败\n%s\n\n请尝试选择其他设备，或点击此按钮打开 wiki 查看可能的解决方案。
+gui.plasmovoice.devices.output=输出
+gui.plasmovoice.devices.output_device=输出设备
+gui.plasmovoice.devices.volume=音量
+gui.plasmovoice.devices.volume.tooltip=将音量设置到 100%% 以上可能会导致失真。
+gui.plasmovoice.devices.occlusion=声音遮挡
+gui.plasmovoice.devices.occlusion.tooltip=从你到每个声源发射一条射线，如果有方块阻挡就会压低声音。\n\n如果你不想听到其他房间的人，这会很有用；但它并不总是准确，不需要时请保持关闭。
+gui.plasmovoice.devices.directional_sources=方向性声源
+gui.plasmovoice.devices.directional_sources.tooltip=当声源没有朝向你，且你位于指定角度之外时，会让声音略微变小。\n\n作用于你听到的玩家。
+gui.plasmovoice.devices.hrtf=HRTF
+gui.plasmovoice.devices.hrtf.tooltip=提升音频定位的准确性，让你更容易在 3D 空间中判断声音来源。\n\n可能会略微降低音质。\n\n作用于你听到的玩家。
+
+# 音量标签页
+gui.plasmovoice.volume=音量
+gui.plasmovoice.volume.sources=声源音量
+gui.plasmovoice.volume.players=玩家音量
+gui.plasmovoice.volume.players_search=搜索...
+gui.plasmovoice.volume.voice_leveling=音量均衡
+gui.plasmovoice.volume.voice_leveling.tooltip=自动调低麦克风音量过大的玩家，并轻微提升声音较小的玩家，让所有人的音量大致相同。\n\n距离、遮挡和你设置的玩家音量仍会叠加生效。\n\n作用于你听到的玩家。
+gui.plasmovoice.volume.voice_leveling_target=目标音量
+gui.plasmovoice.volume.voice_leveling_target.tooltip=玩家音量均衡到的语音电平。\n\n数值越高越响。
+
+# 激活标签页
+gui.plasmovoice.activation=激活
+gui.plasmovoice.activation.type=激活类型
+gui.plasmovoice.activation.type_ptt=按键说话
+gui.plasmovoice.activation.type_voice=语音激活
+gui.plasmovoice.activation.type_inherit=继承
+gui.plasmovoice.activation.toggle=切换“%s”\n%s
+gui.plasmovoice.activation.distance=%s 距离
+gui.plasmovoice.activation.ptt_button=按键说话键
+gui.plasmovoice.activation.toggle_button=切换键
+
+# 悬浮层标签页
+gui.plasmovoice.overlay=悬浮层
+gui.plasmovoice.overlay.activation_icon=HUD 图标
+gui.plasmovoice.overlay.activation_icon_show=显示 HUD 图标
+gui.plasmovoice.overlay.activation_icon_position=HUD 图标位置
+gui.plasmovoice.overlay.activation_icon_position.choose=选择图标位置
+gui.plasmovoice.overlay.hud_position.top_left=左上
+gui.plasmovoice.overlay.hud_position.top_center=顶部居中
+gui.plasmovoice.overlay.hud_position.top_right=右上
+gui.plasmovoice.overlay.hud_position.bottom_left=左下
+gui.plasmovoice.overlay.hud_position.bottom_center=底部居中
+gui.plasmovoice.overlay.hud_position.bottom_right=右下
+gui.plasmovoice.overlay.source_icons=实体图标
+gui.plasmovoice.overlay.show_source_icons=显示实体图标
+gui.plasmovoice.overlay.show_source_icons.hud=仅 GUI
+gui.plasmovoice.overlay.show_source_icons.always=始终
+gui.plasmovoice.overlay.show_source_icons.hidden=隐藏
+gui.plasmovoice.overlay.enable=启用悬浮层
+gui.plasmovoice.overlay.position=悬浮层位置
+gui.plasmovoice.overlay.position.choose=选择悬浮层位置
+gui.plasmovoice.overlay.style=悬浮层样式
+gui.plasmovoice.overlay.style.name_skin=名称和皮肤
+gui.plasmovoice.overlay.style.skin=仅皮肤
+gui.plasmovoice.overlay.style.name=仅名称
+gui.plasmovoice.overlay.sources=悬浮层声源
+
+# 高级标签页
+gui.plasmovoice.advanced=高级
+gui.plasmovoice.advanced.visual=视觉与界面
+gui.plasmovoice.advanced.visualize_voice_distance=可视化语音距离
+gui.plasmovoice.advanced.visualize_voice_distance_on_join=加入时可视化
+gui.plasmovoice.advanced.audio_engine=音频引擎
+gui.plasmovoice.advanced.directional_sources_angle=方向性声源角度
+gui.plasmovoice.advanced.directional_sources_angle.tooltip=启用方向性声源时，在此角度内你听到的声源音量为 100%%。\n\n设为 360 与关闭该选项效果相同。
+gui.plasmovoice.advanced.panning=立体声定位
+gui.plasmovoice.advanced.adaptive_jitter_buffer=自适应抖动缓冲
+gui.plasmovoice.advanced.adaptive_jitter_buffer.tooltip=基于时间的网络抖动缓冲，其延迟会根据连接质量自动调整。\n\n如果你因连接不佳而听到音频异常，可以尝试启用此选项。
+gui.plasmovoice.advanced.exponential_volume=指数音量
+gui.plasmovoice.advanced.exponential_volume.volume_slider=音量滑块
+gui.plasmovoice.advanced.exponential_volume.distance_gain=距离增益
+
+# 快捷键标签页
+gui.plasmovoice.hotkeys=快捷键
+gui.plasmovoice.hotkeys.none=无
+key.plasmovoice.general=通用
+key.plasmovoice.general.mute_microphone=静音麦克风
+key.plasmovoice.general.disable_voice=禁用语音聊天
+key.plasmovoice.general.action=操作键
+key.plasmovoice.occlusion=声音遮挡
+key.plasmovoice.occlusion.toggle=切换声音遮挡
+key.plasmovoice.distance=%s 语音距离
+key.plasmovoice.distance.increase=增加语音距离
+key.plasmovoice.distance.decrease=减少语音距离
+
+# 群组标签页
+gui.plasmovoice.groups=群组
+gui.plasmovoice.groups.loading=正在加载群组...
+gui.plasmovoice.groups.unavailable=此服务器不支持群组。
+gui.plasmovoice.groups.status.waiting=正在等待服务器...
+gui.plasmovoice.groups.status.timeout=服务器无响应
+gui.plasmovoice.groups.name_length=名称长度必须为 %s-%s 个字符。
+gui.plasmovoice.groups.pick_first=请先选择一名玩家。
+gui.plasmovoice.groups.pick=选择玩家
+gui.plasmovoice.groups.create_button=创建群组
+gui.plasmovoice.groups.available=可用群组
+gui.plasmovoice.groups.available.truncated=正在显示 %s/%s 个群组
+gui.plasmovoice.groups.empty=还没有群组。创建第一个吧！
+gui.plasmovoice.groups.browse_denied=你没有权限浏览群组。
+gui.plasmovoice.groups.join=加入
+gui.plasmovoice.groups.cancel=取消
+gui.plasmovoice.groups.tip.id=ID：%s
+gui.plasmovoice.groups.tip.owner=所有者：%s
+gui.plasmovoice.groups.tip.no_owner=无所有者
+gui.plasmovoice.groups.tip.online=在线：%s/%s
+gui.plasmovoice.groups.tip.password=受密码保护
+gui.plasmovoice.groups.tip.persistent=持久化
+gui.plasmovoice.groups.reason.busy=正在等待服务器响应。
+gui.plasmovoice.groups.reason.no_permission=你没有执行此操作的权限。
+gui.plasmovoice.groups.reason.not_joinable=你无法加入此群组（已被封禁或缺少权限）。
+gui.plasmovoice.groups.reason.self=你不能对自己执行此操作。
+gui.plasmovoice.groups.reason.offline=该玩家必须在线。
+gui.plasmovoice.groups.reason.no_candidates=没有可选择的对象。
+gui.plasmovoice.groups.reason.no_password=此群组没有密码。
+gui.plasmovoice.groups.create.title=创建群组
+gui.plasmovoice.groups.create.name=名称
+gui.plasmovoice.groups.create.name.hint=默认名称
+gui.plasmovoice.groups.create.name.tooltip=留空以使用默认名称。
+gui.plasmovoice.groups.create.password=密码
+gui.plasmovoice.groups.create.password.hint=无
+gui.plasmovoice.groups.create.password.tooltip=可选。玩家加入时需要输入。
+gui.plasmovoice.groups.create.persistent=持久化
+gui.plasmovoice.groups.create.persistent.tooltip=持久化群组在所有人离开后仍会保留。
+gui.plasmovoice.groups.create.permissions=权限
+gui.plasmovoice.groups.create.permissions.hint=perm.a, perm.b
+gui.plasmovoice.groups.create.permissions.tooltip=用逗号分隔。玩家需要拥有全部权限才能加入。
+gui.plasmovoice.groups.create.submit=创建
+gui.plasmovoice.groups.join.title=加入群组
+gui.plasmovoice.groups.join.prompt=“%s”受密码保护。
+gui.plasmovoice.groups.join.password=密码
+gui.plasmovoice.groups.join.password.hint=输入密码
+gui.plasmovoice.groups.join.submit=加入
+gui.plasmovoice.groups.current=当前群组
+gui.plasmovoice.groups.current.permissions=所需权限：%s
+gui.plasmovoice.groups.leave=离开群组
+gui.plasmovoice.groups.members=成员（%s 在线，共 %s 人）
+gui.plasmovoice.groups.member.you=%s（你）
+gui.plasmovoice.groups.member.owner=所有者
+gui.plasmovoice.groups.member.online=在线
+gui.plasmovoice.groups.member.offline=离线
+gui.plasmovoice.groups.member.speaking=正在说话
+gui.plasmovoice.groups.kick=踢出
+gui.plasmovoice.groups.ban=封禁
+gui.plasmovoice.groups.invite=邀请玩家
+gui.plasmovoice.groups.invite.player=玩家
+gui.plasmovoice.groups.invite.none=没有玩家
+gui.plasmovoice.groups.invite.submit=邀请
+gui.plasmovoice.groups.invite.tooltip=邀请一名在线语音聊天玩家加入此群组。
+gui.plasmovoice.groups.settings=群组设置
+gui.plasmovoice.groups.settings.name=名称
+gui.plasmovoice.groups.settings.password=密码
+gui.plasmovoice.groups.settings.password.hint=新密码
+gui.plasmovoice.groups.settings.password.tooltip=设置新密码或清除当前密码。
+gui.plasmovoice.groups.settings.persistent=持久化
+gui.plasmovoice.groups.settings.permissions=权限
+gui.plasmovoice.groups.save=保存
+gui.plasmovoice.groups.set=设置
+gui.plasmovoice.groups.clear=清除
+gui.plasmovoice.groups.banned=被封禁的玩家
+gui.plasmovoice.groups.unban=解除封禁
+gui.plasmovoice.groups.manage=管理群组
+gui.plasmovoice.groups.transfer=转让给
+gui.plasmovoice.groups.transfer.submit=转让
+gui.plasmovoice.groups.transfer.tooltip=将另一名在线成员设为所有者。
+gui.plasmovoice.groups.delete=删除群组
+gui.plasmovoice.groups.delete.confirm=再次点击以确认
+
+# 群组悬浮层（悬浮层标签页）
+gui.plasmovoice.overlay.group_category=群组悬浮层
+gui.plasmovoice.overlay.group_visibility=群组悬浮层可见性
+gui.plasmovoice.overlay.group_visibility.tooltip=何时在屏幕上显示当前群组及其在线成员。
+gui.plasmovoice.overlay.group_visibility.off=关闭
+gui.plasmovoice.overlay.group_visibility.always=始终
+gui.plasmovoice.overlay.group_visibility.others_online=其他成员在线时
+gui.plasmovoice.overlay.group_style=悬浮层样式
+gui.plasmovoice.overlay.group_opacity=背景不透明度
+gui.plasmovoice.overlay.group_position=悬浮层位置
+gui.plasmovoice.overlay.group_position.edit=编辑位置
+gui.plasmovoice.overlay.group_reset=重置
+gui.plasmovoice.overlay.group_done=完成
+gui.plasmovoice.overlay.group_edit.title=群组悬浮层位置
+gui.plasmovoice.overlay.group_edit.hint=拖动悬浮层以移动。按 Esc 取消。
+gui.plasmovoice.overlay.group_more=还有 %d 个
